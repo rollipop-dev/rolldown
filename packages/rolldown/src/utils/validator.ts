@@ -773,6 +773,12 @@ const OutputOptionsSchema = v.strictObject({
     v.optional(v.boolean()),
     v.description('Keep function and class names after bundling'),
   ),
+  globalIdentifiers: v.pipe(
+    v.optional(v.array(v.string())),
+    v.description(
+      'Reserved global identifiers to be avoided when generating export binding names for module chunks',
+    ),
+  ),
 }) satisfies v.GenericSchema<OutputOptions>;
 
 const getAddonDescription = (placement: 'bottom' | 'top', wrapper: 'inside' | 'outside') => {
