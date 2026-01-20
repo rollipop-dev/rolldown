@@ -60,6 +60,7 @@ OPTIONS
   --generated-code.preset <generated-code.preset>.
   --generated-code.profiler-names Whether to add readable names to internal variables for profiling purposes.
   --generated-code.symbols    Whether to use Symbol.toStringTag for namespace objects.
+  --global-identifiers <global-identifiers>Reserved global identifiers to be avoided when generating export binding names for module chunks.
   --hash-characters <hash-characters>Use the specified character set for file hashes.
   --inline-dynamic-imports    Inline dynamic imports.
   --input <input>             Entry file.
