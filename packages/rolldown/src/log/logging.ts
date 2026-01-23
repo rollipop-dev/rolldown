@@ -5,9 +5,13 @@ export type LogLevelOption = LogLevel | 'silent';
 /** @inline */
 type LogLevelWithError = LogLevel | 'error';
 
-export interface RollupLog {
+export interface RolldownLog {
   binding?: string;
   cause?: unknown;
+  /**
+   * The log code for this log object.
+   * @example 'PLUGIN_ERROR'
+   */
   code?: string;
   exporter?: string;
   frame?: string;
@@ -19,6 +23,10 @@ export interface RollupLog {
     file?: string;
     line: number;
   };
+  /**
+   * The message for this log object.
+   * @example 'The "transform" hook used by the output plugin "rolldown-plugin-foo" is a build time hook and will not be run for that plugin. Either this plugin cannot be used as an output plugin, or it should have an option to configure it as an output plugin.'
+   */
   message: string;
   meta?: any;
   names?: string[];
@@ -31,16 +39,16 @@ export interface RollupLog {
 }
 
 /** @inline */
-export type RollupLogWithString = RollupLog | string;
+export type RolldownLogWithString = RolldownLog | string;
 
 /** @category Plugin APIs */
-export interface RollupError extends RollupLog {
+export interface RolldownError extends RolldownLog {
   name?: string;
   stack?: string;
   watchFiles?: string[];
 }
 
-export type LogOrStringHandler = (level: LogLevelWithError, log: RollupLogWithString) => void;
+export type LogOrStringHandler = (level: LogLevelWithError, log: RolldownLogWithString) => void;
 
 const LOG_LEVEL_SILENT: LogLevelOption = 'silent';
 export const LOG_LEVEL_ERROR = 'error';

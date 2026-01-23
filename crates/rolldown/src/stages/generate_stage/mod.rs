@@ -157,9 +157,7 @@ impl<'a> GenerateStage<'a> {
             .is_some_and(|m| self.link_output.metas[m.idx].is_included)
         })
         .filter_map(|(idx, ast)| {
-          let Some(ast) = ast else {
-            return None;
-          };
+          let ast = ast.as_mut()?;
           let module = self.link_output.module_table[idx].as_normal().unwrap();
           let ast_scope = &self.link_output.symbol_db[idx].as_ref().unwrap().ast_scopes;
           let chunk_idx = chunk_graph.module_to_chunk[idx].unwrap();
@@ -524,8 +522,8 @@ impl<'a> GenerateStage<'a> {
         if let Some(css_view) =
           module.as_normal_mut().and_then(|normal_module| normal_module.css_view.as_mut())
         {
-          for (idx, record) in css_view.import_records.iter_enumerated() {
-            if let Some(asset_filename) = module_idx_to_filenames.get(&record.resolved_module) {
+          for (idx, rec) in css_view.import_records.iter_enumerated() {
+            if let Some(asset_filename) = module_idx_to_filenames.get(&rec.into_resolved_module()) {
               let span = css_view.record_idx_to_span[idx];
               css_view
                 .mutations
@@ -599,7 +597,7 @@ impl<'a> GenerateStage<'a> {
             .collect(),
           reason: chunk.chunk_reason_type.as_static_str(),
           advanced_chunk_group_id: chunk.chunk_reason_type.group_index(),
-          chunk_id: idx.raw(),
+          id: idx.raw(),
           name: chunk.name.as_ref().map(ArcStr::to_string),
           // TODO(hyf0): add dynamic importees
           imports: chunk

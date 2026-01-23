@@ -84,9 +84,9 @@ impl LinkStage<'_> {
                 .iter()
                 .filter(|rec| {
                   rec.kind.is_static()
-                    || (self.options.inline_dynamic_imports && rec.kind.is_dynamic())
+                    || (self.options.code_splitting.is_disabled() && rec.kind.is_dynamic())
                 })
-                .map(|rec| rec.resolved_module)
+                .filter_map(|rec| rec.resolved_module)
                 .rev()
                 .map(Status::ToBeExecuted),
             );

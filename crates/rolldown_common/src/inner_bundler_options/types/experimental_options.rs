@@ -3,9 +3,8 @@ use schemars::JsonSchema;
 #[cfg(feature = "deserialize_bundler_options")]
 use serde::Deserialize;
 
-use crate::inner_bundler_options::types::chunk_import_map::ChunkImportMap;
-
 use super::attach_debug_info::AttachDebugInfo;
+use super::chunk_import_map::ChunkImportMap;
 use super::chunk_modules_order::ChunkModulesOrderBy;
 use super::dev_mode_options::DevModeOptions;
 
@@ -40,7 +39,6 @@ impl From<SourcemapHires> for string_wizard::Hires {
   serde(rename_all = "camelCase", deny_unknown_fields)
 )]
 pub struct ExperimentalOptions {
-  pub strict_execution_order: Option<bool>,
   pub vite_mode: Option<bool>,
   pub resolve_new_url_to_asset: Option<bool>,
   pub incremental_build: Option<bool>,
@@ -52,13 +50,10 @@ pub struct ExperimentalOptions {
   pub transform_hires_sourcemap: Option<SourcemapHires>,
   pub native_magic_string: Option<bool>,
   pub chunk_optimization: Option<bool>,
+  pub lazy_barrel: Option<bool>,
 }
 
 impl ExperimentalOptions {
-  pub fn is_strict_execution_order_enabled(&self) -> bool {
-    self.strict_execution_order.unwrap_or(false)
-  }
-
   pub fn is_on_demand_wrapping_enabled(&self) -> bool {
     self.on_demand_wrapping.unwrap_or(false)
   }
@@ -86,5 +81,9 @@ impl ExperimentalOptions {
 
   pub fn is_chunk_optimization_enabled(&self) -> bool {
     self.chunk_optimization.unwrap_or(true)
+  }
+
+  pub fn is_lazy_barrel_enabled(&self) -> bool {
+    self.lazy_barrel.unwrap_or(false)
   }
 }

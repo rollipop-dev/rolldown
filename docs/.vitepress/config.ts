@@ -2,11 +2,7 @@ import { extendConfig } from '@voidzero-dev/vitepress-theme/config';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { type DefaultTheme, defineConfig } from 'vitepress';
-import {
-  groupIconMdPlugin,
-  groupIconVitePlugin,
-  localIconLoader,
-} from 'vitepress-plugin-group-icons';
+import { groupIconMdPlugin, groupIconVitePlugin } from 'vitepress-plugin-group-icons';
 import llmstxt from 'vitepress-plugin-llms';
 import { hooksGraphPlugin } from './markdown-hooks-graph.ts';
 
@@ -28,8 +24,19 @@ const sidebarForUserGuide: DefaultTheme.SidebarItem[] = [
     items: [
       { text: 'Configuration Options', link: '/reference' },
       { text: 'Bundler API', link: '/apis/bundler-api.md' },
-      { text: 'Plugin API', link: '/apis/plugin-api.md' },
-      { text: 'Plugin Hook Filters', link: '/apis/plugin-hook-filters.md' },
+      {
+        text: 'Plugin API',
+        link: '/apis/plugin-api.md',
+        items: [
+          { text: 'Hook Filters', link: '/apis/plugin-api/hook-filters.md' },
+          { text: 'File URLs', link: '/apis/plugin-api/file-urls.md' },
+          { text: 'Source Code Transformations', link: '/apis/plugin-api/transformations.md' },
+          {
+            text: 'Inter-plugin communication',
+            link: '/apis/plugin-api/inter-plugin-communication.md',
+          },
+        ],
+      },
       { text: 'Command Line Interface', link: '/apis/cli.md' },
     ],
   },
@@ -59,21 +66,33 @@ const sidebarForInDepth: DefaultTheme.SidebarItem[] = [
       { text: 'Why Bundlers', link: '/in-depth/why-bundlers.md' },
       { text: 'Module Types', link: '/in-depth/module-types.md' },
       { text: 'Top Level Await', link: '/in-depth/tla-in-rolldown.md' },
-      { text: 'Advanced Chunks', link: '/in-depth/advanced-chunks.md' },
+      { text: 'Automatic Code Splitting', link: '/in-depth/automatic-code-splitting.md' },
+      { text: 'Manual Code Splitting', link: '/in-depth/manual-code-splitting.md' },
       { text: 'Bundling CJS', link: '/in-depth/bundling-cjs.md' },
       {
         text: 'Non ESM Output Formats',
         link: '/in-depth/non-esm-output-formats.md',
       },
+      { text: 'Dead Code Elimination', link: '/in-depth/dead-code-elimination.md' },
+      // { text: 'Lazy Barrel Optimization', link: '/in-depth/lazy-barrel-optimization.md' },
       { text: 'Native MagicString', link: '/in-depth/native-magic-string.md' },
       {
         text: 'Why Plugin Hook Filter',
         link: '/in-depth/why-plugin-hook-filter.md',
       },
-      // { text: 'Code Splitting', link: '/in-depth/code-splitting.md' },
       { text: 'Directives', link: '/in-depth/directives.md' },
     ],
   },
+];
+
+const importantAPIs: (string | undefined)[] = [
+  '/Function.build.md',
+  '/Function.rolldown.md',
+  '/Function.watch.md',
+  '/Interface.Plugin.md',
+  '/Interface.PluginContext.md',
+  '/Variable.VERSION.md',
+  '/Function.defineConfig.md',
 ];
 
 function getTypedocSidebar() {
@@ -88,10 +107,20 @@ function getTypedocSidebar() {
   }
 }
 
-const typedocSidebar = getTypedocSidebar().map((item) => ({
-  ...item,
-  items: item.items?.slice().sort((a, b) => (a.text ?? '').localeCompare(b.text ?? '')),
-}));
+const typedocSidebar = getTypedocSidebar().map((item) => {
+  const stringifyForSort = (item: DefaultTheme.SidebarItem) =>
+    (importantAPIs.includes(item.link) ? '0' : '1') + (item.text ?? '');
+  return {
+    ...item,
+    base: '/reference',
+    items: item.items
+      ?.map((item) => ({
+        ...item,
+        text: (importantAPIs.includes(item.link) ? '★ ' : '') + item.text,
+      }))
+      .toSorted((a, b) => stringifyForSort(a).localeCompare(stringifyForSort(b))),
+  };
+});
 
 function getOptionsSidebar() {
   const filepath = path.resolve(import.meta.dirname, '../reference/options-sidebar.json');
@@ -106,8 +135,13 @@ function getOptionsSidebar() {
 }
 
 const sidebarForReference: DefaultTheme.SidebarItem[] = [
-  { text: 'Option Reference', base: '/reference', items: getOptionsSidebar() },
-  { text: 'API Reference', base: '/reference', items: typedocSidebar },
+  {
+    text: 'Options',
+    base: '/reference',
+    items: getOptionsSidebar(),
+    collapsed: false,
+  },
+  ...typedocSidebar,
 ];
 
 const sidebarForDevGuide: DefaultTheme.SidebarItem[] = [
@@ -161,6 +195,7 @@ const sidebarForGlossary: DefaultTheme.SidebarItem[] = [
   {
     text: 'Glossary',
     items: [
+      { text: 'Barrel Module', link: '/glossary/barrel-module.md' },
       { text: 'Entry', link: '/glossary/entry.md' },
       { text: 'Entry Chunk', link: '/glossary/entry-chunk.md' },
       { text: 'Entry Name', link: '/glossary/entry-name.md' },
@@ -219,6 +254,15 @@ const config = defineConfig({
     ['meta', { property: 'og:url', content: 'https://rolldown.rs/' }],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
     ['meta', { name: 'twitter:site', content: '@rolldown_rs' }],
+    [
+      'script',
+      {
+        src: 'https://cdn.usefathom.com/script.js',
+        'data-site': 'RBMPDFTV',
+        'data-spa': 'auto',
+        defer: '',
+      },
+    ],
   ],
 
   themeConfig: {
@@ -255,7 +299,7 @@ const config = defineConfig({
           },
         ],
       },
-      { text: 'Options & APIs', link: '/reference' },
+      { text: 'Options & APIs', activeMatch: '/reference', link: '/reference' },
       { text: 'REPL', link: 'https://repl.rolldown.rs/' },
       {
         text: 'Resources',
@@ -357,7 +401,6 @@ const config = defineConfig({
         customIcon: {
           homebrew: 'logos:homebrew',
           cargo: 'vscode-icons:file-type-cargo',
-          rolldown: localIconLoader(import.meta.url, '../public/logo-without-border.svg'),
         },
       }) as any,
       llmstxt({

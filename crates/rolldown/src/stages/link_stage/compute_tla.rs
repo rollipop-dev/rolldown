@@ -33,8 +33,9 @@ impl LinkStage<'_> {
           // TODO: require TLA module should give a error
           .filter(|rec| matches!(rec.kind, ImportKind::Import))
           .any(|rec| {
-            let importee = &module_table[rec.resolved_module];
-            is_tla(importee.idx(), module_table, visited_map)
+            rec.resolved_module.is_some_and(|module_idx| {
+              is_tla(module_table[module_idx].idx(), module_table, visited_map)
+            })
           });
 
         visited_map.insert(module_idx, Some(contains_tla_dependency));

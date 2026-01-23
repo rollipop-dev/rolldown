@@ -2,8 +2,8 @@ import type {
   LogLevel,
   LogLevelOption,
   LogOrStringHandler,
-  RollupLog,
-  RollupLogWithString,
+  RolldownLog,
+  RolldownLogWithString,
 } from '../log/logging';
 import type { RolldownPluginOption } from '../plugin';
 import type { TreeshakingOptions } from '../types/module-side-effects';
@@ -224,14 +224,14 @@ type ChunkModulesOrder = 'exec-order' | 'module-id';
 /** @inline */
 export type OnLogFunction = (
   level: LogLevel,
-  log: RollupLog,
+  log: RolldownLog,
   defaultHandler: LogOrStringHandler,
 ) => void;
 
 /** @inline */
 export type OnwarnFunction = (
-  warning: RollupLog,
-  defaultHandler: (warning: RollupLogWithString | (() => RollupLogWithString)) => void,
+  warning: RolldownLog,
+  defaultHandler: (warning: RolldownLogWithString | (() => RolldownLogWithString)) => void,
 ) => void;
 
 export interface InputOptions {
@@ -244,6 +244,8 @@ export interface InputOptions {
    * The list of plugins to use.
    *
    * Falsy plugins will be ignored, which can be used to easily activate or deactivate plugins. Nested plugins will be flattened. Async plugins will be awaited and resolved.
+   *
+   * See [Plugin API document](https://rolldown.rs/apis/plugin-api) for more details about creating plugins.
    */
   plugins?: RolldownPluginOption;
   /**
@@ -436,16 +438,6 @@ export interface InputOptions {
    * @experimental
    */
   experimental?: {
-    /**
-     * Lets modules be executed in the order they are declared.
-     *
-     * This is done by injecting runtime helpers to ensure that modules are executed in the order they are imported. External modules won't be affected.
-     *
-     * > [!WARNING]
-     * > Enabling this option may negatively increase bundle size. It is recommended to use this option only when absolutely necessary.
-     * @default false
-     */
-    strictExecutionOrder?: boolean;
     /**
      * Enable Vite compatible mode.
      * @default false
@@ -646,6 +638,8 @@ export interface InputOptions {
    * Watch mode related options.
    *
    * These options only take effect when running with the `--watch` flag, or using `rolldown.watch()` API.
+   *
+   * @experimental
    */
   watch?: WatcherOptions | false;
   /**

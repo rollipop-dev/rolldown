@@ -17,8 +17,8 @@ import type {
 } from '../options/input-options';
 import type {
   AddonFunction,
-  AdvancedChunksNameFunction,
-  AdvancedChunksTestFunction,
+  CodeSplittingNameFunction,
+  CodeSplittingTestFunction,
   AssetFileNamesFunction,
   ChunkFileNamesFunction,
   GlobalsFunction,
@@ -362,6 +362,7 @@ const TreeshakingOptionsSchema = v.union([
     annotations: v.optional(v.boolean()),
     manualPureFunctions: v.optional(v.array(v.string())),
     unknownGlobalSideEffects: v.optional(v.boolean()),
+    invalidImportSideEffects: v.optional(v.boolean()),
     commonjs: v.optional(v.boolean()),
     propertyReadSideEffects: v.optional(v.union([v.literal(false), v.literal('always')])),
     propertyWriteSideEffects: v.optional(v.union([v.literal(false), v.literal('always')])),
@@ -488,6 +489,7 @@ const InputOptionsSchema = v.strictObject({
       ),
       nativeMagicString: v.optional(v.boolean()),
       chunkOptimization: v.optional(v.boolean()),
+      // lazyBarrel: v.optional(v.boolean()),
     }),
   ),
   transform: v.optional(TransformOptionsSchema),
@@ -608,16 +610,16 @@ const ManualChunksFunctionSchema = v.pipe(
 ) satisfies v.GenericSchema<ManualChunksFunction>;
 
 const AdvancedChunksNameFunctionSchema = v.pipe(
-  vFunction<AdvancedChunksNameFunction>(),
+  vFunction<CodeSplittingNameFunction>(),
   v.args(v.tuple([v.string(), v.object({})])),
   v.returns(v.nullish(v.string())),
-) satisfies v.GenericSchema<AdvancedChunksNameFunction>;
+) satisfies v.GenericSchema<CodeSplittingNameFunction>;
 
 const AdvancedChunksTestFunctionSchema = v.pipe(
-  vFunction<AdvancedChunksTestFunction>(),
+  vFunction<CodeSplittingTestFunction>(),
   v.args(v.tuple([v.string()])),
   v.returns(v.union([v.boolean(), v.void(), v.undefined()])),
-) satisfies v.GenericSchema<AdvancedChunksTestFunction>;
+) satisfies v.GenericSchema<CodeSplittingTestFunction>;
 
 const AdvancedChunksSchema = v.strictObject({
   includeDependenciesRecursively: v.optional(v.boolean()),
@@ -742,7 +744,7 @@ const OutputOptionsSchema = v.strictObject({
     v.description('Dynamic import in CJS output'),
   ),
   manualChunks: v.optional(ManualChunksFunctionSchema),
-  codeSplitting: v.optional(AdvancedChunksSchema),
+  codeSplitting: v.optional(v.union([v.boolean(), AdvancedChunksSchema])),
   advancedChunks: v.optional(AdvancedChunksSchema),
   legalComments: v.pipe(
     v.optional(v.union([v.literal('none'), v.literal('inline')])),
@@ -837,15 +839,18 @@ const OutputCliOverrideSchema = v.strictObject({
   ),
   codeSplitting: v.pipe(
     v.optional(
-      v.strictObject({
-        minSize: v.pipe(v.optional(v.number()), v.description('Minimum size of the chunk')),
-        minShareCount: v.pipe(
-          v.optional(v.number()),
-          v.description('Minimum share count of the chunk'),
-        ),
-      }),
+      v.union([
+        v.boolean(),
+        v.strictObject({
+          minSize: v.pipe(v.optional(v.number()), v.description('Minimum size of the chunk')),
+          minShareCount: v.pipe(
+            v.optional(v.number()),
+            v.description('Minimum share count of the chunk'),
+          ),
+        }),
+      ]),
     ),
-    v.description('Code splitting options'),
+    v.description('Code splitting options (true, false, or object)'),
   ),
   advancedChunks: v.pipe(
     v.optional(

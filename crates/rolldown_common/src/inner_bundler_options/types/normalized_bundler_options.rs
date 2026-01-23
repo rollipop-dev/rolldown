@@ -10,6 +10,7 @@ use oxc::transformer_plugins::InjectGlobalVariablesConfig;
 use rolldown_error::EventKindSwitcher;
 use rustc_hash::{FxHashMap, FxHashSet};
 
+use super::code_splitting_mode::CodeSplittingMode;
 use super::experimental_options::ExperimentalOptions;
 use super::generated_code_options::GeneratedCodeOptions;
 use super::legal_comments::LegalComments;
@@ -86,7 +87,7 @@ pub struct NormalizedBundlerOptions {
   pub inject: Vec<InjectImport>,
   pub oxc_inject_global_variables_config: InjectGlobalVariablesConfig,
   pub external_live_bindings: bool,
-  pub inline_dynamic_imports: bool,
+  pub code_splitting: CodeSplittingMode,
   pub dynamic_import_in_cjs: bool,
   pub manual_code_splitting: Option<ManualCodeSplittingOptions>,
   pub checks: EventKindSwitcher,
@@ -111,6 +112,7 @@ pub struct NormalizedBundlerOptions {
   pub minify_internal_exports: bool,
   pub clean_dir: bool,
   pub context: String,
+  pub strict_execution_order: bool,
   pub global_identifiers: Vec<String>,
 }
 
@@ -162,7 +164,7 @@ impl Default for NormalizedBundlerOptions {
       inject: Default::default(),
       oxc_inject_global_variables_config: InjectGlobalVariablesConfig::new(vec![]),
       external_live_bindings: Default::default(),
-      inline_dynamic_imports: Default::default(),
+      code_splitting: CodeSplittingMode::default(),
       dynamic_import_in_cjs: true,
       manual_code_splitting: Default::default(),
       checks: Default::default(),
@@ -187,6 +189,7 @@ impl Default for NormalizedBundlerOptions {
       minify_internal_exports: Default::default(),
       clean_dir: false,
       context: Default::default(),
+      strict_execution_order: false,
       global_identifiers: Default::default(),
     }
   }
@@ -205,6 +208,10 @@ impl NormalizedBundlerOptions {
 
   pub fn is_dev_mode_enabled(&self) -> bool {
     self.experimental.dev_mode.is_some()
+  }
+
+  pub fn is_strict_execution_order_enabled(&self) -> bool {
+    self.strict_execution_order
   }
 
   /// make sure the `polyfill_require` is only valid for `esm` format with `node` platform

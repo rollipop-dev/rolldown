@@ -10,8 +10,8 @@ use oxc::span::CompactStr;
 use oxc_index::{IndexVec, index_vec};
 use rolldown_common::{
   ChunkIdx, ChunkKind, ChunkMeta, CrossChunkImportItem, EntryPointKind, ExportsKind, ImportKind,
-  ImportRecordMeta, Module, ModuleIdx, NamedImport, OutputFormat, PreserveEntrySignatures,
-  RUNTIME_HELPER_NAMES, SymbolIdExt, SymbolRef, WrapKind,
+  ImportRecordMeta, Module, ModuleIdx, NamedImport, OutputFormat, PostChunkOptimizationOperation,
+  PreserveEntrySignatures, RUNTIME_HELPER_NAMES, SymbolIdExt, SymbolRef, WrapKind,
 };
 use rolldown_utils::concat_string;
 use rolldown_utils::index_vec_ext::IndexVecRefExt as _;
@@ -183,45 +183,49 @@ impl GenerateStage<'_> {
           module
             .import_records
             .iter()
-            .inspect(|rec| {
-              if let Module::Normal(importee_module) =
-                &self.link_output.module_table[rec.resolved_module]
-              {
-                // the the resolved module is not included in module graph, skip
-                // TODO: Is that possible that the module of the record is a external module?
-                if !self.link_output.metas[importee_module.idx].is_included {
-                  return;
+            .filter_map(|rec| rec.resolved_module.map(|module_idx| (rec, module_idx)))
+            .for_each(|(rec, module_idx)| {
+              match &self.link_output.module_table[module_idx] {
+                Module::Normal(_) => {
+                  // The the resolved module is not included in module graph, skip it.
+                  if !self.link_output.metas[module_idx].is_included {
+                    return;
+                  }
+                  if matches!(rec.kind, ImportKind::DynamicImport) {
+                    let importee_chunk =
+                      chunk_graph.module_to_chunk[module_idx].expect("importee chunk should exist");
+                    cross_chunk_dynamic_imports.insert(importee_chunk);
+                  }
                 }
-                if matches!(rec.kind, ImportKind::DynamicImport) {
-                  let importee_chunk = chunk_graph.module_to_chunk[importee_module.idx]
-                    .expect("importee chunk should exist");
-                  cross_chunk_dynamic_imports.insert(importee_chunk);
+                Module::External(_) => {
+                  // Ensure the external module is imported in case it has side effects.
+                  if matches!(rec.kind, ImportKind::Import)
+                    && !rec.meta.contains(ImportRecordMeta::IsExportStar)
+                  {
+                    imports_from_external_modules.entry(module_idx).or_default();
+                  }
                 }
               }
-            })
-            .filter(|rec| {
-              matches!(rec.kind, ImportKind::Import)
-                && !rec.meta.contains(ImportRecordMeta::IsExportStar)
-            })
-            .filter_map(|rec| self.link_output.module_table[rec.resolved_module].as_external())
-            .for_each(|importee| {
-              // Ensure the external module is imported in case it has side effects.
-              imports_from_external_modules.entry(importee.idx).or_default();
             });
 
-          module.named_imports.iter().for_each(|(_, import)| {
-            let rec = &module.import_records[import.record_idx];
-            if let Module::External(importee) = &self.link_output.module_table[rec.resolved_module]
-            {
-              imports_from_external_modules
-                .entry(importee.idx)
-                .or_default()
-                .push((module.idx, import.clone()));
-            }
-          });
-          let linking_info = &self.link_output.metas[module.idx];
+          module
+            .named_imports
+            .iter()
+            .filter_map(|(_, import)| {
+              module.import_records[import.record_idx]
+                .resolved_module
+                .map(|module_idx| (import, module_idx))
+            })
+            .for_each(|(import, module_idx)| {
+              if let Module::External(importee) = &self.link_output.module_table[module_idx] {
+                imports_from_external_modules
+                  .entry(importee.idx)
+                  .or_default()
+                  .push((module.idx, import.clone()));
+              }
+            });
           module.stmt_infos.iter_enumerated().for_each(|(stmt_info_idx, stmt_info)| {
-            if !linking_info.stmt_info_included[stmt_info_idx] {
+            if !self.link_output.metas[module.idx].stmt_info_included[stmt_info_idx] {
               return;
             }
             stmt_info.declared_symbols.iter().for_each(|declared| {
@@ -341,13 +345,22 @@ impl GenerateStage<'_> {
     chunk_graph
       .chunk_table
       .iter_enumerated()
-      // Skip removed chunks - they have been merged into other chunks
-      .filter(|(chunk_id, _)| !chunk_graph.removed_chunk_idx.contains(chunk_id))
+      // Skip chunks that are purely removed (merged into other chunks without preserving exports).
+      // Chunks with PreserveExports flag (e.g., emitted chunks merged into common chunks) are kept
+      // because their exports still need to be computed.
+      .filter(|(chunk_id, _)| {
+        !chunk_graph
+          .post_chunk_optimization_operations
+          .get(chunk_id)
+          .map(|flag| *flag == PostChunkOptimizationOperation::Removed)
+          .unwrap_or(false)
+      })
       .for_each(|(chunk_id, chunk)| {
         match chunk.kind {
           ChunkKind::EntryPoint { module: module_idx, meta, .. } => {
             let is_dynamic_imported = meta.contains(ChunkMeta::DynamicImported);
-            let is_user_defined = meta.contains(ChunkMeta::UserDefinedEntry);
+            let is_user_defined =
+              meta.intersects(ChunkMeta::UserDefinedEntry | ChunkMeta::EmittedChunk);
 
             let normalized_entry_signatures = normalize_preserve_entry_signature(
               &self.link_output.overrode_preserve_entry_signature_map,
@@ -485,36 +498,29 @@ impl GenerateStage<'_> {
               .import_records
               .iter()
               .filter(|rec| rec.kind != ImportKind::DynamicImport)
-              .for_each(|item| {
-                if !self.link_output.module_table[item.resolved_module]
-                  .side_effects()
-                  .has_side_effects()
-                {
+              .filter_map(|r| r.resolved_module)
+              .for_each(|module_idx| {
+                if !self.link_output.module_table[module_idx].side_effects().has_side_effects() {
                   return;
                 }
-                let Some(importee_chunk_idx) = chunk_graph.module_to_chunk[item.resolved_module]
-                else {
+                let Some(importee_chunk_idx) = chunk_graph.module_to_chunk[module_idx] else {
                   return;
                 };
                 index_cross_chunk_imports[chunk_id].insert(importee_chunk_idx);
                 let imports_from_other_chunks = &mut index_imports_from_other_chunks[chunk_id];
                 imports_from_other_chunks.entry(importee_chunk_idx).or_default();
               });
-          } else {
+          } else if !self.options.is_strict_execution_order_enabled() {
+            // With strict_execution_order/wrapping, modules aren't executed in loading but on-demand.
+            // So we don't need to do plain imports to address the side effects. It would be ensured
+            // by those `init_xxx()` calls.
             chunk_graph
               .chunk_table
               .iter_enumerated()
               .filter(|(id, _)| *id != chunk_id)
               .filter(|(_, importee_chunk)| {
-                if self.options.experimental.is_strict_execution_order_enabled() {
-                  // With strict_execution_order/wrapping, modules aren't executed in loading but on-demand.
-                  // So we don't need to do plain imports to address the side effects. It would be ensured
-                  // by those `init_xxx()` calls.
-                  false
-                } else {
-                  importee_chunk.bits.has_bit(*importer_chunk_bit)
-                    && importee_chunk.has_side_effect(&self.link_output.module_table)
-                }
+                importee_chunk.bits.has_bit(*importer_chunk_bit)
+                  && importee_chunk.has_side_effect(&self.link_output.module_table)
               })
               .for_each(|(importee_chunk_id, _)| {
                 index_cross_chunk_imports[chunk_id].insert(importee_chunk_id);
@@ -537,6 +543,8 @@ impl GenerateStage<'_> {
     // Generate cross-chunk exports. These must be computed before cross-chunk
     // imports because of export alias renaming, which must consider all export
     // aliases simultaneously to avoid collisions.
+    let preserve_export_names_modules =
+      std::mem::take(&mut chunk_graph.common_chunk_preserve_export_names_modules);
     for (chunk_id, chunk) in chunk_graph.chunk_table.iter_mut_enumerated() {
       if allow_to_minify_internal_exports {
         // Reference: https://github.com/rollup/rollup/blob/f76339428586620ff3e4c32fce48f923e7be7b05/src/utils/exportNames.ts#L5
@@ -560,6 +568,29 @@ impl GenerateStage<'_> {
             chunk.exports_to_other_chunks.entry(export_ref).or_default().push(name.clone());
             processed_entry_exports.insert(export_ref);
           });
+        }
+        // Also preserve exports from AllowExtension emitted chunks that were merged into this chunk
+        if let Some(modules) = preserve_export_names_modules.get(&chunk_id) {
+          let exported_chunk_symbols = &index_chunk_exported_symbols[chunk_id];
+          for &module_idx in modules {
+            let module_meta = &self.link_output.metas[module_idx];
+            module_meta.canonical_exports(false).for_each(|(name, export)| {
+              let export_ref = self.link_output.symbol_db.canonical_ref_for(export.symbol_ref);
+              // Use canonical ref for lookup since that's the key in exported_chunk_symbols
+              if !exported_chunk_symbols.contains_key(&export_ref)
+                || !self.link_output.used_symbol_refs.contains(&export_ref)
+              {
+                return;
+              }
+              // Skip if already processed (e.g., same symbol re-exported from multiple modules)
+              if processed_entry_exports.contains(&export_ref) {
+                return;
+              }
+              used_names.insert(name.clone());
+              chunk.exports_to_other_chunks.entry(export_ref).or_default().push(name.clone());
+              processed_entry_exports.insert(export_ref);
+            });
+          }
         }
         for (chunk_export, _predefined_names) in index_chunk_exported_symbols[chunk_id]
           .iter()

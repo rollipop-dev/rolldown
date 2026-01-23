@@ -3,16 +3,20 @@ import { build, type BuildOptions } from './api/build';
 import { rolldown } from './api/rolldown';
 import type { RolldownBuild } from './api/rolldown/rolldown-build';
 import { watch } from './api/watch';
-import type { RolldownWatcher, RolldownWatcherEvent } from './api/watch/watch-emitter';
+import type {
+  RolldownWatcher,
+  RolldownWatcherEvent,
+  RolldownWatcherWatcherEventMap,
+} from './api/watch/watch-emitter';
 import type { PreRenderedChunk } from './binding.cjs';
 import type { LoggingFunction, WarningHandlerWithDefault } from './log/log-handler';
 import type {
   LogLevel,
   LogLevelOption,
   LogOrStringHandler,
-  RollupError,
-  RollupLog,
-  RollupLogWithString,
+  RolldownError,
+  RolldownLog,
+  RolldownLogWithString,
 } from './log/logging';
 import type { ChecksOptions } from './options/generated/checks-options';
 import type {
@@ -32,10 +36,13 @@ import type {
 } from './options/normalized-output-options';
 import type {
   CodeSplittingGroup,
+  CodeSplittingOptions,
   AddonFunction,
   ChunkFileNamesFunction,
   ChunkingContext,
+  CodeSplittingNameFunction,
   AdvancedChunksGroup,
+  AdvancedChunksOptions,
   GeneratedCodeOptions,
   GeneratedCodePreset,
   GlobalsFunction,
@@ -77,9 +84,11 @@ import type { MinimalPluginContext, PluginContextMeta } from './plugin/minimal-p
 import type { DefineParallelPluginResult } from './plugin/parallel-plugin';
 import type {
   EmittedAsset,
+  EmittedChunk,
   EmittedFile,
   EmittedPrebuiltChunk,
   GetModuleInfo,
+  PluginContextResolveOptions,
   PluginContext,
 } from './plugin/plugin-context';
 import type { TransformPluginContext } from './plugin/transform-plugin-context';
@@ -110,17 +119,21 @@ export { BindingMagicString } from './binding.cjs';
 export type {
   AddonFunction,
   CodeSplittingGroup,
+  CodeSplittingOptions,
   AsyncPluginHooks,
   AdvancedChunksGroup,
+  AdvancedChunksOptions,
   BufferEncoding,
   BuildOptions,
   ChecksOptions,
   ChunkFileNamesFunction,
   ChunkingContext,
+  CodeSplittingNameFunction,
   ConfigExport,
   CustomPluginOptions,
   DefineParallelPluginResult,
   EmittedAsset,
+  EmittedChunk,
   EmittedFile,
   EmittedPrebuiltChunk,
   ExistingRawSourceMap,
@@ -164,6 +177,7 @@ export type {
   PartialNull,
   PartialResolvedId,
   Plugin,
+  PluginContextResolveOptions,
   PluginContext,
   PluginContextMeta,
   PreRenderedAsset,
@@ -184,9 +198,13 @@ export type {
   RolldownPluginOption,
   RolldownWatcher,
   RolldownWatcherEvent,
-  RollupError,
-  RollupLog,
-  RollupLogWithString,
+  RolldownWatcherWatcherEventMap,
+  RolldownError,
+  RolldownError as RollupError,
+  RolldownLog,
+  RolldownLog as RollupLog,
+  RolldownLogWithString,
+  RolldownLogWithString as RollupLogWithString,
   SourceDescription,
   SourceMap,
   SourcemapIgnoreListOption,

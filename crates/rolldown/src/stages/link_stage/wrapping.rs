@@ -52,10 +52,11 @@ fn wrap_module_recursively(ctx: &mut Context, target: ModuleIdx) {
   }
 
   module.import_records.iter().for_each(|rec| {
+    let Some(module_idx) = rec.state.resolved_module else { return };
     if matches!(rec.kind, ImportKind::Require) {
-      ctx.linking_infos[rec.resolved_module].required_by_other_module = true;
+      ctx.linking_infos[module_idx].required_by_other_module = true;
     }
-    wrap_module_recursively(ctx, rec.resolved_module);
+    wrap_module_recursively(ctx, module_idx);
   });
 }
 
@@ -105,8 +106,7 @@ impl LinkStage<'_> {
 
     let mut cjs_exports_kind_modules = FxHashSet::default();
 
-    let is_strict_execution_order_enabled =
-      self.options.experimental.is_strict_execution_order_enabled();
+    let is_strict_execution_order_enabled = self.options.is_strict_execution_order_enabled();
     let on_demand_wrapping = self.options.experimental.is_on_demand_wrapping_enabled();
 
     for module in self.module_table.modules.iter().filter_map(Module::as_normal) {
@@ -141,12 +141,12 @@ impl LinkStage<'_> {
       } else {
         // Make sure depended cjs modules got wrapped.
         module.import_records.iter().for_each(|rec| {
-          let Module::Normal(importee) = &self.module_table[rec.resolved_module] else {
+          let Some(module_idx) = rec.resolved_module else { return };
+          let Module::Normal(importee) = &self.module_table[module_idx] else {
             return;
           };
-
           if matches!(rec.kind, ImportKind::Require) {
-            self.metas[rec.resolved_module].required_by_other_module = true;
+            self.metas[importee.idx].required_by_other_module = true;
           }
           // Commonjs as a dependency must be wrapped. The wrapper is like a commonjs runtime to help initialize the commonjs module correctly.
           if matches!(importee.exports_kind, ExportsKind::CommonJs) {

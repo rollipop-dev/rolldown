@@ -4,6 +4,7 @@ import type { SourcemapIgnoreListOption, SourcemapPathTransformOption } from '..
 import type { ModuleInfo } from '../types/module-info';
 import type { RenderedChunk } from '../types/rolldown-output';
 import type { NullValue, StringOrRegExp } from '../types/utils';
+import type { AssetSource } from '../utils/asset-source';
 // oxlint-disable-next-line no-unused-vars -- this is used in JSDoc links
 import type { InputOptions } from './input-options';
 
@@ -60,11 +61,15 @@ export type SanitizeFileNameFunction = (name: string) => string;
 /** @category Plugin APIs */
 export interface PreRenderedAsset {
   type: 'asset';
+  /** @deprecated Use {@linkcode names} instead. */
   name?: string;
   names: string[];
+  /** @deprecated Use {@linkcode originalFileNames} instead. */
   originalFileName?: string;
+  /** The list of the absolute paths to the original file of this asset. */
   originalFileNames: string[];
-  source: string | Uint8Array;
+  /** The content of this asset. */
+  source: AssetSource;
 }
 
 /** @inline */
@@ -82,17 +87,18 @@ export type ManualChunksFunction = (
 /** @inline */
 export type GlobalsFunction = (name: string) => string;
 
-/** @inline */
-export type AdvancedChunksNameFunction = (
+/** @category Plugin APIs */
+export type CodeSplittingNameFunction = (
   moduleId: string,
   ctx: ChunkingContext,
 ) => string | NullValue;
 
 /** @inline */
-export type AdvancedChunksTestFunction = (id: string) => boolean | undefined | void;
+export type CodeSplittingTestFunction = (id: string) => boolean | undefined | void;
 
 export type MinifyOptions = Omit<BindingMinifyOptions, 'module' | 'sourcemap'>;
 
+/** @inline */
 export interface ChunkingContext {
   getModuleInfo(moduleId: string): ModuleInfo | null;
 }
@@ -278,7 +284,7 @@ export interface OutputOptions {
    */
   esModule?: boolean | 'if-default-prop';
   /**
-   * The pattern to use for naming custom emitted assets to include in the build output, or a function that is called per asset to return such a pattern.
+   * The pattern to use for naming custom emitted assets to include in the build output, or a function that is called per asset with {@linkcode PreRenderedAsset} to return such a pattern.
    *
    * Patterns support the following placeholders:
    * - `[extname]`: The file extension of the asset including a leading dot, e.g. `.css`.
@@ -294,7 +300,7 @@ export interface OutputOptions {
    */
   assetFileNames?: string | AssetFileNamesFunction;
   /**
-   * The pattern to use for chunks created from entry points, or a function that is called per entry chunk to return such a pattern.
+   * The pattern to use for chunks created from entry points, or a function that is called per entry chunk with {@linkcode PreRenderedChunk} to return such a pattern.
    *
    * Patterns support the following placeholders:
    * - `[format]`: The rendering format defined in the output options, e.g. `es` or `cjs`.
@@ -309,7 +315,7 @@ export interface OutputOptions {
    */
   entryFileNames?: string | ChunkFileNamesFunction;
   /**
-   * The pattern to use for naming shared chunks created when code-splitting, or a function that is called per chunk to return such a pattern.
+   * The pattern to use for naming shared chunks created when code-splitting, or a function that is called per chunk with {@linkcode PreRenderedChunk} to return such a pattern.
    *
    * Patterns support the following placeholders:
    * - `[format]`: The rendering format defined in the output options, e.g. `es` or `cjs`.
@@ -454,6 +460,8 @@ export interface OutputOptions {
    */
   externalLiveBindings?: boolean;
   /**
+   * @deprecated Please use `codeSplitting: false` instead.
+   *
    * Whether to inline dynamic imports instead of creating new chunks to create a single bundle.
    *
    * This option can be used only when a single input is provided.
@@ -517,7 +525,13 @@ export interface OutputOptions {
    */
   manualChunks?: ManualChunksFunction;
   /**
-   * Allows you to do manual chunking. For deeper understanding, please refer to the in-depth [documentation](https://rolldown.rs/in-depth/advanced-chunks).
+   * Controls how code splitting is performed.
+   *
+   * - `true`: Default behavior, automatic code splitting. **(default)**
+   * - `false`: Inline all dynamic imports into a single bundle (equivalent to deprecated `inlineDynamicImports: true`).
+   * - `object`: Advanced manual code splitting configuration.
+   *
+   * For deeper understanding, please refer to the in-depth [documentation](https://rolldown.rs/in-depth/manual-code-splitting).
    *
    * @example
    * **Basic vendor chunk**
@@ -536,46 +550,11 @@ export interface OutputOptions {
    *   },
    * });
    * ```
-   * {@include ./docs/output-advanced-chunks.md}
+   * {@include ./docs/output-code-splitting.md}
+   *
+   * @default true
    */
-  codeSplitting?: {
-    /**
-     * By default, each group will also include captured modules' dependencies. This reduces the chance of generating circular chunks.
-     *
-     * If you want to disable this behavior, it's recommended to both set
-     * - {@linkcode InputOptions.preserveEntrySignatures | preserveEntrySignatures}: `false | 'allow-extension'`
-     * - `experimental.strictExecutionOrder`: `true`
-     *
-     * to avoid generating invalid chunks.
-     *
-     * @default true
-     */
-    includeDependenciesRecursively?: boolean;
-    /**
-     * Global fallback of {@linkcode CodeSplittingGroup.minSize | group.minSize}, if it's not specified in the group.
-     */
-    minSize?: number;
-    /**
-     * Global fallback of {@linkcode CodeSplittingGroup.maxSize | group.maxSize}, if it's not specified in the group.
-     */
-    maxSize?: number;
-    /**
-     * Global fallback of {@linkcode CodeSplittingGroup.maxModuleSize | group.maxModuleSize}, if it's not specified in the group.
-     */
-    maxModuleSize?: number;
-    /**
-     * Global fallback of {@linkcode CodeSplittingGroup.minModuleSize | group.minModuleSize}, if it's not specified in the group.
-     */
-    minModuleSize?: number;
-    /**
-     * Global fallback of {@linkcode CodeSplittingGroup.minShareCount | group.minShareCount}, if it's not specified in the group.
-     */
-    minShareCount?: number;
-    /**
-     * Groups to be used for code splitting.
-     */
-    groups?: CodeSplittingGroup[];
-  };
+  codeSplitting?: boolean | CodeSplittingOptions;
   /**
    * @deprecated Please use {@linkcode codeSplitting | output.codeSplitting} instead.
    *
@@ -676,6 +655,16 @@ export interface OutputOptions {
    */
   keepNames?: boolean;
   /**
+   * Lets modules be executed in the order they are declared.
+   *
+   * This is done by injecting runtime helpers to ensure that modules are executed in the order they are imported. External modules won't be affected.
+   *
+   * > [!WARNING]
+   * > Enabling this option may negatively increase bundle size. It is recommended to use this option only when absolutely necessary.
+   * @default false
+   */
+  strictExecutionOrder?: boolean;
+  /**
    * Reserved global identifiers to be avoided when generating export binding names for module chunks.
    *
    * @default []
@@ -693,13 +682,15 @@ export type CodeSplittingGroup = {
    * import { defineConfig } from '@rollipop/rolldown';
    *
    * export default defineConfig({
-   *   advancedChunks: {
-   *     groups: [
-   *       {
-   *         name: 'libs',
-   *         test: /node_modules/,
-   *       },
-   *     ],
+   *   output: {
+   *     codeSplitting: {
+   *       groups: [
+   *         {
+   *           name: 'libs',
+   *           test: /node_modules/,
+   *         },
+   *       ],
+   *     },
    *   },
    * });
    * ```
@@ -719,13 +710,15 @@ export type CodeSplittingGroup = {
    * import { defineConfig } from '@rollipop/rolldown';
    *
    * export default defineConfig({
-   *   advancedChunks: {
-   *     groups: [
-   *       {
-   *         name: (moduleId) => moduleId.includes('node_modules') ? 'libs' : 'app',
-   *         minSize: 100 * 1024,
-   *       },
-   *     ],
+   *   output: {
+   *     codeSplitting: {
+   *       groups: [
+   *         {
+   *           name: (moduleId) => moduleId.includes('node_modules') ? 'libs' : 'app',
+   *           minSize: 100 * 1024,
+   *         },
+   *       ],
+   *     },
    *   },
    * });
    * ```
@@ -734,7 +727,7 @@ export type CodeSplittingGroup = {
    * Constraints like `minSize`, `maxSize`, etc. are applied separately for different names returned by the function.
    * :::
    */
-  name: string | AdvancedChunksNameFunction;
+  name: string | CodeSplittingNameFunction;
   /**
    * Controls which modules are captured in this group.
    *
@@ -749,7 +742,7 @@ export type CodeSplittingGroup = {
    * - ❌ Not recommended: `/node_modules/react/`
    * :::
    */
-  test?: StringOrRegExp | AdvancedChunksTestFunction;
+  test?: StringOrRegExp | CodeSplittingTestFunction;
   /**
    * Priority of the group. Group with higher priority will be chosen first to match modules and create chunks. When converting the group to a chunk, modules of that group will be removed from other groups.
    *
@@ -760,19 +753,22 @@ export type CodeSplittingGroup = {
    * import { defineConfig } from '@rollipop/rolldown';
    *
    * export default defineConfig({
-   *  advancedChunks: {
-   *   groups: [
-   *      {
-   *        name: 'react',
-   *        test: /node_modules[\\/]react/,
-   *        priority: 2,
-   *      },
-   *      {
-   *        name: 'other-libs',
-   *        test: /node_modules/,
-   *        priority: 1,
-   *      },
-   *   ],
+   *   output: {
+   *     codeSplitting: {
+   *       groups: [
+   *         {
+   *           name: 'react',
+   *           test: /node_modules[\\/]react/,
+   *           priority: 2,
+   *         },
+   *         {
+   *           name: 'other-libs',
+   *           test: /node_modules/,
+   *           priority: 1,
+   *         },
+   *       ],
+   *     },
+   *   },
    * });
    * ```
    *
@@ -813,8 +809,59 @@ export type CodeSplittingGroup = {
 
 /**
  * Alias for {@linkcode CodeSplittingGroup}. Use this type for the `codeSplitting.groups` option.
+ *
+ * @deprecated Please use {@linkcode CodeSplittingGroup} instead.
  */
 export type AdvancedChunksGroup = CodeSplittingGroup;
+
+/**
+ * Configuration options for advanced code splitting.
+ */
+export type CodeSplittingOptions = {
+  /**
+   * By default, each group will also include captured modules' dependencies. This reduces the chance of generating circular chunks.
+   *
+   * If you want to disable this behavior, it's recommended to both set
+   * - {@linkcode InputOptions.preserveEntrySignatures | preserveEntrySignatures}: `false | 'allow-extension'`
+   * - {@linkcode OutputOptions.strictExecutionOrder | strictExecutionOrder}: `true`
+   *
+   * to avoid generating invalid chunks.
+   *
+   * @default true
+   */
+  includeDependenciesRecursively?: boolean;
+  /**
+   * Global fallback of {@linkcode CodeSplittingGroup.minSize | group.minSize}, if it's not specified in the group.
+   */
+  minSize?: number;
+  /**
+   * Global fallback of {@linkcode CodeSplittingGroup.maxSize | group.maxSize}, if it's not specified in the group.
+   */
+  maxSize?: number;
+  /**
+   * Global fallback of {@linkcode CodeSplittingGroup.maxModuleSize | group.maxModuleSize}, if it's not specified in the group.
+   */
+  maxModuleSize?: number;
+  /**
+   * Global fallback of {@linkcode CodeSplittingGroup.minModuleSize | group.minModuleSize}, if it's not specified in the group.
+   */
+  minModuleSize?: number;
+  /**
+   * Global fallback of {@linkcode CodeSplittingGroup.minShareCount | group.minShareCount}, if it's not specified in the group.
+   */
+  minShareCount?: number;
+  /**
+   * Groups to be used for code splitting.
+   */
+  groups?: CodeSplittingGroup[];
+};
+
+/**
+ * Alias for {@linkcode CodeSplittingOptions}. Use this type for the `codeSplitting` option.
+ *
+ * @deprecated Please use {@linkcode CodeSplittingOptions} instead.
+ */
+export type AdvancedChunksOptions = CodeSplittingOptions;
 
 interface OverwriteOutputOptionsForCli {
   banner?: string;
@@ -825,10 +872,12 @@ interface OverwriteOutputOptionsForCli {
   outro?: string;
   esModule?: boolean;
   globals?: Record<string, string>;
-  codeSplitting?: {
-    minSize?: number;
-    minShareCount?: number;
-  };
+  codeSplitting?:
+    | boolean
+    | {
+        minSize?: number;
+        minShareCount?: number;
+      };
   advancedChunks?: {
     minSize?: number;
     minShareCount?: number;

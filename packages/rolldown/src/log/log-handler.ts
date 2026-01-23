@@ -4,11 +4,13 @@ import {
   type LogLevel,
   type LogLevelOption,
   logLevelPriority,
-  type RollupLog,
+  type RolldownLog,
 } from './logging';
 import { logInvalidLogPosition } from './logs';
 
-export const normalizeLog = (log: RollupLog | string | (() => RollupLog | string)): RollupLog =>
+export const normalizeLog = (
+  log: RolldownLog | string | (() => RolldownLog | string),
+): RolldownLog =>
   typeof log === 'string'
     ? { message: log }
     : typeof log === 'function'
@@ -39,16 +41,29 @@ export function getLogHandler(
   };
 }
 
-export type LoggingFunction = (log: RollupLog | string | (() => RollupLog | string)) => void;
+export type LoggingFunction = (
+  /**
+   * The log object or message.
+   *
+   * The string argument is equivalent to passing an object with only the
+   * {@linkcode RolldownLog.message | message} property.
+   */
+  log: RolldownLog | string | (() => RolldownLog | string),
+) => void;
 
 export type LoggingFunctionWithPosition = (
-  log: RollupLog | string | (() => RollupLog | string),
+  log: RolldownLog | string | (() => RolldownLog | string),
+  /**
+   * A character index or file location which will be used to augment the log with
+   * {@linkcode RolldownLog.pos | pos}, {@linkcode RolldownLog.loc | loc} and
+   * {@linkcode RolldownLog.frame | frame}.
+   */
   pos?: number | { column: number; line: number },
 ) => void;
 
-export type LogHandler = (level: LogLevel, log: RollupLog) => void;
+export type LogHandler = (level: LogLevel, log: RolldownLog) => void;
 
 export type WarningHandlerWithDefault = (
-  warning: RollupLog,
+  warning: RolldownLog,
   defaultHandler: LoggingFunction,
 ) => void;

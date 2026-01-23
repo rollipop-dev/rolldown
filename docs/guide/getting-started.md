@@ -1,7 +1,7 @@
 # Getting Started
 
-:::warning 🚧 Beta Software
-Rolldown is currently in beta status. While it can already handle most production use cases, there may still be bugs and rough edges. Most notably, the built-in minification feature is still in early work-in-progress status.
+:::warning 🚧 Release Candidate
+Rolldown is currently in RC status. While it can already handle most production use cases, there may still be bugs and rough edges. Most notably, the built-in minification feature is still in early work-in-progress status.
 :::
 
 :::tip Looking for specific use cases?
@@ -80,7 +80,7 @@ If you are using a platform that a prebuilt binary is not distributed, you have 
 
 ### Release Channels
 
-- [latest](https://www.npmjs.com/package/rolldown?activeTab=versions): currently `1.0.0-beta.*`.
+- [latest](https://www.npmjs.com/package/rolldown?activeTab=versions): currently `1.0.0-rc.*`.
 - [pkg.pr.new](https://pkg.pr.new/~/rolldown/rolldown): continuously released from the `main` branch. Install with `npm i https://pkg.pr.new/rolldown@sha` where `sha` is a successful build listed on [pkg.pr.new](https://pkg.pr.new/~/rolldown/rolldown).
 
 ## Using the CLI
@@ -139,7 +139,7 @@ To avoid typing the long command, we can move it inside an npm script:
     "build": "rolldown src/main.js --file bundle.js"
   },
   "devDependencies": {
-    "rolldown": "^1.0.0-beta.1"
+    "rolldown": "^1.0.0-rc.1"
   }
 }
 ```
@@ -165,9 +165,9 @@ export default defineConfig({
 });
 ```
 
-Rolldown supports most of the [Rollup config options](https://rollupjs.org/configuration-options), with some [notable additional features](./notable-features).
+Rolldown supports most of the [Rollup config options](https://rollupjs.org/configuration-options), with some [notable additional features](./notable-features). See the [reference](/reference/) for the full list of options.
 
-While exporting a plain object also works, it is recommended to utilize the `defineConfig` helper method to get options intellisense and auto-completion. This helper is provided purely for the types and returns the options as-is.
+While exporting a plain object also works, it is recommended to utilize the [`defineConfig`](/reference/Function.defineConfig) helper method to get options intellisense and auto-completion. This helper is provided purely for the types and returns the options as-is.
 
 Next, in the npm script, we can instruct Rolldown to use the config file with the `--config` CLI option (`-c` for short):
 
@@ -179,7 +179,7 @@ Next, in the npm script, we can instruct Rolldown to use the config file with th
     "build": "rolldown -c"
   },
   "devDependencies": {
-    "rolldown": "^1.0.0-beta.1"
+    "rolldown": "^1.0.0-rc.1"
   }
 }
 ```

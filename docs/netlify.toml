@@ -30,6 +30,10 @@ to = "/reference/"
 from = "/options/"
 to = "/reference"
 
+[[redirects]]
+from = "/apis/plugin-hook-filters"
+to = "/apis/plugin-api/hook-filters"
+
 # Redirect old /options/ paths to /reference/
 [[redirects]]
 from = "/options/input"
@@ -113,7 +117,15 @@ to = "/reference/OutputOptions.generatedCode"
 
 [[redirects]]
 from = "/options/output-advanced-chunks"
-to = "/reference/OutputOptions.advancedChunks"
+to = "/reference/OutputOptions.codeSplitting"
+
+[[redirects]]
+from = "/in-depth/advanced-chunks"
+to = "/in-depth/manual-code-splitting"
+
+[[redirects]]
+from = "/in-depth/code-splitting"
+to = "/in-depth/automatic-code-splitting"
 
 [[redirects]]
 from = "/options/output-clean-dir"

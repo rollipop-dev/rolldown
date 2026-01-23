@@ -1,4 +1,7 @@
-use oxc::span::{CompactStr, Span};
+use oxc::{
+  semantic::ReferenceId,
+  span::{CompactStr, Span},
+};
 
 use crate::{MemberExprRefResolution, SymbolRef, type_aliases::MemberExprRefResolutionMap};
 
@@ -8,12 +11,16 @@ use crate::{MemberExprRefResolution, SymbolRef, type_aliases::MemberExprRefResol
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MemberExprRef {
   pub object_ref: SymbolRef,
-  pub prop_and_span_list: Box<Vec<(CompactStr, Span)>>,
+  pub prop_and_span_list: Vec<(CompactStr, Span)>,
   /// Span of the whole member expression
   /// FIXME: use `AstNodeId` to identify the MemberExpr instead of `Span`
   /// related discussion: https://github.com/rolldown/rolldown/pull/1818#discussion_r1699374441
   pub span: Span,
   pub object_ref_type: MemberExprObjectReferencedType,
+  /// The semantic reference ID for the object identifier of this member expression.
+  /// Used during symbol renaming to find the scope where the reference occurs,
+  /// enabling detection of potential shadowing by nested scope bindings.
+  pub reference_id: Option<ReferenceId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -29,13 +36,9 @@ impl MemberExprRef {
     prop_and_span_list: Vec<(CompactStr, Span)>,
     span: Span,
     obj_ref_type: MemberExprObjectReferencedType,
+    reference_id: Option<ReferenceId>,
   ) -> Self {
-    Self {
-      object_ref,
-      prop_and_span_list: Box::new(prop_and_span_list),
-      span,
-      object_ref_type: obj_ref_type,
-    }
+    Self { object_ref, prop_and_span_list, span, object_ref_type: obj_ref_type, reference_id }
   }
 
   /// This method is tricky, use it with care.

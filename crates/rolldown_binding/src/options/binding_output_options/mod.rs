@@ -156,5 +156,6 @@ pub struct BindingOutputOptions<'env> {
   pub top_level_var: Option<bool>,
   pub minify_internal_exports: Option<bool>,
   pub clean_dir: Option<bool>,
+  pub strict_execution_order: Option<bool>,
   pub global_identifiers: Option<Vec<String>>,
 }

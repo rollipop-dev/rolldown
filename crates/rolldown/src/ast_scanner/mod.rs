@@ -12,7 +12,7 @@ use const_eval::{ConstEvalCtx, try_extract_const_literal};
 use oxc::ast::ast::{BindingPattern, Expression, ImportExpression};
 use oxc::ast::{AstKind, ast};
 use oxc::ast_visit::walk;
-use oxc::semantic::{Reference, ScopeFlags, Scoping};
+use oxc::semantic::{Reference, ReferenceId, ScopeFlags, Scoping};
 use oxc::span::SPAN;
 use oxc::{
   ast::{
@@ -273,15 +273,14 @@ impl<'me, 'ast: 'me> AstScanner<'me, 'ast> {
     self.visit_program(program);
     let mut exports_kind = ExportsKind::None;
 
-    if self.esm_export_keyword.is_some() {
+    if let Some(esm_export_keyword) = self.esm_export_keyword {
       exports_kind = ExportsKind::Esm;
       if let Some(start) = self.cjs_module_ident {
         self.result.warnings.push(
           BuildDiagnostic::commonjs_variable_in_esm(
             self.immutable_ctx.id.to_string(),
             self.immutable_ctx.source.clone(),
-            // SAFETY: we checked at the beginning
-            self.esm_export_keyword.expect("should have start offset"),
+            esm_export_keyword,
             CjsExportSpan::Module(start),
           )
           .with_severity_warning(),
@@ -292,8 +291,7 @@ impl<'me, 'ast: 'me> AstScanner<'me, 'ast> {
           BuildDiagnostic::commonjs_variable_in_esm(
             self.immutable_ctx.id.to_string(),
             self.immutable_ctx.source.clone(),
-            // SAFETY: we checked at the beginning
-            self.esm_export_keyword.expect("should have start offset"),
+            esm_export_keyword,
             CjsExportSpan::Exports(start),
           )
           .with_severity_warning(),
@@ -306,7 +304,7 @@ impl<'me, 'ast: 'me> AstScanner<'me, 'ast> {
     } else {
       // TODO(hyf0): Should add warnings if the module type doesn't satisfy the exports kind.
       match self.immutable_ctx.module_type {
-        ModuleDefFormat::CJS | ModuleDefFormat::CjsPackageJson | ModuleDefFormat::Cts => {
+        ModuleDefFormat::Cjs | ModuleDefFormat::CjsPackageJson | ModuleDefFormat::Cts => {
           exports_kind = ExportsKind::CommonJs;
         }
         ModuleDefFormat::EsmMjs | ModuleDefFormat::EsmPackageJson | ModuleDefFormat::EsmMts => {
@@ -663,6 +661,7 @@ impl<'me, 'ast: 'me> AstScanner<'me, 'ast> {
       self.result.ecma_view_meta.insert(EcmaViewMeta::HasStarExport);
     }
     self.result.imports.insert(decl.span, id);
+    self.result.import_records[id].meta.insert(ImportRecordMeta::IsReExport);
     if let Some(ref with_clause) = decl.with_clause {
       self.result.import_attribute_map.insert(id, ImportAttribute::from_with_clause(with_clause));
     }
@@ -709,10 +708,7 @@ impl<'me, 'ast: 'me> AstScanner<'me, 'ast> {
           .insert(record_idx, ImportAttribute::from_with_clause(with_clause));
       }
       self.result.imports.insert(decl.span, record_idx);
-      // `export {} from '...'`
-      if decl.specifiers.is_empty() {
-        self.result.import_records[record_idx].meta.insert(ImportRecordMeta::IsPlainImport);
-      }
+      self.result.import_records[record_idx].meta.insert(ImportRecordMeta::IsReExport);
     } else {
       decl.specifiers.iter().for_each(|spec| {
         if let Some(local_symbol_id) = self.get_root_binding(spec.local.name().as_str()) {
@@ -862,10 +858,6 @@ impl<'me, 'ast: 'me> AstScanner<'me, 'ast> {
         .insert(rec_id, ImportAttribute::from_with_clause(with_clause));
     }
     self.result.imports.insert(decl.span, rec_id);
-    // // `import '...'` or `import {} from '...'`
-    if decl.specifiers.as_ref().is_none_or(|s| s.is_empty()) {
-      self.result.import_records[rec_id].meta.insert(ImportRecordMeta::IsPlainImport);
-    }
 
     let Some(specifiers) = &decl.specifiers else { return };
     specifiers.iter().for_each(|spec| match spec {
@@ -926,11 +918,11 @@ impl<'me, 'ast: 'me> AstScanner<'me, 'ast> {
     prop_and_span_list: Vec<(CompactStr, Span)>,
     span: Span,
     obj_ref_type: MemberExprObjectReferencedType,
+    reference_id: Option<ReferenceId>,
   ) {
-    self
-      .current_stmt_info
-      .referenced_symbols
-      .push(MemberExprRef::new(object_ref, prop_and_span_list, span, obj_ref_type).into());
+    self.current_stmt_info.referenced_symbols.push(
+      MemberExprRef::new(object_ref, prop_and_span_list, span, obj_ref_type, reference_id).into(),
+    );
   }
 
   fn is_root_symbol(&self, symbol_id: SymbolId) -> bool {

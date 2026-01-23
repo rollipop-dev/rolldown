@@ -395,10 +395,14 @@
             "null"
           ]
         },
-        "inlineDynamicImports": {
-          "type": [
-            "boolean",
-            "null"
+        "codeSplitting": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CodeSplittingMode"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "dynamicImportInCjs": {
@@ -560,6 +564,12 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "strictExecutionOrder": {
+          "type": [
+            "boolean",
+            "null"
           ]
         },
         "globalIdentifiers": {
@@ -923,6 +933,12 @@
               "type": "null"
             }
           ]
+        },
+        "invalidImportSideEffects": {
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       },
       "additionalProperties": false
@@ -944,12 +960,6 @@
     "ExperimentalOptions": {
       "type": "object",
       "properties": {
-        "strictExecutionOrder": {
-          "type": [
-            "boolean",
-            "null"
-          ]
-        },
         "viteMode": {
           "type": [
             "boolean",
@@ -1031,6 +1041,12 @@
           ]
         },
         "chunkOptimization": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "lazyBarrel": {
           "type": [
             "boolean",
             "null"
@@ -1193,6 +1209,14 @@
             "alias",
             "from"
           ]
+        }
+      ]
+    },
+    "CodeSplittingMode": {
+      "description": "Controls how code splitting is performed.\n\n- `Bool(true)`: Default behavior, automatic code splitting with lazy-loaded dynamic imports.\n- `Bool(false)`: Inline all dynamic imports into a single bundle (no code splitting).",
+      "anyOf": [
+        {
+          "type": "boolean"
         }
       ]
     },

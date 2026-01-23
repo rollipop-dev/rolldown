@@ -324,7 +324,7 @@ export interface ParserOptions {
   /** Treat the source text as `js`, `jsx`, `ts`, `tsx` or `dts`. */
   lang?: 'js' | 'jsx' | 'ts' | 'tsx' | 'dts'
   /** Treat the source text as `script` or `module` code. */
-  sourceType?: 'script' | 'module' | 'unambiguous' | undefined
+  sourceType?: 'script' | 'module' | 'commonjs' | 'unambiguous' | undefined
   /**
    * Return an AST which includes TypeScript-related properties, or excludes them.
    *
@@ -1181,7 +1181,7 @@ export interface TransformOptions {
   /** Treat the source text as `js`, `jsx`, `ts`, `tsx`, or `dts`. */
   lang?: 'js' | 'jsx' | 'ts' | 'tsx' | 'dts'
   /** Treat the source text as `script` or `module` code. */
-  sourceType?: 'script' | 'module' | 'unambiguous' | undefined
+  sourceType?: 'script' | 'module' | 'commonjs' | 'unambiguous' | undefined
   /**
    * The current working directory. Used to resolve relative paths in other
    * options.
@@ -1400,6 +1400,25 @@ export declare class BindingChunkingContext {
   getModuleInfo(moduleId: string): BindingModuleInfo | null
 }
 
+/** A decoded source map with mappings as an array of arrays instead of VLQ-encoded string. */
+export declare class BindingDecodedMap {
+  /** The source map version (always 3). */
+  get version(): number
+  /** The generated file name. */
+  get file(): string | null
+  /** The list of original source files. */
+  get sources(): Array<string>
+  /** The original source contents (if `includeContent` was true). */
+  get sourcesContent(): Array<string | undefined | null>
+  /** The list of symbol names used in mappings. */
+  get names(): Array<string>
+  /**
+   * The decoded mappings as an array of line arrays.
+   * Each line is an array of segments, where each segment is [generatedColumn, sourceIndex, originalLine, originalColumn, nameIndex?].
+   */
+  get mappings(): Array<Array<Array<number>>>
+}
+
 export declare class BindingDevEngine {
   constructor(options: BindingBundlerOptions, devOptions?: BindingDevOptions | undefined | null)
   run(): Promise<void>
@@ -1478,6 +1497,16 @@ export declare class BindingMagicString {
    * Supports negative indices (counting from the end).
    */
   slice(start?: number | undefined | null, end?: number | undefined | null): string
+  /**
+   * Generates a source map for the transformations applied to this MagicString.
+   * Returns a BindingSourceMap object with version, file, sources, sourcesContent, names, mappings.
+   */
+  generateMap(options?: BindingSourceMapOptions | undefined | null): BindingSourceMap
+  /**
+   * Generates a decoded source map for the transformations applied to this MagicString.
+   * Returns a BindingDecodedMap object with mappings as an array of arrays.
+   */
+  generateDecodedMap(options?: BindingSourceMapOptions | undefined | null): BindingDecodedMap
 }
 
 export declare class BindingModuleInfo {
@@ -1507,7 +1536,7 @@ export declare class BindingNormalizedOptions {
   get format(): 'es' | 'cjs' | 'iife' | 'umd'
   get exports(): 'default' | 'named' | 'none' | 'auto'
   get esModule(): boolean | 'if-default-prop'
-  get inlineDynamicImports(): boolean
+  get codeSplitting(): boolean
   get dynamicImportInCjs(): boolean
   get sourcemap(): boolean | 'inline' | 'hidden'
   get sourcemapBaseUrl(): string | null
@@ -1593,6 +1622,26 @@ export declare class BindingRenderedChunkMeta {
 export declare class BindingRenderedModule {
   get code(): string | null
   get renderedExports(): Array<string>
+}
+
+/** A source map object with properties matching the SourceMap V3 specification. */
+export declare class BindingSourceMap {
+  /** The source map version (always 3). */
+  get version(): number
+  /** The generated file name. */
+  get file(): string | null
+  /** The list of original source files. */
+  get sources(): Array<string>
+  /** The original source contents (if `includeContent` was true). */
+  get sourcesContent(): Array<string | undefined | null>
+  /** The list of symbol names used in mappings. */
+  get names(): Array<string>
+  /** The VLQ-encoded mappings string. */
+  get mappings(): string
+  /** Returns the source map as a JSON string. */
+  toString(): string
+  /** Returns the source map as a base64-encoded data URL. */
+  toUrl(): string
 }
 
 export declare class BindingTransformPluginContext {
@@ -1801,7 +1850,6 @@ export interface BindingExperimentalDevModeOptions {
 }
 
 export interface BindingExperimentalOptions {
-  strictExecutionOrder?: boolean
   viteMode?: boolean
   resolveNewUrlToAsset?: boolean
   devMode?: BindingExperimentalDevModeOptions
@@ -1813,6 +1861,7 @@ export interface BindingExperimentalOptions {
   transformHiresSourcemap?: boolean | 'boundary'
   nativeMagicString?: boolean
   chunkOptimization?: boolean
+  lazyBarrel?: boolean
 }
 
 export interface BindingFilterToken {
@@ -2110,6 +2159,7 @@ export interface BindingOutputOptions {
   topLevelVar?: boolean
   minifyInternalExports?: boolean
   cleanDir?: boolean
+  strictExecutionOrder?: boolean
   globalIdentifiers?: Array<string>
 }
 
@@ -2279,6 +2329,21 @@ export interface BindingSourcemap {
   inner: string | BindingJsonSourcemap
 }
 
+export interface BindingSourceMapOptions {
+  /** The filename for the generated file (goes into `map.file`) */
+  file?: string
+  /** The filename of the original source (goes into `map.sources`) */
+  source?: string
+  includeContent?: boolean
+  /**
+   * Accepts boolean or string: true, false, "boundary"
+   * - true: high-resolution sourcemaps (character-level)
+   * - false: low-resolution sourcemaps (line-level) - default
+   * - "boundary": high-resolution only at word boundaries
+   */
+  hires?: boolean | string
+}
+
 export interface BindingTransformHookExtraArgs {
   moduleType: string
 }
@@ -2288,6 +2353,7 @@ export interface BindingTreeshake {
   annotations?: boolean
   manualPureFunctions?: ReadonlyArray<string>
   unknownGlobalSideEffects?: boolean
+  invalidImportSideEffects?: boolean
   commonjs?: boolean
   propertyReadSideEffects?: BindingPropertyReadSideEffects
   propertyWriteSideEffects?: BindingPropertyWriteSideEffects
@@ -2523,11 +2589,17 @@ export interface NativeError {
 }
 
 export interface PreRenderedChunk {
+  /** The name of this chunk, which is used in naming patterns. */
   name: string
+  /** Whether this chunk is a static entry point. */
   isEntry: boolean
+  /** Whether this chunk is a dynamic entry point. */
   isDynamicEntry: boolean
+  /** The id of a module that this chunk corresponds to. */
   facadeModuleId?: string
+  /** The list of ids of modules included in this chunk. */
   moduleIds: Array<string>
+  /** Exported variable names from this chunk. */
   exports: Array<string>
 }
 

@@ -25,8 +25,7 @@ pub fn extract_toplevel_item_span(
     .with_options(ParseOptions { allow_return_outside_function: true, ..ParseOptions::default() });
   let ret = parser.parse();
 
-  let semantic =
-    SemanticBuilder::new().with_scope_tree_child_ids(true).build(&ret.program).semantic;
+  let semantic = SemanticBuilder::new().build(&ret.program).semantic;
   let mut visitor = ExtractTargetSpan::new(toplevel_item_name, &semantic);
   visitor.visit_program(&ret.program);
   visitor.ret_span
@@ -117,12 +116,9 @@ impl<'a> Visit<'a> for ExtractTargetSpan<'a> {
     let symbol_id = it.symbol_id();
     if symbol_id == self.symbol_id.unwrap() {
       for p in self.visit_path.iter().rev() {
-        match p {
-          AstKind::VariableDeclaration(decl) => {
-            self.ret_span = Some(decl.span);
-            break;
-          }
-          _ => {}
+        if let AstKind::VariableDeclaration(decl) = p {
+          self.ret_span = Some(decl.span);
+          break;
         }
       }
     }

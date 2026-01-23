@@ -39,14 +39,12 @@ pub struct NormalModule {
 impl NormalModule {
   pub fn star_export_module_ids(&self) -> impl Iterator<Item = ModuleIdx> + '_ {
     if self.has_star_export() {
-      itertools::Either::Left(
-        self
-          .ecma_view
-          .import_records
-          .iter()
-          .filter(|&rec| rec.meta.contains(ImportRecordMeta::IsExportStar))
-          .map(|rec| rec.resolved_module),
-      )
+      itertools::Either::Left(self.ecma_view.import_records.iter().filter_map(|rec| {
+        if !rec.meta.contains(ImportRecordMeta::IsExportStar) {
+          return None;
+        }
+        rec.resolved_module
+      }))
     } else {
       itertools::Either::Right(std::iter::empty())
     }
@@ -155,7 +153,7 @@ impl NormalModule {
       if !rec.meta.contains(ImportRecordMeta::IsExportStar) {
         return None;
       }
-      match modules[rec.resolved_module] {
+      match modules[rec.resolved_module?] {
         Module::External(_) => Some(rec_id),
         Module::Normal(_) => None,
       }
@@ -195,7 +193,7 @@ impl NormalModule {
     options: &NormalizedBundlerOptions,
     args: &ModuleRenderArgs,
     initial_indent: u32,
-  ) -> Option<ModuleRenderOutput> {
+  ) -> ModuleRenderOutput {
     match args {
       ModuleRenderArgs::Ecma { ast } => {
         let enable_sourcemap = options.sourcemap.is_some() && !self.is_virtual();
@@ -227,9 +225,9 @@ impl NormalModule {
           });
           let map =
             render_output.map.map(|original| collapse_sourcemaps(&[&original, &mutated_map]));
-          return Some(ModuleRenderOutput { code, map });
+          return ModuleRenderOutput { code, map };
         }
-        Some(ModuleRenderOutput { code: render_output.code, map: render_output.map })
+        ModuleRenderOutput { code: render_output.code, map: render_output.map }
       }
     }
   }

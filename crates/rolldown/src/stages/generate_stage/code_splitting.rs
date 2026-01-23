@@ -8,7 +8,7 @@ use arcstr::ArcStr;
 use itertools::Itertools;
 use oxc_index::{IndexVec, index_vec};
 use rolldown_common::{
-  Chunk, ChunkIdx, ChunkKind, ChunkMeta, ExportsKind, ImportKind, ImportRecordIdx,
+  Chunk, ChunkIdx, ChunkKind, ChunkMeta, EntryPointKind, ExportsKind, ImportKind, ImportRecordIdx,
   ImportRecordMeta, IndexModules, Module, ModuleIdx, ModuleNamespaceIncludedReason,
   PreserveEntrySignatures, SymbolRef, WrapKind,
 };
@@ -83,8 +83,19 @@ impl GenerateStage<'_> {
           ChunkKind::EntryPoint {
             meta: {
               let mut meta = ChunkMeta::default();
-              meta.set(ChunkMeta::UserDefinedEntry, module.is_user_defined_entry);
+              meta.set(
+                ChunkMeta::UserDefinedEntry,
+                matched_entry
+                  .map(|entry_point| matches!(entry_point.kind, EntryPointKind::UserDefined))
+                  .unwrap_or(false),
+              );
               meta.set(ChunkMeta::DynamicImported, !module.dynamic_importers.is_empty());
+              meta.set(
+                ChunkMeta::EmittedChunk,
+                matched_entry
+                  .map(|entry_point| entry_point.kind.is_emitted_user_defined())
+                  .unwrap_or(false),
+              );
               meta
             },
             bit: count,
@@ -231,7 +242,7 @@ impl GenerateStage<'_> {
   }
 
   pub fn ensure_lazy_module_initialization_order(&self, chunk_graph: &mut ChunkGraph) {
-    if self.options.experimental.strict_execution_order.unwrap_or_default() {
+    if self.options.is_strict_execution_order_enabled() {
       // If `strict_execution_order` is enabled, the lazy module initialization order is already
       // guaranteed.
       return;
@@ -314,13 +325,17 @@ impl GenerateStage<'_> {
           let Some(module) = self.link_output.module_table[*idx].as_normal() else {
             continue;
           };
-
-          for (rec_idx, rec) in module.import_records.iter_enumerated().filter(|(_idx, rec)| {
-            matches!(rec.kind, ImportKind::Import)
-              && modules_need_to_check.contains(&rec.resolved_module)
-          }) {
-            module_init_position.entry(rec.resolved_module).or_insert((*idx, rec_idx));
-          }
+          module
+            .import_records
+            .iter_enumerated()
+            .filter_map(|(rec_idx, rec)| {
+              rec.resolved_module.map(|module_idx| (rec_idx, rec, module_idx))
+            })
+            .for_each(|(rec_idx, rec, module_idx)| {
+              if rec.kind == ImportKind::Import && modules_need_to_check.contains(&module_idx) {
+                module_init_position.entry(module_idx).or_insert((*idx, rec_idx));
+              }
+            });
           if module_init_position.len() == modules_need_to_check.len() {
             break;
           }
@@ -381,11 +396,16 @@ impl GenerateStage<'_> {
         continue;
       };
       js_import_order.push(module_idx);
-      for rec in normal_module.import_records.iter().rev().filter(|rec| {
-        chunk_modules_map.contains_key(&rec.resolved_module) && rec.kind == ImportKind::Import
-      }) {
-        stack.push(rec.resolved_module);
-      }
+      normal_module
+        .import_records
+        .iter()
+        .rev()
+        .filter_map(|rec| rec.resolved_module.map(|module_idx| (rec, module_idx)))
+        .for_each(|(rec, module_idx)| {
+          if rec.kind == ImportKind::Import && chunk_modules_map.contains_key(&module_idx) {
+            stack.push(module_idx);
+          }
+        });
     }
     js_import_order
   }
@@ -519,19 +539,23 @@ impl GenerateStage<'_> {
             // In theory we will not append external module to `q`.
             continue;
           };
-          for (idx, rec) in module.import_records.iter_enumerated() {
-            if !rec.meta.contains(ImportRecordMeta::IsExportStar) {
-              continue;
-            }
-            match &self.link_output.module_table[rec.resolved_module] {
-              Module::Normal(_) => {
-                q.push_back(rec.resolved_module);
+          module
+            .import_records
+            .iter_enumerated()
+            .filter_map(|(idx, rec)| rec.resolved_module.map(|module_idx| (idx, rec, module_idx)))
+            .for_each(|(idx, rec, resolved_module_idx)| {
+              if !rec.meta.contains(ImportRecordMeta::IsExportStar) {
+                return;
               }
-              Module::External(_) => {
-                entry_external_module_map.entry(module_idx).or_default().push(idx);
+              match &self.link_output.module_table[resolved_module_idx] {
+                Module::Normal(_) => {
+                  q.push_back(resolved_module_idx);
+                }
+                Module::External(_) => {
+                  entry_external_module_map.entry(module_idx).or_default().push(idx);
+                }
               }
-            }
-          }
+            });
         }
         (!entry_external_module_map.is_empty()).then_some((idx, entry_external_module_map))
       })
@@ -556,8 +580,10 @@ impl GenerateStage<'_> {
         // from external module.
         for rec_idx in rec_list {
           let rec = &mut module.import_records[rec_idx];
-          rec.meta.insert(ImportRecordMeta::EntryLevelExternal);
-          entry_level_external_modules.insert(rec.resolved_module);
+          if let Some(module_idx) = rec.resolved_module {
+            rec.meta.insert(ImportRecordMeta::EntryLevelExternal);
+            entry_level_external_modules.insert(module_idx);
+          }
         }
 
         if !self.link_output.metas[module_idx]
@@ -690,7 +716,10 @@ impl GenerateStage<'_> {
         ChunkKind::EntryPoint {
           meta: {
             let mut meta = ChunkMeta::default();
-            meta.set(ChunkMeta::UserDefinedEntry, module.is_user_defined_entry);
+            meta.set(
+              ChunkMeta::UserDefinedEntry,
+              matches!(entry_point.kind, EntryPointKind::UserDefined),
+            );
             meta.set(ChunkMeta::DynamicImported, !module.dynamic_importers.is_empty());
             meta.set(ChunkMeta::EmittedChunk, entry_point.kind.is_emitted_user_defined());
             meta
@@ -867,21 +896,25 @@ fn propagate_has_dynamic_exports(
       if matches!(module.exports_kind, ExportsKind::CommonJs) {
         true
       } else {
-        module.import_records.iter().any(|rec| {
-          if rec.resolved_module == target || !rec.meta.contains(ImportRecordMeta::IsExportStar) {
-            return false;
-          }
-          if rec.meta.contains(ImportRecordMeta::EntryLevelExternal) {
-            return false;
-          }
-          propagate_has_dynamic_exports(
-            rec.resolved_module,
-            modules,
-            linking_infos,
-            visited_modules,
-            invalidate_modules,
-          )
-        })
+        module
+          .import_records
+          .iter()
+          .filter_map(|rec| rec.resolved_module.map(|module_idx| (rec, module_idx)))
+          .any(|(rec, module_idx)| {
+            if module_idx == target || !rec.meta.contains(ImportRecordMeta::IsExportStar) {
+              return false;
+            }
+            if rec.meta.contains(ImportRecordMeta::EntryLevelExternal) {
+              return false;
+            }
+            propagate_has_dynamic_exports(
+              module_idx,
+              modules,
+              linking_infos,
+              visited_modules,
+              invalidate_modules,
+            )
+          })
       }
     }
     Module::External(_) => true,

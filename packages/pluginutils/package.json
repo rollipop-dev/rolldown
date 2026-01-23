@@ -1,6 +1,6 @@
 {
   "name": "@rollipop/rolldown-pluginutils",
-  "version": "0.0.0-beta.3",
+  "version": "1.0.0-rc.1",
   "homepage": "https://rolldown.rs/",
   "license": "MIT",
   "repository": {
@@ -36,7 +36,8 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "vitest --typecheck"
+    "test": "vitest --typecheck",
+    "publint": "publint ."
   },
   "devDependencies": {
     "@types/picomatch": "catalog:",
