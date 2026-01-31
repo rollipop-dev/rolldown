@@ -18,6 +18,7 @@ use rolldown_utils::rayon::{
   IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator,
 };
 
+use rolldown_utils::indexmap::FxIndexMap;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{stages::link_stage::LinkStage, types::linking_metadata::LinkingMetadataVec};
@@ -177,7 +178,10 @@ impl LinkStage<'_> {
     );
 
     let (user_defined_entries, mut dynamic_entries): (Vec<_>, Vec<_>) =
-      std::mem::take(&mut self.entries).into_iter().partition(|item| item.kind.is_user_defined());
+      std::mem::take(&mut self.entries)
+        .into_values()
+        .flatten()
+        .partition(|item| item.kind.is_user_defined());
     user_defined_entries.iter().filter(|entry| entry.kind.is_user_defined()).for_each(|entry| {
       let module = match &self.module_table[entry.idx] {
         Module::Normal(module) => module,
@@ -245,14 +249,19 @@ impl LinkStage<'_> {
     dynamic_entries.retain(|entry| included_dynamic_entry.contains(&entry.idx));
 
     // update entries with lived only.
-    self.entries = user_defined_entries
-      .into_iter()
-      .chain(if self.options.code_splitting.is_disabled() {
-        itertools::Either::Left(std::iter::empty())
-      } else {
-        itertools::Either::Right(dynamic_entries.into_iter())
-      })
-      .collect();
+    self.entries = {
+      let mut entries = FxIndexMap::default();
+      for entry in
+        user_defined_entries.into_iter().chain(if self.options.code_splitting.is_disabled() {
+          itertools::Either::Left(std::iter::empty())
+        } else {
+          itertools::Either::Right(dynamic_entries.into_iter())
+        })
+      {
+        entries.entry(entry.idx).or_insert_with(Vec::new).push(entry);
+      }
+      entries
+    };
 
     // Setting the json module none self reference included symbol map
     for (mi, set) in std::mem::take(&mut context.json_module_none_self_reference_included_symbol) {
@@ -653,11 +662,12 @@ pub fn include_symbol(
 
   if let Some(v) = ctx.constant_symbol_map.get(&canonical_ref)
     && !include_reason.contains(SymbolIncludeReason::EntryExport)
-    && !ctx.inline_const_smart
+    && (!ctx.inline_const_smart || v.safe_to_inline)
     && !v.commonjs_export
   {
-    // If the symbol is a constant value and it is not a commonjs module export , we don't need to include it since it would be always inline
-    // We don't need to add anyflag since if `inlineConst` is disabled, the test expr will always
+    // If the symbol is a constant value and it is not a commonjs module export, we don't need to include it since it would be always inlined.
+    // In smart mode, we only skip if `safe_to_inline` is true (meaning it will be inlined regardless of context).
+    // We don't need to add any flag since if `inlineConst` is disabled, the test expr will always
     // return `false`
     return;
   }

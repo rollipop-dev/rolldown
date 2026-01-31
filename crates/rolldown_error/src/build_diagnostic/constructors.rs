@@ -20,6 +20,7 @@ use super::events::bundler_initialize_error::BundlerInitializeError;
 use super::events::cannot_call_namespace::CannotCallNamespace;
 use super::events::configuration_field_conflict::ConfigurationFieldConflict;
 use super::events::could_not_clean_directory::CouldNotCleanDirectory;
+use super::events::duplicate_shebang::DuplicateShebang;
 use super::events::export_undefined_variable::ExportUndefinedVariable;
 use super::events::filename_conflict::FilenameConflict;
 use super::events::illegal_identifier_as_name::IllegalIdentifierAsName;
@@ -33,6 +34,7 @@ use super::events::plugin_error::{CausedPlugin, PluginError};
 use super::events::plugin_timings::{PluginTimingInfo, PluginTimings};
 use super::events::prefer_builtin_feature::PreferBuiltinFeature;
 use super::events::resolve_error::DiagnosableResolveError;
+use super::events::tsconfig_error::TsConfigError;
 use super::events::unhandleable_error::UnhandleableError;
 use super::events::unloadable_dependency::{UnloadableDependency, UnloadableDependencyContext};
 use super::events::unsupported_feature::UnsupportedFeature;
@@ -367,5 +369,13 @@ impl BuildDiagnostic {
 
   pub fn plugin_timings(plugins: Vec<PluginTimingInfo>) -> Self {
     Self::new_inner(PluginTimings { plugins })
+  }
+
+  pub fn duplicate_shebang(filename: String) -> Self {
+    Self::new_inner(DuplicateShebang { filename })
+  }
+
+  pub fn tsconfig_error(file_path: String, reason: ResolveError) -> Self {
+    Self::new_inner(TsConfigError { file_path, reason })
   }
 }

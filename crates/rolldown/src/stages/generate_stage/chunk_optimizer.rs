@@ -22,8 +22,10 @@ use crate::{
 };
 
 use super::{
-  GenerateStage, chunk_ext::ChunkCreationReason, chunk_ext::ChunkDebugExt,
-  code_splitting::IndexSplittingInfo,
+  GenerateStage,
+  chunk_ext::ChunkCreationReason,
+  chunk_ext::ChunkDebugExt,
+  code_splitting::{IndexSplittingInfo, PendingCommonChunkInfo},
 };
 
 /// Information about a facade chunk merge operation.
@@ -50,11 +52,16 @@ impl GenerateStage<'_> {
         ChunkKind::Common => None,
       })
       .collect::<FxHashMap<ModuleIdx, ChunkIdx>>();
-    for entry in self.link_output.entries.iter().filter(|item| item.kind.is_user_defined()) {
-      let Some(entry_chunk_idx) = chunk_graph.module_to_chunk[entry.idx] else {
+    for (&module_idx, _entry_points) in self
+      .link_output
+      .entries
+      .iter()
+      .filter(|(_, entries)| entries.iter().any(|e| e.kind.is_user_defined()))
+    {
+      let Some(entry_chunk_idx) = chunk_graph.module_to_chunk[module_idx] else {
         continue;
       };
-      let mut q = VecDeque::from_iter([entry.idx]);
+      let mut q = VecDeque::from_iter([module_idx]);
       let mut visited = FxHashSet::default();
       while let Some(cur) = q.pop_front() {
         if visited.contains(&cur) {
@@ -88,16 +95,40 @@ impl GenerateStage<'_> {
     chunk_graph: &mut ChunkGraph,
     bits_to_chunk: &mut FxHashMap<BitSet, ChunkIdx>,
     input_base: &ArcStr,
-    pending_common_chunks: FxIndexMap<BitSet, Vec<ModuleIdx>>,
+    pending_common_chunks: FxIndexMap<BitSet, PendingCommonChunkInfo>,
   ) {
     let static_entry_chunk_reference: FxHashMap<ChunkIdx, FxHashSet<ChunkIdx>> =
       self.construct_static_entry_to_reached_dynamic_entries_map(chunk_graph);
 
     let entry_chunk_idx =
       chunk_graph.chunk_table.iter_enumerated().map(|(idx, _)| idx).collect::<FxHashSet<_>>();
+    // Calculate on demand to avoid add a new field on each NormalModule.
+    let dynamic_entry_to_dynamic_importers: FxHashMap<ModuleIdx, FxHashSet<ModuleIdx>> = {
+      // Get dynamic entry modules from chunk_table, then find matched entry points
+      // and extract importers from related_stmt_infos
+      let mut map: FxHashMap<ModuleIdx, FxHashSet<ModuleIdx>> = FxHashMap::default();
+      for chunk in chunk_graph.chunk_table.iter() {
+        let ChunkKind::EntryPoint { meta, module, .. } = chunk.kind else {
+          continue;
+        };
+        if meta != ChunkMeta::DynamicImported {
+          continue;
+        }
+        // Find the matched dynamic entry point from link_output.entries
+        if let Some(entries) = self.link_output.entries.get(&module) {
+          for entry in entries.iter().filter(|e| e.kind.is_dynamic_import()) {
+            // Extract importers from related_stmt_infos (first element is the importer ModuleIdx)
+            for (importer_idx, _, _, _) in &entry.related_stmt_infos {
+              map.entry(module).or_default().insert(*importer_idx);
+            }
+          }
+        }
+      }
+      map
+    };
     // extract entry chunk module relation
     // this means `key_chunk` also referenced all entry module in value `vec`
-    for (bits, modules) in pending_common_chunks {
+    for (bits, info) in pending_common_chunks {
       let chunk_idxs = bits
         .index_of_one()
         .into_iter()
@@ -112,12 +143,14 @@ impl GenerateStage<'_> {
         &static_entry_chunk_reference,
         chunk_graph,
         &self.link_output.module_table,
+        &dynamic_entry_to_dynamic_importers,
+        &info,
       );
 
       self.assign_modules_to_chunk(
         merge_target,
         &chunk_idxs,
-        modules,
+        info,
         bits,
         chunk_graph,
         bits_to_chunk,
@@ -135,7 +168,7 @@ impl GenerateStage<'_> {
     &self,
     merge_target: Option<ChunkIdx>,
     chunk_idxs: &[ChunkIdx],
-    modules: Vec<ModuleIdx>,
+    info: PendingCommonChunkInfo,
     bits: BitSet,
     chunk_graph: &mut ChunkGraph,
     bits_to_chunk: &mut FxHashMap<BitSet, ChunkIdx>,
@@ -149,18 +182,24 @@ impl GenerateStage<'_> {
           // 1. If the target chunk is an async entry, we can merge safely.
           // 2. If the user defined entry chunk has strict preserve entry signature, but all pending
           // modules will not change the entry signature after merge into it, we can still merge them.
-          if is_async_entry_only || self.can_merge_without_changing_entry_signature(chunk, &modules)
+          if is_async_entry_only
+            || self.can_merge_without_changing_entry_signature(chunk, &info.modules)
           {
-            self.merge_modules_into_existing_chunk(chunk_idx, chunk_idxs, modules, chunk_graph);
+            self.merge_modules_into_existing_chunk(
+              chunk_idx,
+              chunk_idxs,
+              info.modules,
+              chunk_graph,
+            );
           } else {
-            self.create_common_chunk(modules, bits, chunk_graph, bits_to_chunk, input_base);
+            self.create_common_chunk(info, bits, chunk_graph, bits_to_chunk, input_base);
           }
         } else {
-          self.merge_modules_into_existing_chunk(chunk_idx, chunk_idxs, modules, chunk_graph);
+          self.merge_modules_into_existing_chunk(chunk_idx, chunk_idxs, info.modules, chunk_graph);
         }
       }
       _ => {
-        self.create_common_chunk(modules, bits, chunk_graph, bits_to_chunk, input_base);
+        self.create_common_chunk(info, bits, chunk_graph, bits_to_chunk, input_base);
       }
     }
   }
@@ -199,7 +238,7 @@ impl GenerateStage<'_> {
   /// Creates a new common chunk and assigns modules to it.
   fn create_common_chunk(
     &self,
-    modules: Vec<ModuleIdx>,
+    info: PendingCommonChunkInfo,
     bits: BitSet,
     chunk_graph: &mut ChunkGraph,
     bits_to_chunk: &mut FxHashMap<BitSet, ChunkIdx>,
@@ -212,7 +251,7 @@ impl GenerateStage<'_> {
       self.options,
     );
     let chunk_id = chunk_graph.add_chunk(chunk);
-    for module_idx in modules {
+    for module_idx in info.modules {
       chunk_graph.add_module_to_chunk(
         module_idx,
         chunk_id,
@@ -233,6 +272,8 @@ impl GenerateStage<'_> {
     entry_chunk_reference: &FxHashMap<ChunkIdx, FxHashSet<ChunkIdx>>,
     chunk_graph: &ChunkGraph,
     module_table: &ModuleTable,
+    dynamic_entry_to_dynamic_importers: &FxHashMap<ModuleIdx, FxHashSet<ModuleIdx>>,
+    info: &PendingCommonChunkInfo,
   ) -> Option<ChunkIdx> {
     let mut user_defined_entry = vec![];
     let mut dynamic_entry = vec![];
@@ -255,20 +296,47 @@ impl GenerateStage<'_> {
 
     let merged_user_defined_chunk =
       Self::find_merge_target(&user_defined_entry, &user_defined_entry_modules, module_table);
-    if !user_defined_entry.is_empty() {
+    if user_defined_entry.is_empty() {
+      let dynamic_chunk_entry_modules = Self::collect_entry_modules(&dynamic_entry, chunk_graph)?;
+      Self::find_merge_target(&dynamic_entry, &dynamic_chunk_entry_modules, module_table)
+    } else {
       let chunk_idx = merged_user_defined_chunk?;
-
-      let ret = dynamic_entry.iter().all(|idx| {
-        entry_chunk_reference
-          .get(&chunk_idx)
-          .map(|reached_dynamic_chunk| reached_dynamic_chunk.contains(idx))
-          .unwrap_or(false)
+      let chunk = &chunk_graph.chunk_table[chunk_idx];
+      let reached_dynamic_chunk = entry_chunk_reference.get(&chunk_idx);
+      // Check if all dynamic entry chunks are reachable from the merged user-defined entry chunk.
+      // If not, we cannot merge the shared modules into the user-defined entry chunk because
+      // the dynamic entries would not be able to access the shared modules.
+      let all_dynamic_entries_reachable =
+        dynamic_entry.iter().all(|idx| reached_dynamic_chunk.is_some_and(|set| set.contains(idx)));
+      if !all_dynamic_entries_reachable {
+        return None;
+      }
+      let modules_set = chunk
+        .modules
+        .iter()
+        .copied()
+        .chain(
+          info
+            .modules
+            .iter()
+            .filter(|idx| !dynamic_entry_to_dynamic_importers.contains_key(idx))
+            .copied(),
+        )
+        .collect::<FxHashSet<_>>();
+      // For each module in the shared modules, if it is a dynamic entry module,
+      // all its dynamic importers must be in the current chunk (including modules to be merged).
+      // This ensures that when a dynamic import occurs, the merged entry chunk (containing the
+      // dynamic entry module) is already loaded, preventing missing module errors at runtime.
+      let all_dynamic_entry_importers_valid = info.modules.iter().all(|&module_idx| {
+        let Some(importers) = dynamic_entry_to_dynamic_importers.get(&module_idx) else {
+          // Not a dynamic entry module, no constraint
+          return true;
+        };
+        // all importer are in current chunk (includes those modules will be merged)
+        importers.iter().all(|importer| modules_set.contains(importer))
       });
-      return ret.then_some(chunk_idx);
+      all_dynamic_entry_importers_valid.then_some(chunk_idx)
     }
-
-    let dynamic_chunk_entry_modules = Self::collect_entry_modules(&dynamic_entry, chunk_graph)?;
-    Self::find_merge_target(&dynamic_entry, &dynamic_chunk_entry_modules, module_table)
   }
 
   /// Collects entry module indices from a list of chunk indices.
@@ -345,6 +413,7 @@ impl GenerateStage<'_> {
   /// Finds empty dynamic entry chunks that should be merged with their target common chunks.
   /// Returns a tuple of (merge_entry_to_chunk, emitted_chunk_groups).
   fn find_facade_chunk_merge_candidates(
+    &self,
     chunk_graph: &ChunkGraph,
   ) -> (FxHashMap<ModuleIdx, FacadeChunkMergeInfo>, FxHashMap<ChunkIdx, Vec<ChunkIdx>>) {
     let mut merge_entry_to_chunk = FxHashMap::default();
@@ -380,12 +449,15 @@ impl GenerateStage<'_> {
         ChunkReasonType::ManualCodeSplitting { .. }
       );
       let is_pure_user_defined_to_entry_chunk = matches!(target_chunk.kind, ChunkKind::EntryPoint { meta, bit: _, module: _ } if meta.is_pure_user_defined_entry());
-      // Three optimization scenarios:
+      let is_common_chunk = matches!(target_chunk.kind, ChunkKind::Common);
+      // Four optimization scenarios:
       // 1. Emitted chunk (AllowExtension) merged into manual code splitting group
       //    → Group by target chunk to detect export name conflicts before merging
       // 2. Dynamic entry chunk merged into manual code splitting group
       //    → Directly merge, the facade chunk can be removed
       // 3. Dynamic entry chunk merged into user-defined entry chunk
+      //    → Directly merge, the facade chunk can be removed
+      // 4. Dynamic entry chunk merged into common chunk
       //    → Directly merge, the facade chunk can be removed
       if is_manual_to_chunk && is_emitted_from_chunk {
         emitted_chunk_groups.entry(target_chunk_idx).or_default().push(chunk_idx);
@@ -394,6 +466,8 @@ impl GenerateStage<'_> {
           FacadeChunkEliminationReason::DynamicEntryMergedIntoManualGroup
         } else if is_pure_user_defined_to_entry_chunk {
           FacadeChunkEliminationReason::DynamicEntryMergedIntoUserDefinedEntry
+        } else if is_common_chunk {
+          FacadeChunkEliminationReason::DynamicEntryMergedIntoCommonChunk
         } else {
           continue;
         };
@@ -472,7 +546,7 @@ impl GenerateStage<'_> {
   ) {
     // Find empty dynamic entry chunks that should be merged with their target common chunks
     let (mut merge_entry_to_chunk, emitted_chunk_groups) =
-      Self::find_facade_chunk_merge_candidates(chunk_graph);
+      self.find_facade_chunk_merge_candidates(chunk_graph);
 
     if merge_entry_to_chunk.is_empty() && emitted_chunk_groups.is_empty() {
       return;
@@ -604,7 +678,6 @@ impl GenerateStage<'_> {
         }
         optimized_common_chunks.insert(target_chunk_idx);
       }
-
       if matches!(wrap_kind, WrapKind::Esm | WrapKind::None) {
         include_symbol(
           context,

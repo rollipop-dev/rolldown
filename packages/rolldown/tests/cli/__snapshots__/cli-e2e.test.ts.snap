@@ -29,6 +29,7 @@ OPTIONS
   --checks.common-js-variable-in-esm Whether to emit warnings when a CommonJS variable is used in an ES module.
   --checks.configuration-field-conflict Whether to emit warnings when a config value is overridden by another config value with a higher priority.
   --checks.could-not-clean-directory Whether to emit warnings when Rolldown could not clean the output directory.
+  --checks.duplicate-shebang  Whether to emit warnings when both the code and postBanner contain shebang.
   --checks.empty-import-meta  Whether to emit warnings when \`import.meta\` is not supported with the output format and is replaced with an empty object (\`{}\`).
   --checks.eval               Whether to emit warnings when detecting uses of direct \`eval\`s.
   --checks.filename-conflict  Whether to emit warnings when files generated have the same name with different contents.
@@ -86,19 +87,22 @@ OPTIONS
   --shim-missing-exports      Create shim variables for missing exports.
   --sourcemap-base-url <sourcemap-base-url>Base URL used to prefix sourcemap paths.
   --sourcemap-debug-ids       Inject sourcemap debug IDs.
+  --strict-execution-order    Lets modules be executed in the order they are declared.
   --top-level-var             Rewrite top-level declarations to use \`var\`.
   --transform.assumptions.ignore-function-length .
   --transform.assumptions.no-document-all .
   --transform.assumptions.object-rest-no-symbols .
   --transform.assumptions.pure-getters .
   --transform.assumptions.set-public-class-fields .
-  --transform.decorators.emit-decorator-metadata .
-  --transform.decorators.legacy .
+  --transform.decorator.emit-decorator-metadata .
+  --transform.decorator.legacy .
   --transform.define <transform.define>Define global variables (syntax: key=value,key2=value2).
   --transform.drop-labels <transform.drop-labels>Remove labeled statements with these label names.
   --transform.helpers.mode <transform.helpers.mode>.
   --transform.inject <transform.inject>Inject import statements on demand.
   --transform.jsx <transform.jsx>.
+  --transform.plugins.styled-components <transform.plugins.styled-components>.
+  --transform.plugins.tagged-template-escape .
   --transform.target <transform.target>The JavaScript target environment.
   --transform.typescript.allow-declare-fields .
   --transform.typescript.allow-namespaces .
@@ -107,6 +111,7 @@ OPTIONS
   --transform.typescript.jsx-pragma <transform.typescript.jsx-pragma>.
   --transform.typescript.jsx-pragma-frag <transform.typescript.jsx-pragma-frag>.
   --transform.typescript.only-remove-type-imports .
+  --transform.typescript.remove-class-fields-without-initializer .
   --transform.typescript.rewrite-import-extensions <transform.typescript.rewrite-import-extensions>.
   --tsconfig <tsconfig>       Path to the tsconfig.json file.
   --virtual-dirname <virtual-dirname>.
@@ -179,6 +184,7 @@ exports[`cli options for bundling > should handle multiple define arguments with
 exports[`cli options for bundling > should handle negative boolean options 1`] = `
 "(function(exports, node_fs) {
 
+Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 
 //#region index.ts
 	const nonExternal = "nonExternal";

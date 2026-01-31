@@ -18,7 +18,7 @@ function _create_class(Constructor, protoProps, staticProps) {
   return Constructor;
 }
 // @ts-check
-import { __exportAll, __reExport, __toCommonJS, __toESM } from 'rolldown:runtime';
+import { __exportAll, __reExport, __toCommonJS, __toESM } from '\0rolldown/runtime.js';
 var Module = /*#__PURE__*/ function() {
   "use strict";
   function Module(id) {

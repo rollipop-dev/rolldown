@@ -5,19 +5,16 @@ import { defineTest } from 'rolldown-tests'
 const transformedIds: string[] = []
 
 export default defineTest({
-  skip: true,
   config: {
-    // experimental: {
-    //   lazyBarrel: true,
-    // },
+    input: './src/main.js',
+    experimental: {
+      lazyBarrel: true,
+    },
     plugins: [
       {
         name: 'track-transforms',
         transform(_, id) {
           transformedIds.push(id);
-          return {
-            moduleSideEffects: id.includes('non-barrel')
-          }
         },
       },
     ],
@@ -31,13 +28,13 @@ export default defineTest({
     // - barrel: only 'a.js' is loaded (b.js is skipped due to side-effect-free)
     // - non-barrel: all modules are loaded (has side effects)
     // - other.js: loaded because it's re-exported from entry
-    expect(relativeIds).toContain('main.js')
-    expect(relativeIds).toContain('barrel/index.js')
-    expect(relativeIds).toContain('barrel/a.js')
-    expect(relativeIds).toContain('non-barrel/index.js')
-    expect(relativeIds).toContain('non-barrel/c.js')
-    expect(relativeIds).toContain('non-barrel/d.js')
-    expect(relativeIds).toContain('other.js')
+    expect(relativeIds).toContain('src/main.js')
+    expect(relativeIds).toContain('src/barrel/index.js')
+    expect(relativeIds).toContain('src/barrel/a.js')
+    expect(relativeIds).toContain('src/non-barrel/index.js')
+    expect(relativeIds).toContain('src/non-barrel/c.js')
+    expect(relativeIds).toContain('src/non-barrel/d.js')
+    expect(relativeIds).toContain('src/other.js')
     expect(transformedIds.length).toBe(7)
   },
 })

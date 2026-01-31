@@ -314,9 +314,17 @@ export type ImportNameKind = /** `import { x } from "mod"` */
 'Default';
 
 /**
- * Parse asynchronously.
+ * Parse JS/TS source asynchronously on a separate thread.
  *
- * Note: This function can be slower than `parseSync` due to the overhead of spawning a thread.
+ * Note that not all of the workload can happen on a separate thread.
+ * Parsing on Rust side does happen in a separate thread, but deserialization of the AST to JS objects
+ * has to happen on current thread. This synchronous deserialization work typically outweighs
+ * the asynchronous parsing by a factor of between 3 and 20.
+ *
+ * i.e. the majority of the workload cannot be parallelized by using this method.
+ *
+ * Generally `parseSync` is preferable to use as it does not have the overhead of spawning a thread.
+ * If you need to parallelize parsing multiple files, it is recommended to use worker threads.
  */
 export declare function parse(filename: string, sourceText: string, options?: ParserOptions | undefined | null): Promise<ParseResult>
 
@@ -361,7 +369,16 @@ export interface ParserOptions {
   showSemanticErrors?: boolean
 }
 
-/** Parse synchronously. */
+/**
+ * Parse JS/TS source synchronously on current thread.
+ *
+ * This is generally preferable over `parse` (async) as it does not have the overhead
+ * of spawning a thread, and the majority of the workload cannot be parallelized anyway
+ * (see `parse` documentation for details).
+ *
+ * If you need to parallelize parsing multiple files, it is recommended to use worker threads
+ * with `parseSync` rather than using `parse`.
+ */
 export declare function parseSync(filename: string, sourceText: string, options?: ParserOptions | undefined | null): ParseResult
 
 /** Returns `true` if raw transfer is supported on this platform. */
@@ -971,23 +988,6 @@ export interface JsxOptions {
    * @default 'React.Fragment'
    */
   pragmaFrag?: string
-  /**
-   * When spreading props, use `Object.assign` directly instead of an extend helper.
-   *
-   * Only used for `classic` {@link runtime}.
-   *
-   * @default false
-   */
-  useBuiltIns?: boolean
-  /**
-   * When spreading props, use inline object with spread elements directly
-   * instead of an extend helper or Object.assign.
-   *
-   * Only used for `classic` {@link runtime}.
-   *
-   * @default false
-   */
-  useSpread?: boolean
   /**
    * Enable React Fast Refresh .
    *
@@ -1761,6 +1761,7 @@ export interface BindingChecksOptions {
   preferBuiltinFeature?: boolean
   couldNotCleanDirectory?: boolean
   pluginTimings?: boolean
+  duplicateShebang?: boolean
 }
 
 export interface BindingChunkImportMap {
@@ -1822,10 +1823,14 @@ export interface BindingEmittedChunk {
 
 export interface BindingEmittedPrebuiltChunk {
   fileName: string
+  name?: string
   code: string
   exports?: Array<string>
   map?: BindingSourcemap
   sourcemapFileName?: string
+  facadeModuleId?: string
+  isEntry?: boolean
+  isDynamicEntry?: boolean
 }
 
 export type BindingError =
@@ -1858,7 +1863,6 @@ export interface BindingExperimentalOptions {
   chunkImportMap?: boolean | BindingChunkImportMap
   onDemandWrapping?: boolean
   incrementalBuild?: boolean
-  transformHiresSourcemap?: boolean | 'boundary'
   nativeMagicString?: boolean
   chunkOptimization?: boolean
   lazyBarrel?: boolean
@@ -2386,24 +2390,16 @@ export interface BindingViteBuildImportAnalysisPluginV2Config {
 }
 
 export interface BindingViteDynamicImportVarsPluginConfig {
+  sourcemap?: boolean
   include?: Array<BindingStringOrRegex>
   exclude?: Array<BindingStringOrRegex>
   resolver?: (id: string, importer: string) => MaybePromise<string | undefined>
-  isV2?: BindingViteDynamicImportVarsPluginV2Config
-}
-
-export interface BindingViteDynamicImportVarsPluginV2Config {
-  sourcemap: boolean
 }
 
 export interface BindingViteImportGlobPluginConfig {
   root?: string
-  restoreQueryExtension?: boolean
-  isV2?: BindingViteImportGlobPluginV2Config
-}
-
-export interface BindingViteImportGlobPluginV2Config {
   sourcemap?: boolean
+  restoreQueryExtension?: boolean
 }
 
 export interface BindingViteJsonPluginConfig {
