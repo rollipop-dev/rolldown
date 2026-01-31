@@ -8,6 +8,7 @@ on:
       - rollipop
     paths:
       - packages/rolldown/package.json
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
