@@ -1,8 +1,10 @@
 use std::{cmp::Ordering, collections::VecDeque, path::Path};
 
 use crate::{
-  chunk_graph::ChunkGraph, stages::generate_stage::chunk_ext::ChunkDebugExt,
-  types::linking_metadata::LinkingMetadataVec, utils::chunk::normalize_preserve_entry_signature,
+  chunk_graph::ChunkGraph,
+  stages::generate_stage::{chunk_ext::ChunkDebugExt, chunk_optimizer::ChunkOptimizationGraph},
+  types::linking_metadata::LinkingMetadataVec,
+  utils::chunk::normalize_preserve_entry_signature,
 };
 use arcstr::ArcStr;
 use itertools::Itertools;
@@ -10,7 +12,7 @@ use oxc_index::{IndexVec, index_vec};
 use rolldown_common::{
   Chunk, ChunkIdx, ChunkKind, ChunkMeta, EntryPointKind, ExportsKind, ImportKind, ImportRecordIdx,
   ImportRecordMeta, IndexModules, Module, ModuleIdx, ModuleNamespaceIncludedReason,
-  PreserveEntrySignatures, SymbolRef, WrapKind,
+  PostChunkOptimizationOperation, PreserveEntrySignatures, SymbolRef, WrapKind,
 };
 use rolldown_error::BuildResult;
 use rolldown_utils::{
@@ -23,20 +25,6 @@ use rolldown_utils::{
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::{GenerateStage, chunk_ext::ChunkCreationReason};
-
-bitflags::bitflags! {
-  #[derive(Debug, Clone, Copy, Default)]
-  pub struct PendingCommonChunkMeta: u8 {
-    // Empty for now, will be extended as needed
-  }
-}
-
-#[derive(Debug, Default)]
-pub struct PendingCommonChunkInfo {
-  pub modules: Vec<ModuleIdx>,
-  #[expect(dead_code, reason = "Reserved for future use")]
-  pub meta: PendingCommonChunkMeta,
-}
 
 #[derive(Clone, Debug)]
 pub struct SplittingInfo {
@@ -128,7 +116,10 @@ impl GenerateStage<'_> {
         );
         chunk.add_creation_reason(
           ChunkCreationReason::PreserveModules {
-            is_user_defined_entry: module.is_user_defined_entry,
+            is_user_defined_entry: self
+              .link_output
+              .user_defined_entry_modules
+              .contains(&module.idx),
             module_stable_id: &module.stable_id,
           },
           self.options,
@@ -194,8 +185,12 @@ impl GenerateStage<'_> {
 
     chunk_graph
       .chunk_table
-      .iter_mut()
-      .sorted_by(|a, b| {
+      .iter_mut_enumerated()
+      .filter(|(chunk_idx, _chunk)| {
+        chunk_graph.post_chunk_optimization_operations.get(chunk_idx).copied()
+          != Some(PostChunkOptimizationOperation::Removed)
+      })
+      .sorted_by(|(_ai, a), (_bi, b)| {
         let a_should_be_first = Ordering::Less;
         let b_should_be_first = Ordering::Greater;
 
@@ -236,7 +231,7 @@ impl GenerateStage<'_> {
         }
       })
       .enumerate()
-      .for_each(|(i, chunk)| {
+      .for_each(|(i, (_chunk_idx, chunk))| {
         chunk.exec_order = i.try_into().expect("Too many chunks, u32 overflowed.");
       });
     // The esbuild using `Chunk#bits` to sorted chunks, but the order of `Chunk#bits` is not stable, eg `BitSet(0) 00000001_00000000` > `BitSet(8) 00000000_00000001`. It couldn't ensure the order of dynamic chunks and common chunks.
@@ -524,7 +519,7 @@ impl GenerateStage<'_> {
           ) {
             true
           } else if module_namespace_included_reason
-            .contains(ModuleNamespaceIncludedReason::ReExportExternalModule)
+            .contains(ModuleNamespaceIncludedReason::ReExportDynamicExports)
           {
             // If the module namespace is only used to reexport external module,
             // then we need to ensure if it is still has dynamic exports after flatten entry level
@@ -662,7 +657,9 @@ impl GenerateStage<'_> {
         if !self.link_output.metas[item.idx].is_included {
           return None;
         }
-        if self.options.preserve_modules || item.is_user_defined_entry {
+        if self.options.preserve_modules
+          || self.link_output.user_defined_entry_modules.contains(&item.idx)
+        {
           Path::new(item.id.as_ref()).is_absolute().then_some(item.id.as_ref())
         } else {
           None
@@ -725,7 +722,8 @@ impl GenerateStage<'_> {
         module.idx,
       );
 
-      let preserve_entry_signature = if module.is_user_defined_entry {
+      let is_user_defined_entry = self.link_output.user_defined_entry_modules.contains(&module.idx);
+      let preserve_entry_signature = if is_user_defined_entry {
         match finalized_preserve_entry_signatures {
           PreserveEntrySignatures::AllowExtension
           | PreserveEntrySignatures::Strict
@@ -766,7 +764,7 @@ impl GenerateStage<'_> {
       );
       chunk.add_creation_reason(
         ChunkCreationReason::Entry {
-          is_user_defined_entry: module.is_user_defined_entry,
+          is_user_defined_entry,
           entry_module_id: &module.debug_id,
           name: entry_point.name.as_ref(),
         },
@@ -805,25 +803,26 @@ impl GenerateStage<'_> {
       );
     }
 
-    let mut module_to_assigned: IndexVec<ModuleIdx, bool> =
+    let mut module_is_assigned: IndexVec<ModuleIdx, bool> =
       oxc_index::index_vec![false; self.link_output.module_table.modules.len()];
 
     self
       .apply_manual_code_splitting(
         index_splitting_info,
-        &mut module_to_assigned,
+        &mut module_is_assigned,
         chunk_graph,
         input_base,
       )
       .await?;
 
-    let mut pending_common_chunks: FxIndexMap<BitSet, PendingCommonChunkInfo> =
-      FxIndexMap::default();
     // If it is allow to allow that entry chunks have the different exports as the underlying entry module.
     // This is used to generate less chunks when possible.
     // TODO: maybe we could bailout peer chunk?
     let allow_chunk_optimization = self.options.experimental.is_chunk_optimization_enabled()
       && !self.link_output.metas.iter().any(|meta| meta.is_tla_or_contains_tla_dependency);
+    let mut temp_chunk_graph =
+      ChunkOptimizationGraph::new(allow_chunk_optimization, chunk_graph, bits_to_chunk);
+
     // 1. Assign modules to corresponding chunks
     // 2. Create shared chunks to store modules that belong to multiple chunks.
     for idx in &self.link_output.sorted_modules {
@@ -834,11 +833,11 @@ impl GenerateStage<'_> {
         continue;
       }
 
-      if module_to_assigned[normal_module.idx] {
+      if module_is_assigned[normal_module.idx] {
         continue;
       }
 
-      module_to_assigned[normal_module.idx] = true;
+      module_is_assigned[normal_module.idx] = true;
 
       let bits = &index_splitting_info[normal_module.idx].bits;
       debug_assert!(
@@ -852,8 +851,11 @@ impl GenerateStage<'_> {
           chunk_id,
           self.link_output.metas[normal_module.idx].depended_runtime_helper,
         );
+        if allow_chunk_optimization {
+          temp_chunk_graph.add_module_to_chunk(normal_module.idx, chunk_id);
+        }
       } else if allow_chunk_optimization {
-        pending_common_chunks.entry(bits.clone()).or_default().modules.push(normal_module.idx);
+        temp_chunk_graph.init_module_assignment(normal_module.idx, bits);
       } else {
         let mut chunk =
           Chunk::new(None, None, bits.clone(), vec![], ChunkKind::Common, input_base.clone(), None);
@@ -872,18 +874,20 @@ impl GenerateStage<'_> {
     }
 
     if allow_chunk_optimization {
+      temp_chunk_graph.calc_chunk_dependencies(&self.link_output.metas);
       self.try_insert_common_module_to_exist_chunk(
         chunk_graph,
         bits_to_chunk,
         input_base,
-        pending_common_chunks,
+        &mut temp_chunk_graph,
       );
 
-      self.optimize_facade_dynamic_entry_chunks(
+      self.optimize_facade_entry_chunks(
         chunk_graph,
         index_splitting_info,
         input_base,
-        &mut module_to_assigned,
+        &mut module_is_assigned,
+        &temp_chunk_graph,
       );
     }
 

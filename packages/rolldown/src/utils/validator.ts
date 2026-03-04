@@ -119,6 +119,7 @@ const ModuleTypesSchema = v.record(
     v.literal('asset'),
     v.literal('base64'),
     v.literal('binary'),
+    v.literal('copy'),
     v.literal('css'),
     v.literal('dataurl'),
     v.literal('empty'),
@@ -372,6 +373,18 @@ const ChecksOptionsSchema = v.strictObject({
   duplicateShebang: v.pipe(
     v.optional(v.boolean()),
     v.description('Whether to emit warnings when both the code and postBanner contain shebang'),
+  ),
+  unsupportedTsconfigOption: v.pipe(
+    v.optional(v.boolean()),
+    v.description(
+      'Whether to emit warnings when a tsconfig option or combination of options is not supported',
+    ),
+  ),
+  ineffectiveDynamicImport: v.pipe(
+    v.optional(v.boolean()),
+    v.description(
+      'Whether to emit warnings when a module is dynamically imported but also statically imported, making the dynamic import ineffective for code splitting',
+    ),
   ),
 });
 isTypeTrue<IsSchemaSubType<typeof ChecksOptionsSchema, ChecksOptions>>();
@@ -758,6 +771,8 @@ const AdvancedChunksSchema = v.strictObject({
         maxSize: v.optional(v.number()),
         minModuleSize: v.optional(v.number()),
         maxModuleSize: v.optional(v.number()),
+        entriesAware: v.optional(v.boolean()),
+        entriesAwareMergeThreshold: v.optional(v.number()),
       }),
     ),
   ),
@@ -839,8 +854,6 @@ const OutputOptionsSchema = v.strictObject({
   assetFileNames: v.optional(AssetFileNamesSchema),
   entryFileNames: v.optional(ChunkFileNamesSchema),
   chunkFileNames: v.optional(ChunkFileNamesSchema),
-  cssEntryFileNames: v.optional(ChunkFileNamesSchema),
-  cssChunkFileNames: v.optional(ChunkFileNamesSchema),
   sanitizeFileName: v.optional(SanitizeFileNameSchema),
   minify: v.pipe(
     v.optional(v.union([v.boolean(), v.literal('dce-only'), MinifyOptionsSchema])),
@@ -870,6 +883,19 @@ const OutputOptionsSchema = v.strictObject({
   advancedChunks: v.optional(AdvancedChunksSchema),
   legalComments: v.pipe(
     v.optional(v.union([v.literal('none'), v.literal('inline')])),
+    v.description('Control legal comments in the output'),
+  ),
+  comments: v.pipe(
+    v.optional(
+      v.union([
+        v.boolean(),
+        v.strictObject({
+          legal: v.optional(v.boolean()),
+          annotation: v.optional(v.boolean()),
+          jsdoc: v.optional(v.boolean()),
+        }),
+      ]),
+    ),
     v.description('Control comments in the output'),
   ),
   plugins: v.optional(v.custom<RolldownOutputPluginOption>(() => true)),
@@ -927,14 +953,6 @@ const OutputCliOverrideSchema = v.strictObject({
   chunkFileNames: v.pipe(
     v.optional(v.string()),
     v.description('Name pattern for emitted secondary chunks'),
-  ),
-  cssEntryFileNames: v.pipe(
-    v.optional(v.string()),
-    v.description('Name pattern for emitted css entry chunks'),
-  ),
-  cssChunkFileNames: v.pipe(
-    v.optional(v.string()),
-    v.description('Name pattern for emitted css secondary chunks'),
   ),
   sanitizeFileName: v.pipe(v.optional(v.boolean()), v.description('Sanitize file name')),
   banner: v.pipe(v.optional(v.string()), v.description(getAddonDescription('top', 'outside'))),

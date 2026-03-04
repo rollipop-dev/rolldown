@@ -2,6 +2,7 @@ use rolldown_utils::indexmap::FxIndexMap;
 use rustc_hash::FxHashMap;
 use std::{fmt::Debug, path::PathBuf};
 use types::code_splitting_mode::CodeSplittingMode;
+use types::comments::CommentsOptions;
 use types::devtools_options::DevtoolsOptions;
 use types::generated_code_options::GeneratedCodeOptions;
 use types::inject_import::InjectImport;
@@ -77,18 +78,6 @@ pub struct BundlerOptions {
     schemars(with = "Option<String>")
   )]
   pub chunk_filenames: Option<ChunkFilenamesOutputOption>,
-  #[cfg_attr(
-    feature = "deserialize_bundler_options",
-    serde(default, deserialize_with = "deserialize_chunk_filenames"),
-    schemars(with = "Option<String>")
-  )]
-  pub css_entry_filenames: Option<ChunkFilenamesOutputOption>,
-  #[cfg_attr(
-    feature = "deserialize_bundler_options",
-    serde(default, deserialize_with = "deserialize_chunk_filenames"),
-    schemars(with = "Option<String>")
-  )]
-  pub css_chunk_filenames: Option<ChunkFilenamesOutputOption>,
   #[cfg_attr(
     feature = "deserialize_bundler_options",
     serde(default, deserialize_with = "deserialize_asset_filenames"),
@@ -211,6 +200,7 @@ pub struct BundlerOptions {
   pub transform: Option<BundlerTransformOptions>,
   pub watch: Option<WatchOption>,
   pub legal_comments: Option<LegalComments>,
+  pub comments: Option<CommentsOptions>,
   pub polyfill_require: Option<bool>,
   #[cfg_attr(
     feature = "deserialize_bundler_options",
@@ -533,6 +523,20 @@ where
                 ));
               }
             };
+          }
+          #[cfg(debug_assertions)]
+          "jsxPreset" => {
+            let preset_str = v
+              .as_str()
+              .ok_or_else(|| serde::de::Error::custom("transform.jsxPreset should be a string"))?;
+            transform_options.jsx_preset = Some(match preset_str {
+              "enable" => crate::JsxPreset::Enable,
+              "disable" => crate::JsxPreset::Disable,
+              "preserve" => crate::JsxPreset::Preserve,
+              _ => {
+                return Err(serde::de::Error::custom(format!("unknown jsxPreset: {preset_str}",)));
+              }
+            });
           }
           _ => return Err(serde::de::Error::custom(format!("unknown transform option: {k}",))),
         }

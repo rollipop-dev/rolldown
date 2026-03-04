@@ -49,6 +49,7 @@ bitflags::bitflags! {
     }
 }
 
+#[expect(clippy::struct_excessive_bools)]
 pub struct IncludeContext<'a> {
   pub modules: &'a IndexModules,
   pub symbols: &'a SymbolRefDb,
@@ -66,6 +67,9 @@ pub struct IncludeContext<'a> {
   /// see [rolldown_common::ecmascript::ecma_view::EcmaViewMeta]
   pub bailout_cjs_tree_shaking_modules: FxHashSet<ModuleIdx>,
   pub may_partial_namespace: bool,
+  /// Tracks whether any new module was included during the current convergence iteration.
+  /// Used to detect fixpoint without O(N) scanning of `is_module_included_vec`.
+  pub module_inclusion_changed: bool,
   pub module_namespace_included_reason: &'a mut ModuleNamespaceReasonVec,
   pub json_module_none_self_reference_included_symbol: FxHashMap<ModuleIdx, FxHashSet<SymbolRef>>,
 }
@@ -100,6 +104,7 @@ impl<'a> IncludeContext<'a> {
       normal_symbol_exports_chain_map,
       bailout_cjs_tree_shaking_modules: FxHashSet::default(),
       may_partial_namespace: false,
+      module_inclusion_changed: false,
       module_namespace_included_reason,
       json_module_none_self_reference_included_symbol: FxHashMap::default(),
     }
@@ -209,10 +214,10 @@ impl LinkStage<'_> {
 
     let mut unused_record_idxs = vec![];
     let cycled_idx = self.sort_dynamic_entries_by_topological_order(&mut dynamic_entries);
-    let mut previous_included_module_count =
-      context.is_module_included_vec.iter().filter(|item| **item).count();
     let mut included_dynamic_entry = FxHashSet::default();
     loop {
+      context.module_inclusion_changed = false;
+
       // It could be safely take since it is no more used.
       // We extract bailout_modules first to avoid borrowing conflict:
       // passing `context` requires a mutable borrow, which conflicts with
@@ -236,14 +241,9 @@ impl LinkStage<'_> {
         }
       });
 
-      let current_included_module_count =
-        context.is_module_included_vec.iter().filter(|item| **item).count();
-
-      if current_included_module_count == previous_included_module_count {
+      if !context.module_inclusion_changed {
         break;
       }
-
-      previous_included_module_count = current_included_module_count;
     }
 
     dynamic_entries.retain(|entry| included_dynamic_entry.contains(&entry.idx));
@@ -553,7 +553,14 @@ pub fn include_runtime_symbol(
   runtime: &RuntimeModuleBrief,
   depended_runtime_helper: RuntimeHelper,
 ) {
+  let runtime_module = &ctx.modules[runtime.id()].as_normal().expect("runtime should be normal");
+
   if depended_runtime_helper.is_empty() {
+    // No runtime helpers needed, but if the runtime has side effects (e.g. from
+    // a plugin transform), we still need to include it.
+    if runtime_module.side_effects.has_side_effects() {
+      include_module(ctx, runtime_module);
+    }
     return;
   }
 
@@ -571,10 +578,10 @@ pub fn include_module(ctx: &mut IncludeContext, module: &NormalModule) {
   }
 
   ctx.is_module_included_vec[module.idx] = true;
+  ctx.module_inclusion_changed = true;
 
-  if module.idx == ctx.runtime_idx {
-    // runtime module has no side effects and it's statements should be included
-    // by other modules's references.
+  if module.idx == ctx.runtime_idx && !module.side_effects.has_side_effects() {
+    // Unmodified runtime: statements included only via references.
     return;
   }
 
@@ -722,7 +729,7 @@ pub fn include_symbol(
         .insert(ModuleNamespaceIncludedReason::Unknown);
     } else if include_reason.contains(SymbolIncludeReason::ReExportDynamicExports) {
       ctx.module_namespace_included_reason[canonical_ref.owner]
-        .insert(ModuleNamespaceIncludedReason::ReExportExternalModule);
+        .insert(ModuleNamespaceIncludedReason::ReExportDynamicExports);
     }
     include_reason.intersects(SymbolIncludeReason::SimulatedFacadeChunk)
   } else {
@@ -808,7 +815,32 @@ pub fn include_statement(
       {
         return;
       }
-      if !module.ast_usage.contains(EcmaModuleAstUsage::IsCjsReexport) {
+      if module.ast_usage.contains(EcmaModuleAstUsage::IsCjsReexport) {
+        // When the importer is a CJS re-export (`module.exports = require('./mod')`),
+        // we normally skip bailout since resolved_exports tracks needed exports.
+        // However, for conditional re-export patterns like:
+        //   if (cond) module.exports = require('./a');
+        //   else module.exports = require('./b');
+        // resolved_exports only captures one branch, causing the other branch's
+        // `exports.xxx = value` statements to be incorrectly tree-shaken.
+        // Detect this by checking if the importer requires multiple CJS modules.
+        let has_more_than_one_cjs_requires = module
+          .import_records
+          .iter()
+          .filter(|rec| {
+            matches!(rec.kind, ImportKind::Require)
+              && rec.resolved_module.is_some_and(|idx| {
+                ctx.modules[idx]
+                  .as_normal()
+                  .is_some_and(|m| matches!(m.exports_kind, ExportsKind::CommonJs))
+              })
+          })
+          .nth(1)
+          .is_some();
+        if has_more_than_one_cjs_requires {
+          ctx.bailout_cjs_tree_shaking_modules.insert(module_idx);
+        }
+      } else {
         ctx.bailout_cjs_tree_shaking_modules.insert(module_idx);
       }
     });

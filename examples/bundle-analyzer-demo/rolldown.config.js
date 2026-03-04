@@ -1,0 +1,14 @@
+import { defineConfig } from '@rollipop/rolldown';
+import { bundleAnalyzerPlugin } from '@rollipop/rolldown/experimental';
+
+export default defineConfig({
+  input: {
+    main: './src/main.js',
+    worker: './src/worker.js',
+  },
+  output: {
+    dir: 'dist',
+    format: 'esm',
+  },
+  plugins: [bundleAnalyzerPlugin()],
+});

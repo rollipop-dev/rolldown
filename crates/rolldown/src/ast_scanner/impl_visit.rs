@@ -8,11 +8,10 @@ use oxc::{
   semantic::{ScopeFlags, SymbolId},
   span::{GetSpan, Span},
 };
-use rolldown_common::StmtInfoIdx;
 use rolldown_common::{
   ConstExportMeta, EcmaModuleAstUsage, EcmaViewMeta, ImportKind, ImportRecordMeta, LocalExport,
-  MemberExprObjectReferencedType, OutputFormat, RUNTIME_MODULE_KEY, SideEffectDetail, StmtInfoMeta,
-  SymbolRefFlags, dynamic_import_usage::DynamicImportExportsUsage,
+  MemberExprObjectReferencedType, OutputFormat, RUNTIME_MODULE_KEY, SideEffectDetail, StmtInfoIdx,
+  StmtInfoMeta, SymbolRefFlags, dynamic_import_usage::DynamicImportExportsUsage,
 };
 #[cfg(debug_assertions)]
 use rolldown_ecmascript::ToSourceString;
@@ -23,7 +22,7 @@ use rolldown_std_utils::OptionExt;
 use crate::ast_scanner::{TraverseState, cjs_export_analyzer::CommonJsAstType};
 
 use super::{
-  AstScanner, cjs_export_analyzer::CjsGlobalAssignmentType,
+  AstScanner, UntranspiledSyntax, cjs_export_analyzer::CjsGlobalAssignmentType,
   side_effect_detector::SideEffectDetector,
 };
 
@@ -51,22 +50,40 @@ impl<'me, 'ast: 'me> Visit<'ast> for AstScanner<'me, 'ast> {
   }
 
   fn visit_simple_assignment_target(&mut self, it: &ast::SimpleAssignmentTarget<'ast>) {
-    if !self.immutable_ctx.flat_options.property_write_side_effects()
-      && self.traverse_state.contains(TraverseState::TopLevel)
-    {
-      match it {
-        ast::SimpleAssignmentTarget::ComputedMemberExpression(_)
-        | ast::SimpleAssignmentTarget::StaticMemberExpression(_) => {
-          let pre = self.traverse_state;
+    match it {
+      ast::SimpleAssignmentTarget::ComputedMemberExpression(_)
+      | ast::SimpleAssignmentTarget::StaticMemberExpression(_) => {
+        let pre = self.traverse_state;
+        self.traverse_state.insert(TraverseState::MemberExprIsWrite);
+        if !self.immutable_ctx.flat_options.property_write_side_effects()
+          && pre.contains(TraverseState::TopLevel)
+        {
           self.traverse_state.insert(TraverseState::RootSymbolReferenceStmtInfoId);
-          walk::walk_simple_assignment_target(self, it);
-          self.traverse_state = pre;
-          return;
         }
-        _ => {}
+        walk::walk_simple_assignment_target(self, it);
+        self.traverse_state = pre;
+        return;
       }
+      _ => {}
     }
     walk::walk_simple_assignment_target(self, it);
+  }
+
+  fn visit_computed_member_expression(&mut self, it: &ast::ComputedMemberExpression<'ast>) {
+    if self.traverse_state.contains(TraverseState::MemberExprIsWrite) {
+      let kind = AstKind::ComputedMemberExpression(self.alloc(it));
+      self.enter_node(kind);
+      // In assignment targets, only the member object is written.
+      // The computed key expression is evaluated as a read.
+      let pre = self.traverse_state;
+      self.visit_expression(&it.object);
+      self.traverse_state.remove(TraverseState::MemberExprIsWrite);
+      self.visit_expression(&it.expression);
+      self.traverse_state = pre;
+      self.leave_node(kind);
+      return;
+    }
+    walk::walk_computed_member_expression(self, it);
   }
 
   fn visit_program(&mut self, program: &ast::Program<'ast>) {
@@ -82,20 +99,22 @@ impl<'me, 'ast: 'me> Visit<'ast> for AstScanner<'me, 'ast> {
     );
     // Custom visit
 
-    #[expect(
-      clippy::cast_possible_truncation,
-      reason = "We don't have a plan to support more than u32 statements in a single module"
-    )]
     for (idx, stmt) in program.body.iter().enumerate() {
       // `0` is reserved for Module Namespace Object stmt info
-      self.current_stmt_idx = StmtInfoIdx::from_raw_unchecked(idx as u32 + 1);
-      self.current_stmt_info.side_effect = SideEffectDetector::new(
+      #[expect(
+        clippy::cast_possible_truncation,
+        reason = "We don't have a plan to support more than u32 statements in a single module"
+      )]
+      {
+        self.current_stmt_idx = StmtInfoIdx::from_raw_unchecked(idx as u32 + 1);
+      }
+      let detector = SideEffectDetector::new(
         &self.result.symbol_ref_db.ast_scopes,
         self.immutable_ctx.flat_options,
         self.immutable_ctx.options,
         None,
-      )
-      .detect_side_effect_of_stmt(stmt);
+      );
+      self.current_stmt_info.side_effect = detector.detect_side_effect_of_stmt(stmt);
 
       #[cfg(debug_assertions)]
       {
@@ -111,6 +130,19 @@ impl<'me, 'ast: 'me> Visit<'ast> for AstScanner<'me, 'ast> {
         self.result.ecma_view_meta.insert(EcmaViewMeta::ExecutionOrderSensitive);
       }
       self.result.stmt_infos.add_stmt_info(std::mem::take(&mut self.current_stmt_info));
+    }
+
+    if self.untranspiled_syntax.contains(UntranspiledSyntax::TypeScript) {
+      self.result.errors.push(BuildDiagnostic::untranspiled_syntax(
+        self.immutable_ctx.id.to_string(),
+        "TypeScript",
+      ));
+    }
+    if self.untranspiled_syntax.contains(UntranspiledSyntax::Jsx) {
+      self
+        .result
+        .errors
+        .push(BuildDiagnostic::untranspiled_syntax(self.immutable_ctx.id.to_string(), "JSX"));
     }
 
     self.result.hashbang_range = program.hashbang.as_ref().map(GetSpan::span);
@@ -386,22 +418,15 @@ impl<'me, 'ast: 'me> Visit<'ast> for AstScanner<'me, 'ast> {
 
   fn visit_declaration(&mut self, it: &ast::Declaration<'ast>) {
     match it {
-      Declaration::VariableDeclaration(_) => {
-        walk::walk_declaration(self, it);
-      }
       Declaration::FunctionDeclaration(function) => {
         self.visit_function_decl(function, ScopeFlags::Function);
       }
       Declaration::ClassDeclaration(class) => {
         self.visit_class_decl(class);
       }
-
-      Declaration::TSTypeAliasDeclaration(_)
-      | Declaration::TSInterfaceDeclaration(_)
-      | Declaration::TSEnumDeclaration(_)
-      | Declaration::TSModuleDeclaration(_)
-      | Declaration::TSImportEqualsDeclaration(_)
-      | Declaration::TSGlobalDeclaration(_) => unreachable!(),
+      _ => {
+        walk::walk_declaration(self, it);
+      }
     }
   }
 
@@ -417,6 +442,87 @@ impl<'me, 'ast: 'me> Visit<'ast> for AstScanner<'me, 'ast> {
       self.current_stmt_info.meta.insert(StmtInfoMeta::KeepNamesType);
     }
     walk::walk_expression(self, it);
+  }
+
+  // --- Outermost TS visitor overrides ---
+  // Empty bodies prevent the walker from descending into TS subtrees.
+  // We only record the untranspiled syntax flag so the scan stage can report the error.
+
+  fn visit_ts_enum_declaration(&mut self, _it: &ast::TSEnumDeclaration<'ast>) {
+    self.untranspiled_syntax |= UntranspiledSyntax::TypeScript;
+  }
+
+  fn visit_ts_type_alias_declaration(&mut self, _it: &ast::TSTypeAliasDeclaration<'ast>) {
+    self.untranspiled_syntax |= UntranspiledSyntax::TypeScript;
+  }
+
+  fn visit_ts_interface_declaration(&mut self, _it: &ast::TSInterfaceDeclaration<'ast>) {
+    self.untranspiled_syntax |= UntranspiledSyntax::TypeScript;
+  }
+
+  fn visit_ts_module_declaration(&mut self, _it: &ast::TSModuleDeclaration<'ast>) {
+    self.untranspiled_syntax |= UntranspiledSyntax::TypeScript;
+  }
+
+  fn visit_ts_import_equals_declaration(&mut self, _it: &ast::TSImportEqualsDeclaration<'ast>) {
+    self.untranspiled_syntax |= UntranspiledSyntax::TypeScript;
+  }
+
+  fn visit_ts_global_declaration(&mut self, _it: &ast::TSGlobalDeclaration<'ast>) {
+    self.untranspiled_syntax |= UntranspiledSyntax::TypeScript;
+  }
+
+  fn visit_ts_as_expression(&mut self, _it: &ast::TSAsExpression<'ast>) {
+    self.untranspiled_syntax |= UntranspiledSyntax::TypeScript;
+  }
+
+  fn visit_ts_satisfies_expression(&mut self, _it: &ast::TSSatisfiesExpression<'ast>) {
+    self.untranspiled_syntax |= UntranspiledSyntax::TypeScript;
+  }
+
+  fn visit_ts_type_assertion(&mut self, _it: &ast::TSTypeAssertion<'ast>) {
+    self.untranspiled_syntax |= UntranspiledSyntax::TypeScript;
+  }
+
+  fn visit_ts_non_null_expression(&mut self, _it: &ast::TSNonNullExpression<'ast>) {
+    self.untranspiled_syntax |= UntranspiledSyntax::TypeScript;
+  }
+
+  fn visit_ts_instantiation_expression(&mut self, _it: &ast::TSInstantiationExpression<'ast>) {
+    self.untranspiled_syntax |= UntranspiledSyntax::TypeScript;
+  }
+
+  fn visit_ts_export_assignment(&mut self, _it: &ast::TSExportAssignment<'ast>) {
+    self.untranspiled_syntax |= UntranspiledSyntax::TypeScript;
+  }
+
+  fn visit_ts_namespace_export_declaration(
+    &mut self,
+    _it: &ast::TSNamespaceExportDeclaration<'ast>,
+  ) {
+    self.untranspiled_syntax |= UntranspiledSyntax::TypeScript;
+  }
+
+  fn visit_ts_index_signature(&mut self, _it: &ast::TSIndexSignature<'ast>) {
+    self.untranspiled_syntax |= UntranspiledSyntax::TypeScript;
+  }
+
+  // --- Outermost JSX visitor overrides ---
+
+  fn visit_jsx_element(&mut self, it: &ast::JSXElement<'ast>) {
+    if self.immutable_ctx.flat_options.jsx_preserve() {
+      walk::walk_jsx_element(self, it);
+    } else {
+      self.untranspiled_syntax |= UntranspiledSyntax::Jsx;
+    }
+  }
+
+  fn visit_jsx_fragment(&mut self, it: &ast::JSXFragment<'ast>) {
+    if self.immutable_ctx.flat_options.jsx_preserve() {
+      walk::walk_jsx_fragment(self, it);
+    } else {
+      self.untranspiled_syntax |= UntranspiledSyntax::Jsx;
+    }
   }
 
   fn visit_call_expression(&mut self, it: &ast::CallExpression<'ast>) {
@@ -540,14 +646,37 @@ impl<'me, 'ast: 'me> AstScanner<'me, 'ast> {
           {
             if !span.is_unspanned() {
               is_inserted_before = true;
+
+              if matches!(ty, MemberExprObjectReferencedType::Namespace)
+                && self.traverse_state.contains(TraverseState::MemberExprIsWrite)
+                && props[0].0 == "default"
+              {
+                // Write through namespace default (e.g. `ns.default.a = value`). Since
+                // `ns.default` is the raw CJS exports object, any property write on it may
+                // affect all `ns.xxx` reads. Mark the symbol so all CJS exports of the target
+                // module are bailed out from constant inlining.
+                let symbol_ref_flags = root_symbol_id.flags_mut(&mut self.result.symbol_ref_db);
+                *symbol_ref_flags |= SymbolRefFlags::HasComputedMemberWrite;
+              }
               self.add_member_expr_reference(
                 root_symbol_id,
                 props,
                 span,
                 ty,
                 ident_ref.reference_id.get(),
+                self.traverse_state.contains(TraverseState::MemberExprIsWrite),
               );
             }
+          } else if self.traverse_state.contains(TraverseState::MemberExprIsWrite)
+            && matches!(
+              ty,
+              MemberExprObjectReferencedType::Default | MemberExprObjectReferencedType::Namespace
+            )
+          {
+            // Computed member write (e.g. `cjs[name] = value`) where the key is dynamic.
+            // Mark the import symbol so all CJS exports of the target module won't be inlined.
+            let symbol_ref_flags = root_symbol_id.flags_mut(&mut self.result.symbol_ref_db);
+            *symbol_ref_flags |= SymbolRefFlags::HasComputedMemberWrite;
           }
         }
         if !is_inserted_before {

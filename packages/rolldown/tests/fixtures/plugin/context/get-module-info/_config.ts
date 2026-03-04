@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { GetModuleInfo } from '@rollipop/rolldown';
+import type { GetModuleInfo } from '@rollipop/rolldown';
 import { defineTest } from 'rolldown-tests';
 import { expect } from 'vitest';
 

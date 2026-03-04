@@ -47,8 +47,19 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use std::borrow::Cow;
 use sugar_path::SugarPath;
 
+use bitflags::bitflags;
+
 use crate::SharedOptions;
 use crate::ast_scanner::cjs_export_analyzer::CommonjsExportSymbolUsage;
+
+bitflags! {
+  #[derive(Debug, Clone, Copy, Default)]
+  /// Tracks untranspiled syntax encountered during scanning.
+  pub(crate) struct UntranspiledSyntax: u8 {
+    const TypeScript = 1 << 0;
+    const Jsx = 1 << 1;
+  }
+}
 
 #[derive(Debug)]
 pub struct ScanResult {
@@ -116,6 +127,8 @@ bitflags::bitflags! {
         /// If current position all parent scopes are block scope or top level scope.
         /// A cache state of [AstScanner::is_valid_tla_scope]
         const TopLevel = 1 << 1;
+        /// Set when traversing a member expression that is an assignment target (write context).
+        const MemberExprIsWrite = 1 << 2;
     }
 }
 
@@ -152,6 +165,7 @@ pub struct AstScanner<'me, 'ast> {
   cjs_named_exports_usage: FxHashMap<CompactStr, CommonjsExportSymbolUsage>,
   traverse_state: TraverseState,
   current_comment_idx: usize,
+  untranspiled_syntax: UntranspiledSyntax,
 }
 
 impl<'me, 'ast: 'me> AstScanner<'me, 'ast> {
@@ -241,6 +255,7 @@ impl<'me, 'ast: 'me> AstScanner<'me, 'ast> {
       )]),
       traverse_state: TraverseState::empty(),
       current_comment_idx: 0,
+      untranspiled_syntax: UntranspiledSyntax::empty(),
     }
   }
 
@@ -431,7 +446,7 @@ impl<'me, 'ast: 'me> AstScanner<'me, 'ast> {
   }
 
   fn get_root_binding(&self, name: &str) -> Option<SymbolId> {
-    self.result.symbol_ref_db.scoping().get_root_binding(name)
+    self.result.symbol_ref_db.scoping().get_root_binding(name.into())
   }
 
   /// `is_dummy` means if it the import record is created during ast transformation.
@@ -711,13 +726,6 @@ impl<'me, 'ast: 'me> AstScanner<'me, 'ast> {
       decl.specifiers.iter().for_each(|spec| {
         if let Some(local_symbol_id) = self.get_root_binding(spec.local.name().as_str()) {
           self.add_local_export(spec.exported.name().as_str(), local_symbol_id, spec.span);
-        } else {
-          self.result.errors.push(BuildDiagnostic::export_undefined_variable(
-            self.immutable_ctx.id.to_string(),
-            self.immutable_ctx.source.clone(),
-            spec.local.span(),
-            ArcStr::from(spec.local.name().as_str()),
-          ));
         }
       });
       if let Some(decl) = decl.declaration.as_ref() {
@@ -778,7 +786,9 @@ impl<'me, 'ast: 'me> AstScanner<'me, 'ast> {
             let id = cls_decl.id.as_ref().unwrap();
             self.add_local_export(id.name.as_str(), id.expect_symbol_id(), id.span);
           }
-          _ => unreachable!("doesn't support ts now"),
+          _ => {
+            self.untranspiled_syntax |= UntranspiledSyntax::TypeScript;
+          }
         }
       }
     }
@@ -798,7 +808,29 @@ impl<'me, 'ast: 'me> AstScanner<'me, 'ast> {
   fn scan_export_default_decl(&mut self, decl: &ExportDefaultDeclaration) {
     use oxc::ast::ast::ExportDefaultDeclarationKind;
     let local_binding_for_default_export = match &decl.declaration {
-      oxc::ast::match_expression!(ExportDefaultDeclarationKind) => None,
+      ast::ExportDefaultDeclarationKind::Identifier(id) => {
+        if let Some(symbol_id) = self.resolve_symbol_from_reference(id) {
+          let scoping = self.result.symbol_ref_db.ast_scopes.scoping();
+          let symbol_id_span = scoping.symbol_span(symbol_id);
+
+          // We can only reuse the symbol if all the following conditions are met:
+          // 1. Declaration is before `export default` (not: `export default foo; const foo = 1;`)
+          // 2. Symbol is not an imported binding (not: `import { foo } from './other'; export default foo;`)
+          // 3. Symbol has no redeclarations (not: `var foo = 1; var foo = 2; export default foo;`)
+          // 4. Symbol has no write references (not: `let foo = 1; foo = 2; export default foo;`)
+          // See https://github.com/rollup/rollup/blob/061a0387/test/function/samples/default-export-before-declaration
+          let cannot_reuse_symbol = (id.span.is_unspanned()
+            || symbol_id_span.is_unspanned()
+            || symbol_id_span.start > id.span.start)
+            || scoping.symbol_flags(symbol_id).is_import()
+            || !scoping.symbol_redeclarations(symbol_id).is_empty()
+            || scoping.get_resolved_references(symbol_id).any(Reference::is_write);
+          if !cannot_reuse_symbol {
+            self.result.default_export_ref.symbol = symbol_id;
+          }
+        }
+        None
+      }
       ast::ExportDefaultDeclarationKind::FunctionDeclaration(fn_decl) => {
         if fn_decl.is_side_effect_free() || fn_decl.pure {
           self.result.ecma_view_meta.insert(EcmaViewMeta::TopExportedSideEffectsFreeFunction);
@@ -823,7 +855,11 @@ impl<'me, 'ast: 'me> AstScanner<'me, 'ast> {
           (symbol_id, id.span)
         })
       }
-      ast::ExportDefaultDeclarationKind::TSInterfaceDeclaration(_) => unreachable!(),
+      ast::ExportDefaultDeclarationKind::TSInterfaceDeclaration(_) => {
+        self.untranspiled_syntax |= UntranspiledSyntax::TypeScript;
+        None
+      }
+      oxc::ast::match_expression!(ExportDefaultDeclarationKind) => None,
     };
     let (reference, span) = local_binding_for_default_export
       .unwrap_or((self.result.default_export_ref.symbol, Span::default()));
@@ -869,7 +905,7 @@ impl<'me, 'ast: 'me> AstScanner<'me, 'ast> {
       }
       ast::ImportDeclarationSpecifier::ImportNamespaceSpecifier(spec) => {
         let symbol_id = spec.local.expect_symbol_id();
-        self.add_star_import(symbol_id, rec_id, spec.span);
+        self.add_star_import(symbol_id, rec_id, spec.local.span());
       }
     });
   }
@@ -917,9 +953,18 @@ impl<'me, 'ast: 'me> AstScanner<'me, 'ast> {
     span: Span,
     obj_ref_type: MemberExprObjectReferencedType,
     reference_id: Option<ReferenceId>,
+    is_write: bool,
   ) {
     self.current_stmt_info.referenced_symbols.push(
-      MemberExprRef::new(object_ref, prop_and_span_list, span, obj_ref_type, reference_id).into(),
+      MemberExprRef::new(
+        object_ref,
+        prop_and_span_list,
+        span,
+        obj_ref_type,
+        reference_id,
+        is_write,
+      )
+      .into(),
     );
   }
 

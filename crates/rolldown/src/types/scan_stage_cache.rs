@@ -2,7 +2,7 @@ use arcstr::ArcStr;
 use itertools::Itertools;
 use oxc_index::IndexVec;
 use rolldown_common::{
-  BarrelState, GetLocalDbMut, ImporterRecord, ModuleId, ModuleIdx, StableModuleId,
+  BarrelState, GetLocalDbMut, ImporterRecord, Module, ModuleId, ModuleIdx, StableModuleId,
 };
 use rolldown_error::BuildResult;
 use rolldown_utils::rayon::{IntoParallelRefIterator, ParallelIterator};
@@ -10,7 +10,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use sugar_path::SugarPath;
 
 use crate::{
-  SharedOptions, SharedResolver,
+  SharedOptions,
   module_loader::{deferred_scan_data::defer_sync_scan_data, module_loader::VisitState},
   stages::scan_stage::{NormalizedScanStageOutput, ScanStageOutput},
 };
@@ -46,14 +46,10 @@ impl ScanStageCache {
     self.snapshot.take()
   }
 
-  pub async fn update_defer_sync_data(
-    &mut self,
-    options: &SharedOptions,
-    resolver: &SharedResolver,
-  ) -> BuildResult<()> {
+  pub async fn update_defer_sync_data(&mut self, options: &SharedOptions) -> BuildResult<()> {
     let snapshot = self.take_snapshot();
     if let Some(mut snapshot) = snapshot {
-      defer_sync_scan_data(options, resolver, &self.module_id_to_idx, &mut snapshot).await?;
+      defer_sync_scan_data(options, &self.module_id_to_idx, &mut snapshot).await?;
       self.set_snapshot(snapshot);
     }
     Ok(())
@@ -136,6 +132,34 @@ impl ScanStageCache {
         cache.entry_points.push(entry_point);
       }
     }
+
+    // Update barrel module resolved import records
+    let resolved_barrel_modules = std::mem::take(&mut self.barrel_state.resolved_barrel_modules);
+    for (barrel_module_idx, resolved_imports) in resolved_barrel_modules {
+      let barrel_module = &mut cache.module_table[barrel_module_idx];
+      if let Module::Normal(normal_module) = barrel_module {
+        resolved_imports.into_iter().for_each(|(rec_idx, new_idx)| {
+          normal_module.import_records[rec_idx].resolved_module = Some(new_idx);
+        });
+      }
+    }
+
+    // Recompute user-defined entry modules for this build instead of monotonically extending.
+    // `scan_stage_output.user_defined_entry_modules` only contains entries discovered in the
+    // current scan (e.g. changed modules + emitted entries), so we additionally keep configured
+    // root entries that remain valid in cache.
+    let mut user_defined_entry_modules = scan_stage_output.user_defined_entry_modules;
+    for user_defined_entry_id in &self.user_defined_entry {
+      let Some(visit_state) = self.module_id_to_idx.get(user_defined_entry_id) else {
+        continue;
+      };
+      let idx = visit_state.idx();
+      if cache.module_table.modules.get(idx).is_some() {
+        user_defined_entry_modules.insert(idx);
+      }
+    }
+    cache.user_defined_entry_modules = user_defined_entry_modules;
+
     Ok(())
   }
 
@@ -184,6 +208,7 @@ impl ScanStageCache {
       overrode_preserve_entry_signature_map: cache.overrode_preserve_entry_signature_map.clone(),
       entry_point_to_reference_ids: cache.entry_point_to_reference_ids.clone(),
       flat_options: cache.flat_options,
+      user_defined_entry_modules: cache.user_defined_entry_modules.clone(),
     }
   }
 }

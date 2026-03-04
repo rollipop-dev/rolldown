@@ -146,18 +146,6 @@
             "null"
           ]
         },
-        "cssEntryFilenames": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "cssChunkFilenames": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "assetFilenames": {
           "type": [
             "string",
@@ -458,6 +446,16 @@
             }
           ]
         },
+        "comments": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CommentsOptions"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "polyfillRequire": {
           "type": [
             "boolean",
@@ -698,7 +696,8 @@
             "binary",
             "empty",
             "css",
-            "asset"
+            "asset",
+            "copy"
           ]
         },
         {
@@ -1283,6 +1282,20 @@
             "null"
           ],
           "format": "double"
+        },
+        "entriesAware": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "entriesAwareMergeThreshold": {
+          "description": "Only effective when `entriesAware` is set to `true`.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
         }
       },
       "additionalProperties": false,
@@ -1400,6 +1413,18 @@
             "boolean",
             "null"
           ]
+        },
+        "unsupportedTsconfigOption": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "ineffectiveDynamicImport": {
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       },
       "additionalProperties": false
@@ -1455,6 +1480,41 @@
           "const": "inline"
         }
       ]
+    },
+    "CommentsOptions": {
+      "description": "Resolved comments options with explicit boolean flags.",
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "$ref": "#/$defs/RawCommentsObject"
+        }
+      ]
+    },
+    "RawCommentsObject": {
+      "type": "object",
+      "properties": {
+        "legal": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "annotation": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "jsdoc": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
     },
     "MakeAbsoluteExternalsRelative": {
       "oneOf": [

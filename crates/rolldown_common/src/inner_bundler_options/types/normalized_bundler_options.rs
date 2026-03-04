@@ -11,6 +11,7 @@ use rolldown_error::EventKindSwitcher;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::code_splitting_mode::CodeSplittingMode;
+use super::comments::CommentsOptions;
 use super::experimental_options::ExperimentalOptions;
 use super::generated_code_options::GeneratedCodeOptions;
 use super::legal_comments::LegalComments;
@@ -50,8 +51,6 @@ pub struct NormalizedBundlerOptions {
   pub module_types: FxHashMap<Cow<'static, str>, ModuleType>,
   // --- Output
   pub name: Option<String>,
-  pub css_entry_filenames: ChunkFilenamesOutputOption,
-  pub css_chunk_filenames: ChunkFilenamesOutputOption,
   pub entry_filenames: ChunkFilenamesOutputOption,
   pub chunk_filenames: ChunkFilenamesOutputOption,
   pub asset_filenames: AssetFilenamesOutputOption,
@@ -94,6 +93,7 @@ pub struct NormalizedBundlerOptions {
   pub profiler_names: bool,
   pub watch: WatchOption,
   pub legal_comments: LegalComments,
+  pub comments: CommentsOptions,
   pub drop_labels: FxHashSet<String>,
   pub polyfill_require: bool,
   pub defer_sync_scan_data: Option<DeferSyncScanDataOption>,
@@ -129,8 +129,6 @@ impl Default for NormalizedBundlerOptions {
       shim_missing_exports: Default::default(),
       module_types: Default::default(),
       name: Default::default(),
-      css_entry_filenames: ChunkFilenamesOutputOption::String(String::new()),
-      css_chunk_filenames: ChunkFilenamesOutputOption::String(String::new()),
       entry_filenames: ChunkFilenamesOutputOption::String(String::new()),
       chunk_filenames: ChunkFilenamesOutputOption::String(String::new()),
       asset_filenames: AssetFilenamesOutputOption::String(String::new()),
@@ -171,6 +169,7 @@ impl Default for NormalizedBundlerOptions {
       profiler_names: Default::default(),
       watch: Default::default(),
       legal_comments: LegalComments::None,
+      comments: CommentsOptions::default(),
       drop_labels: Default::default(),
       polyfill_require: Default::default(),
       defer_sync_scan_data: Default::default(),

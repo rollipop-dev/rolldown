@@ -9,6 +9,15 @@ Rolldown is a JavaScript/TypeScript bundler written in Rust and TypeScript, desi
 
 </tips>
 
+# Spec-Driven Development
+
+Design docs live in `meta/design/`. They capture high-level vision and design intent, giving both humans and AI a shared understanding of what the system should be.
+
+When a design doc exists for a topic, treat it as the source of truth — read it before coding, update it before changing the design. When there isn't one, just code.
+
+- **Format:** See `meta/design/template.md` for the suggested format. Keep it freeform — one concept per file, link between docs, no rigid structure required.
+- **Traceability:** When implementing or fixing something described in a design doc, link the relevant GitHub issue/PR in commit messages or comments so progress is traceable.
+
 # Architecture
 
 ## Three-Layer Architecture
@@ -35,6 +44,7 @@ Rust Core (crates/rolldown)
 - `packages/rolldown-tests`: Test suite for the `rolldown` package using Vitest.
 - `packages/rollup-tests`: Compatibility test suite for Rollup plugins.
 - `docs/`: Documentation site built with VitePress.
+- `meta/design/`: Design documents. See the "Spec-Driven Development" section above.
 
 ## Auto-generated or Submodule Files
 
@@ -66,6 +76,7 @@ IMPORTANT: The project uses `just` as a task runner. Always prefer `just` comman
 
 # Common Pitfalls & Best Practices
 
+- **`AGENTS.md` is the source of truth.** `CLAUDE.md` is a symlink to it.
 - **Check surrounding code for conventions:** Before adding new code, always study the existing patterns, naming conventions, and architectural choices in the file and directory you are working in.
 - **Break large changes into tracked steps:** Decompose substantial work into manageable subtasks. Track progress to prevent scope creep and missed items. Use `TodoWrite` or similar tools to maintain a checklist.
 - **Batch multiple edits:** Prefer to batch multiple edits over sequential single edits. Use `MultiEdit` or similar tools if available.

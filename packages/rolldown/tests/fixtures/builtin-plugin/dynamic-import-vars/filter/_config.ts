@@ -1,8 +1,5 @@
 import { defineTest } from 'rolldown-tests';
-import {
-  viteDynamicImportVarsPlugin,
-  viteImportGlobPlugin,
-} from '@rollipop/rolldown/experimental';
+import { viteDynamicImportVarsPlugin, viteImportGlobPlugin } from '@rollipop/rolldown/experimental';
 
 export default defineTest({
   config: {

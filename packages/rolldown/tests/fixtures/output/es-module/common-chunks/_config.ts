@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import type { OutputChunk as RolldownOutputChunk } from 'rolldown';
+import type { OutputChunk as RolldownOutputChunk } from '@rollipop/rolldown';
 import { defineTest } from 'rolldown-tests';
 import { expect } from 'vitest';
 import fs from 'node:fs';
@@ -18,10 +18,10 @@ export default defineTest({
     const require = createRequire(import.meta.url);
     expect(
       output.output
-        .filter((output): output is RolldownOutputChunk => output.type === 'chunk' && output.isEntry)
-        .every((chunk) =>
-          require(`./dist/${chunk.fileName}`).__esModule
-        ),
+        .filter(
+          (output): output is RolldownOutputChunk => output.type === 'chunk' && output.isEntry,
+        )
+        .every((chunk) => require(`./dist/${chunk.fileName}`).__esModule),
     ).toBe(true);
   },
 });

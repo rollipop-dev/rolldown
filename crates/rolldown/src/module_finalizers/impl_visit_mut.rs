@@ -4,7 +4,7 @@ use oxc::ast::AstType;
 use oxc::ast::ast::{AssignmentTarget, JSXMemberExpression};
 use oxc::span::{Atom, CompactStr};
 use oxc::{
-  allocator::{self, IntoIn, TakeIn},
+  allocator::{self, Dummy as _, IntoIn, TakeIn},
   ast::{
     NONE,
     ast::{self, BindingPattern, Expression, SimpleAssignmentTarget, Statement},
@@ -471,9 +471,18 @@ impl<'ast> VisitMut<'ast> for ScopeHoistingFinalizer<'_, 'ast> {
             Expression::Identifier(ident_ref) => {
               *it = ast::JSXElementName::IdentifierReference(ident_ref);
             }
+            Expression::StaticMemberExpression(member_expr) => {
+              *it = ast::JSXElementName::MemberExpression(oxc::allocator::Box::new_in(
+                JSXMemberExpression::from_ast(member_expr.unbox(), self.alloc).unwrap(),
+                self.alloc,
+              ));
+            }
+            Expression::ThisExpression(this_expr) => {
+              *it = ast::JSXElementName::ThisExpression(this_expr);
+            }
             _ => {
               unreachable!(
-                "Should always rewrite to Identifier for JsxElementName::IdentifierReference"
+                "Should always rewrite to Identifier, StaticMemberExpression, or ThisExpression for JsxElementName::IdentifierReference"
               )
             }
           }
@@ -582,6 +591,7 @@ impl<'ast> VisitMut<'ast> for ScopeHoistingFinalizer<'_, 'ast> {
                   binding: ast::AssignmentTarget::from(target),
                   init,
                   span: Span::default(),
+                  ..ast::AssignmentTargetWithDefault::dummy(self.alloc)
                 }
                 .into_in(self.alloc),
               )
@@ -590,6 +600,7 @@ impl<'ast> VisitMut<'ast> for ScopeHoistingFinalizer<'_, 'ast> {
             },
             span: Span::default(),
             computed: false,
+            ..ast::AssignmentTargetPropertyProperty::dummy(self.alloc)
           }
           .into_in(self.alloc),
         );

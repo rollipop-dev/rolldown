@@ -1,6 +1,5 @@
 mod asset;
 mod chunk;
-mod css;
 mod ecmascript;
 mod file_emitter;
 mod generated;
@@ -11,6 +10,7 @@ mod module_loader;
 mod source_map_gen_msg;
 mod type_aliases;
 mod types;
+mod utils;
 
 /// This module is to help `rolldown` crate could export types related bundler options easily.
 /// `rolldown` crate could use `pub use rolldown_common::bundler_options::*;` to export all types, so we don't need write
@@ -32,12 +32,13 @@ pub mod bundler_options {
       chunk_import_map::ChunkImportMap,
       chunk_modules_order::ChunkModulesOrderBy,
       code_splitting_mode::CodeSplittingMode,
+      comments::CommentsOptions,
       defer_sync_scan_data_option::DeferSyncScanDataOption,
       dev_mode_options::DevModeOptions,
       devtools_options::DevtoolsOptions,
       es_module_flag::EsModuleFlag,
       experimental_options::ExperimentalOptions,
-      filename_template::FilenameTemplate,
+      filename_template::{FilenameTemplate, is_path_fragment},
       generated_code_options::GeneratedCodeOptions,
       hash_characters::HashCharacters,
       inject_import::InjectImport,
@@ -50,7 +51,10 @@ pub mod bundler_options {
       manual_code_splitting_options::{
         ChunkingContext, ManualCodeSplittingOptions, MatchGroup, MatchGroupName, MatchGroupTest,
       },
-      minify_options::{MinifyOptions, RawMinifyOptions, RawMinifyOptionsDetailed},
+      minify_options::{
+        MinifyOptions, RawCompressOptions, RawMangleOptions, RawMinifyOptions,
+        RawMinifyOptionsDetailed,
+      },
       module_type::ModuleType,
       normalized_bundler_options::{NormalizedBundlerOptions, SharedNormalizedBundlerOptions},
       on_log::{Log, LogLocation, LogWithoutPlugin, OnLog},
@@ -85,8 +89,13 @@ pub mod bundler_options {
         PropertyWriteSideEffects, TreeshakeOptions,
       },
       tsconfig::TsConfig,
+      tsconfig_merge::merge_transform_options_with_tsconfig as merge_tsconfig,
       watch_option::{NotifyOption, OnInvalidate, WatchOption},
     },
+  };
+
+  pub use crate::utils::enhanced_transform::{
+    EnhancedTransformOptions, EnhancedTransformResult, TsconfigOption, enhanced_transform,
   };
 }
 
@@ -104,10 +113,6 @@ pub use crate::{
       module_group::ModuleGroup,
       preliminary_filename::PreliminaryFilename,
     },
-  },
-  css::{
-    css_asset_meta::CssAssetMeta,
-    css_view::{CssAssetNameReplacer, CssRenderer, CssView},
   },
   ecmascript::{
     comment_annotation::get_leading_comment,

@@ -51,6 +51,7 @@ export type ModuleTypes = Record<
   | 'empty'
   | 'css'
   | 'asset'
+  | 'copy'
 >;
 
 export interface WatcherOptions {
@@ -592,6 +593,7 @@ export interface InputOptions {
      * @default false
      */
     chunkImportMap?: boolean | { baseUrl?: string; fileName?: string };
+
     /**
      * Enable on-demand wrapping of modules.
      * @default false

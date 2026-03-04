@@ -1,4 +1,4 @@
-import type { OutputChunk, RenderedChunk } from '@rollipop/rolldown';
+import type { OutputChunk } from '@rollipop/rolldown';
 import { defineTest } from 'rolldown-tests';
 import { expect } from 'vitest';
 
@@ -22,18 +22,12 @@ export default defineTest({
         name: 'test-plugin',
         renderChunk: (_code, chunk) => {
           // The imports should use the modified paths from output.paths function
-          expect(chunk.imports).toStrictEqual([
-            'react/index.js',
-            'vue/dist/vue.esm.js',
-          ]);
+          expect(chunk.imports).toStrictEqual(['react/index.js', 'vue/dist/vue.esm.js']);
         },
         generateBundle: (_options, bundle) => {
           const chunk = bundle['main.js'] as OutputChunk;
           // The imports should use the modified paths from output.paths function
-          expect(chunk.imports).toStrictEqual([
-            'react/index.js',
-            'vue/dist/vue.esm.js',
-          ]);
+          expect(chunk.imports).toStrictEqual(['react/index.js', 'vue/dist/vue.esm.js']);
         },
       },
     ],

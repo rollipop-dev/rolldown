@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { RolldownPlugin } from '@rollipop/rolldown';
+import type { RolldownPlugin } from '@rollipop/rolldown';
 import { defineTest } from 'rolldown-tests';
 import { viteLoadFallbackPlugin } from '@rollipop/rolldown/experimental';
 import { expect } from 'vitest';

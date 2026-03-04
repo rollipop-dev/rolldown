@@ -26,7 +26,7 @@ use rolldown_ecmascript_utils::{
 
 mod finalizer_context;
 mod impl_visit_mut;
-pub use finalizer_context::{FinalizerMutableState, ScopeHoistingFinalizerContext};
+pub use finalizer_context::ScopeHoistingFinalizerContext;
 use oxc::span::{CompactStr, Ident};
 use rolldown_utils::ecmascript::is_validate_identifier_name;
 use rolldown_utils::indexmap::{FxIndexMap, FxIndexSet};
@@ -939,11 +939,18 @@ impl<'me, 'ast> ScopeHoistingFinalizer<'me, 'ast> {
         Some(ast::SimpleAssignmentTarget::StaticMemberExpression(final_access))
       }
       CjsMemberProperty::Computed(expr) => {
-        let expr_clone = expr.clone_in(self.alloc);
+        // Finalize the computed key expression (e.g. inline constants) so that an
+        // inlined value is emitted instead of a reference to a tree-shaken binding.
+        let finalized_expr = match expr {
+          ast::Expression::Identifier(ident_ref) => self
+            .try_rewrite_identifier_reference_expr(ident_ref, false)
+            .unwrap_or_else(|| expr.clone_in(self.alloc)),
+          _ => expr.clone_in(self.alloc),
+        };
         let final_access = self.snippet.builder.alloc_computed_member_expression(
           SPAN,
           default_access,
-          expr_clone,
+          finalized_expr,
           false,
         );
         Some(ast::SimpleAssignmentTarget::ComputedMemberExpression(final_access))
@@ -1405,6 +1412,15 @@ impl<'me, 'ast> ScopeHoistingFinalizer<'me, 'ast> {
           use ast::ExportDefaultDeclarationKind;
           let default_decl_span = default_decl.span;
           match &mut default_decl.declaration {
+            // Special case: when exporting an identifier that's already the default export symbol
+            ast::ExportDefaultDeclarationKind::Identifier(id)
+              if self.scope.scoping().get_reference(id.reference_id()).symbol_id().is_some_and(
+                |symbol_id| symbol_id == self.ctx.module.default_export_ref.symbol,
+              ) =>
+            {
+              // "let a = ..;export default a" => "let a = ..;" (no transformation needed)
+              return;
+            }
             decl @ ast::match_expression!(ExportDefaultDeclarationKind) => {
               let expr = decl.to_expression_mut();
               let canonical_name_for_default_export_ref =

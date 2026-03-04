@@ -107,6 +107,7 @@ function withShared({
     input: {
       index: './src/index',
       'plugins-index': './src/plugins-index',
+      'utils-index': './src/utils-index',
       'experimental-index': './src/experimental-index',
       ...(!isBrowserBuild
         ? {
@@ -147,10 +148,6 @@ function withShared({
     },
     transform: {
       target: 'node22',
-      decorator: {
-        // Legacy decorators are required for the @lazyProp decorator
-        legacy: true,
-      },
       define: {
         'import.meta.browserBuild': String(isBrowserBuild),
       },

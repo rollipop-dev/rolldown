@@ -18,7 +18,6 @@ function _create_class(Constructor, protoProps, staticProps) {
   return Constructor;
 }
 // @ts-check
-import { __exportAll, __reExport, __toCommonJS, __toESM } from '\0rolldown/runtime.js';
 var Module = /*#__PURE__*/ function() {
   "use strict";
   function Module(id) {
@@ -75,23 +74,28 @@ export var DevRuntime = /*#__PURE__*/ function() {
               }).exports, mod), mod.exports;
           };
       };
-      /** @internal */ this.__toESM = __toESM;
-      /** @internal */ this.__toCommonJS = __toCommonJS;
-      /** @internal */ this.__exportAll = __exportAll;
+      /** @internal */ // @ts-expect-error The variable will be injected at build time.
+      this.__toESM = __toESM;
+      /** @internal */ // @ts-expect-error The variable will be injected at build time.
+      this.__toCommonJS = __toCommonJS;
+      /** @internal */ // @ts-expect-error The variable will be injected at build time.
+      this.__exportAll = __exportAll;
       /**
  * @param {boolean} [isNodeMode]
  * @returns {(mod: any) => any}
  * @internal
- */ this.__toDynamicImportESM = function(isNodeMode) {
+ */ // @ts-expect-error The variable will be injected at build time.
+      this.__toDynamicImportESM = function(isNodeMode) {
           return function(mod) {
               return __toESM(mod.default, isNodeMode);
           };
       };
-      /** @internal */ this.__reExport = __reExport;
-      this.cache = /** @type {string[]} */ [];
-      this.timeout = /** @type {NodeJS.Timeout | null} */ null;
-      this.timeoutSetLength = 0;
-      /** @type {(module: string) => void} */ this.sendModuleRegisteredMessage = function() {
+      /** @internal */ // @ts-expect-error The variable will be injected at build time.
+      this.__reExport = __reExport;
+      this.sendModuleRegisteredMessage = function() {
+          var cache = /** @type {string[]} */ [];
+          var timeout = /** @type {NodeJS.Timeout | null} */ null;
+          var timeoutSetLength = 0;
           var self = _this;
           /**
    * @param {string} module
@@ -99,8 +103,24 @@ export var DevRuntime = /*#__PURE__*/ function() {
               if (!self.messenger) {
                   return;
               }
-              self.cache.push(module);
-              this.timeout = safetyInvokeWithSetTimeout(self.flush.bind(this));
+              cache.push(module);
+              if (!timeout) {
+                  timeout = setTimeout(/** @returns void */ function flushCache() {
+                      if (cache.length > timeoutSetLength) {
+                          timeout = setTimeout(flushCache);
+                          timeoutSetLength = cache.length;
+                          return;
+                      }
+                      self.messenger.send({
+                          type: 'hmr:module-registered',
+                          modules: cache
+                      });
+                      cache.length = 0;
+                      timeout = null;
+                      timeoutSetLength = 0;
+                  });
+                  timeoutSetLength = cache.length;
+              }
           };
       }();
       this.messenger = messenger;
@@ -148,37 +168,7 @@ export var DevRuntime = /*#__PURE__*/ function() {
                   return {};
               }
           }
-      },
-      {
-          key: "flush",
-          value: function flush() {
-              if (this.cache.length > this.timeoutSetLength) {
-                  this.timeoutSetLength = this.cache.length;
-                  this.timeout = safetyInvokeWithSetTimeout(this.flush.bind(this));
-                  return;
-              }
-              this.messenger.send({
-                  type: 'hmr:module-registered',
-                  modules: this.cache
-              });
-              this.cache.length = 0;
-              this.timeoutSetLength = 0;
-              this.timeout = null;
-          }
       }
   ]);
   return DevRuntime;
 }();
-/**
-* In lower React Native versions, `setTimeout` is cannot be used in `rolldown:hmr` initialization phase because `InitializeCore` of React Native is not evaluated yet.
-* 
-* `rolldown:hmr` -> `InitializeCore` -> Define polyfills (e.g, `setTimeout`)
-*
-* @param {() => void} fn 
-*/ function safetyInvokeWithSetTimeout(fn) {
-  if (typeof setTimeout === 'function') {
-      return setTimeout(fn);
-  }
-  fn();
-  return null;
-}

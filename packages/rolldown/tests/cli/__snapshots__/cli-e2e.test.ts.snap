@@ -34,6 +34,7 @@ OPTIONS
   --checks.eval               Whether to emit warnings when detecting uses of direct \`eval\`s.
   --checks.filename-conflict  Whether to emit warnings when files generated have the same name with different contents.
   --checks.import-is-undefined Whether to emit warnings when an imported variable is not exported.
+  --checks.ineffective-dynamic-import Whether to emit warnings when a module is dynamically imported but also statically imported, making the dynamic import ineffective for code splitting.
   --checks.missing-global-name Whether to emit warnings when the \`output.globals\` option is missing when needed.
   --checks.missing-name-option-for-iife-export Whether to emit warnings when the \`output.name\` option is missing when needed.
   --checks.mixed-exports      Whether to emit warnings when the way to export values is ambiguous.
@@ -42,12 +43,12 @@ OPTIONS
   --checks.tolerated-transform Whether to emit warnings when detecting tolerated transform.
   --checks.unresolved-entry   Whether to emit warnings when an entrypoint cannot be resolved.
   --checks.unresolved-import  Whether to emit warnings when an import cannot be resolved.
+  --checks.unsupported-tsconfig-option Whether to emit warnings when a tsconfig option or combination of options is not supported.
   --chunk-file-names <name>   Name pattern for emitted secondary chunks.
   --clean-dir                 Clean output directory before emitting output.
   --code-splitting <code-splitting>Code splitting options (true, false, or object).
+  --comments <comments>       Control comments in the output.
   --context <context>         The entity top-level \`this\` represents.
-  --css-chunk-file-names <css-chunk-file-names>Name pattern for emitted css secondary chunks.
-  --css-entry-file-names <css-entry-file-names>Name pattern for emitted css entry chunks.
   --cwd <cwd>                 Current working directory.
   --devtools.session-id <devtools.session-id>Used to name the build.
   --dynamic-import-in-cjs     Dynamic import in CJS output.
@@ -66,7 +67,7 @@ OPTIONS
   --input <input>             Entry file.
   --intro <intro>             Code to insert the top of the bundled file (inside the wrapper function).
   --keep-names                Keep function and class names after bundling.
-  --legal-comments <legal-comments>Control comments in the output.
+  --legal-comments <legal-comments>Control legal comments in the output.
   --log-level <log-level>     Log level (silent, info, debug, warn).
   --make-absolute-externals-relative Prevent normalization of external imports.
   --minify-internal-exports   Minify internal exports.
