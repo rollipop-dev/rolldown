@@ -102,6 +102,7 @@ export function bindingifyOutputOptions(outputOptions: OutputOptions): BindingOu
     minifyInternalExports: outputOptions.minifyInternalExports,
     cleanDir,
     strictExecutionOrder,
+    strict: outputOptions.strict,
     globalIdentifiers,
   };
 }

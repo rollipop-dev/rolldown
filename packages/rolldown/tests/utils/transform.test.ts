@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { transform, transformSync, TsconfigCache } from 'rolldown/utils';
+import { transform, transformSync, TsconfigCache } from '@rollipop/rolldown/utils';
 import { expect, describe, it } from 'vitest';
 
 describe('enhanced transform', () => {

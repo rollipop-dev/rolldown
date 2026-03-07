@@ -7,22 +7,6 @@ source: crates/rolldown_testing/src/integration_test.rs
 
 ```js
 /*!
-* FOO.TS (ABOVE EXPORT)
-*/
-const foo = "foo";
-/*!
-* FOO.TS (BELOW EXPORT)
-*/
-
-/*!
-* FOO.TS (ABOVE EXPORT)
-*/
-const bar = "bar";
-/*!
-* FOO.TS (BELOW EXPORT)
-*/
-
-/*!
 * INDEX.TS (ABOVE IMPORT)
 * THIS COMMENT IS NOT PRESERVED
 */
@@ -36,10 +20,10 @@ const bar = "bar";
 /*!
 * INDEX.TS (ABOVE EXPORT)
 */
-var main_default = foo + bar;
+var main_default = "foobar";
 /*!
 * INDEX.TS (BELOW EXPORT)
 */
-
 export { main_default as default };
+
 ```

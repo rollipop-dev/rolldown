@@ -713,6 +713,18 @@ export interface OutputOptions {
    */
   strictExecutionOrder?: boolean;
   /**
+   * Whether to always output `"use strict"` directive in non-ES module outputs.
+   *
+   * - `true` - Always emit `"use strict"` at the top of the output (not applicable for ESM format since ESM is always strict).
+   * - `false` - Never emit `"use strict"` in the output.
+   * - `'auto'` - Respect the `"use strict"` directives from the source code.
+   *
+   * See [In-depth directive guide](https://rolldown.rs/in-depth/directives) for more details.
+   *
+   * @default 'auto'
+   */
+  strict?: boolean | 'auto';
+  /**
    * Reserved global identifiers to be avoided when generating export binding names for module chunks.
    *
    * @default []
