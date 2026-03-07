@@ -29,3 +29,7 @@ pub use binding_vite_react_refresh_wrapper_plugin_config::BindingViteReactRefres
 pub use binding_vite_reporter_plugin_config::BindingViteReporterPluginConfig;
 pub use binding_vite_resolve_plugin_config::BindingViteResolvePluginConfig;
 pub use binding_vite_transform_plugin_config::BindingViteTransformPluginConfig;
+
+// Rollipop built-in plugins
+mod binding_rollipop_worklets_plugin_config;
+pub use binding_rollipop_worklets_plugin_config::BindingRollipopWorkletsPluginConfig;

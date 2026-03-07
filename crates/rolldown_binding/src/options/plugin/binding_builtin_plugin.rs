@@ -21,9 +21,13 @@ use rolldown_plugin_vite_transform::ViteTransformPlugin;
 use rolldown_plugin_vite_wasm_fallback::ViteWasmFallbackPlugin;
 use rolldown_plugin_vite_web_worker_post::ViteWebWorkerPostPlugin;
 
+// Rollipop built-in plugins
+use rolldown_plugin_rollipop_worklets::RollipopWorkletsPlugin;
+
 use crate::options::plugin::config::{
   BindingBundleAnalyzerPluginConfig, BindingEsmExternalRequirePluginConfig,
-  BindingViteModulePreloadPolyfillPluginConfig, BindingViteReactRefreshWrapperPluginConfig,
+  BindingRollipopWorkletsPluginConfig, BindingViteModulePreloadPolyfillPluginConfig,
+  BindingViteReactRefreshWrapperPluginConfig,
 };
 
 use super::{
@@ -197,6 +201,19 @@ impl TryFrom<BindingBuiltinPlugin<'_>> for Arc<dyn Pluginable> {
       }
       BindingBuiltinPluginName::ViteWasmFallback => Arc::new(ViteWasmFallbackPlugin),
       BindingBuiltinPluginName::ViteWebWorkerPost => Arc::new(ViteWebWorkerPostPlugin),
+
+      // Rollipop built-in plugins
+      BindingBuiltinPluginName::RollipopWorklets => {
+        let plugin: RollipopWorkletsPlugin = if let Some(options) = plugin.options {
+          BindingRollipopWorkletsPluginConfig::from_unknown(options)?.into()
+        } else {
+          return Err(napi::Error::new(
+            napi::Status::InvalidArg,
+            "Missing options for RollipopWorkletsPlugin",
+          ));
+        };
+        Arc::new(plugin)
+      }
     })
   }
 }

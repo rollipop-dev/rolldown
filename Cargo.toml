@@ -142,6 +142,9 @@ rolldown_utils = { version = "0.1.0", path = "crates/rolldown_utils" }
 rolldown_workspace = { version = "0.1.0", path = "crates/rolldown_workspace" }
 string_wizard = { version = "0.0.27", path = "crates/string_wizard", features = ["serde"] }
 
+# Rolldown built-in plugins
+rolldown_plugin_rollipop_worklets = { version = "0.1.0", path = "crates/rolldown_plugin_rollipop_worklets" }
+
 #
 anyhow = "1.0.98"
 append-only-vec = "0.1.7"
