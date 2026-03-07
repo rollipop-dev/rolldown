@@ -1798,7 +1798,8 @@ export type BindingBuiltinPluginName =  'builtin:bundle-analyzer'|
 'builtin:vite-resolve'|
 'builtin:vite-transform'|
 'builtin:vite-wasm-fallback'|
-'builtin:vite-web-worker-post';
+'builtin:vite-web-worker-post'|
+'builtin:rollipop-worklets';
 
 export interface BindingBundleAnalyzerPluginConfig {
   /** Output filename for the bundle analysis data (default: "analyze-data.json") */
@@ -2554,6 +2555,12 @@ export interface BindingResolveOptions {
   modules?: Array<string>
   symlinks?: boolean
   yarnPnp?: boolean
+}
+
+export interface BindingRollipopWorkletsPluginConfig {
+  root: string
+  pluginVersion: string
+  isRelease: boolean
 }
 
 export interface BindingSourcemap {

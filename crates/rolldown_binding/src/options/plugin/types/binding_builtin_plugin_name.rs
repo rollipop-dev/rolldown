@@ -39,4 +39,8 @@ pub enum BindingBuiltinPluginName {
   ViteWasmFallback,
   #[napi(value = "builtin:vite-web-worker-post")]
   ViteWebWorkerPost,
+
+  // Rollipop built-in plugins
+  #[napi(value = "builtin:rollipop-worklets")]
+  RollipopWorklets,
 }
