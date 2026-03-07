@@ -1,6 +1,6 @@
 import path from 'node:path';
-import { resolveTsconfig } from 'rolldown/experimental';
-import { TsconfigCache } from 'rolldown/utils';
+import { resolveTsconfig } from '@rollipop/rolldown/experimental';
+import { TsconfigCache } from '@rollipop/rolldown/utils';
 import { expect, describe, it } from 'vitest';
 
 describe('resolveTsconfig', () => {

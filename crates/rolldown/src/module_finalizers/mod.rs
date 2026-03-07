@@ -16,8 +16,7 @@ use rolldown_common::{
   AstScopes, Chunk, ChunkIdx, ConcatenateWrappedModuleKind, ExportsKind, ImportRecordIdx,
   ImportRecordMeta, InlineConstMode, MemberExprRefResolution, Module, ModuleIdx,
   ModuleNamespaceIncludedReason, ModuleType, NamespaceAlias, NormalModule, OutputExports,
-  OutputFormat, Platform, RenderedConcatenatedModuleParts, Specifier, SymbolIdExt, SymbolRef,
-  WrapKind,
+  OutputFormat, Platform, RenderedConcatenatedModuleParts, Specifier, SymbolRef, WrapKind,
 };
 use rolldown_ecmascript::ToSourceString;
 use rolldown_ecmascript_utils::{
@@ -605,8 +604,7 @@ impl<'me, 'ast> ScopeHoistingFinalizer<'me, 'ast> {
             else {
               return vec![];
             };
-            let importee_name =
-              &module.get_import_path(self.ctx.chunk, self.ctx.options.paths.as_ref());
+            let importee_name = &module.get_import_path(self.ctx.chunk, self.ctx.resolved_paths);
             let call_expr = self.snippet.re_export_call_expr(
               re_export_fn_ref.clone_in(self.alloc),
               self.snippet.id_ref_expr(binding_name_for_namespace_object_ref, SPAN),
@@ -958,7 +956,9 @@ impl<'me, 'ast> ScopeHoistingFinalizer<'me, 'ast> {
     }
   }
 
-  fn get_conflicted_info(&self, id: KeepNameId) -> Option<(&'me str, &'me str)> {
+  /// Returns `(original_name, canonical_name)` for keep_names processing.
+  /// Returns `Some` only if the name has been deconflicted (renamed).
+  fn get_keep_name_info(&self, id: KeepNameId) -> Option<(&'me str, &'me str)> {
     let symbol_ref: SymbolRef = match id {
       KeepNameId::SymbolId(symbol_id) => (self.ctx.idx, symbol_id).into(),
       KeepNameId::ReferenceId(reference_id) => {
@@ -966,7 +966,6 @@ impl<'me, 'ast> ScopeHoistingFinalizer<'me, 'ast> {
         (self.ctx.idx, symbol_id).into()
       }
       KeepNameId::CompactStr(_) => {
-        // CompactStr variant doesn't need conflict resolution - it's already a direct name
         return None;
       }
     };
@@ -1151,7 +1150,7 @@ impl<'me, 'ast> ScopeHoistingFinalizer<'me, 'ast> {
               call_expr.arguments.get_mut(0).expect("require should have an argument");
             // Rewrite `require('xxx')` to `require('fs')`, if there is an alias that maps 'xxx' to 'fs'
             *request_path = ast::Argument::StringLiteral(self.snippet.alloc_string_literal(
-              &importee.get_import_path(self.ctx.chunk, self.ctx.options.paths.as_ref()),
+              &importee.get_import_path(self.ctx.chunk, self.ctx.resolved_paths),
               request_path.span(),
             ));
             None
@@ -1258,7 +1257,7 @@ impl<'me, 'ast> ScopeHoistingFinalizer<'me, 'ast> {
       .enumerate()
       .zip(self.ctx.module.stmt_infos.iter_enumerated().skip(1))
       .for_each(|((_top_stmt_idx, mut top_stmt), (stmt_info_idx, _stmt_info))| {
-        if !self.ctx.linking_info.stmt_info_included[stmt_info_idx] {
+        if !self.ctx.linking_info.stmt_info_included.has_bit(stmt_info_idx) {
           return;
         }
 
@@ -1541,8 +1540,9 @@ impl<'me, 'ast> ScopeHoistingFinalizer<'me, 'ast> {
               return;
             }
           }
-        } else if self.ctx.options.top_level_var {
-          // Here we should find if it's a "VariableDeclaration" and switch it to "Var."
+        }
+
+        if self.ctx.options.top_level_var {
           if let Statement::VariableDeclaration(var_decl) = &mut top_stmt {
             var_decl.kind = ast::VariableDeclarationKind::Var;
             for decl in &mut var_decl.declarations {
@@ -1571,8 +1571,8 @@ impl<'me, 'ast> ScopeHoistingFinalizer<'me, 'ast> {
     if !self.ctx.options.keep_names {
       return None;
     }
-    let (original_name, _) = self.get_conflicted_info(name_binding_id?)?;
-    let (_, canonical_name) = self.get_conflicted_info(symbol_binding_id?)?;
+    let (original_name, _) = self.get_keep_name_info(name_binding_id?)?;
+    let (_, canonical_name) = self.get_keep_name_info(symbol_binding_id?)?;
     let original_name: CompactStr = CompactStr::new(original_name);
     let new_name = CompactStr::new(canonical_name);
     let insert_position = self.cur_stmt_index + 1;
@@ -1591,26 +1591,23 @@ impl<'me, 'ast> ScopeHoistingFinalizer<'me, 'ast> {
 
     match expr {
       ast::Expression::ClassExpression(class_expression) => {
-        if let Some(element) = self.keep_name_helper_for_class(
-          class_expression
-            .id
-            .as_ref()
-            .and_then(|id| id.symbol_id.get().map(KeepNameId::SymbolId))
-            .or(keep_name_id),
-          &class_expression.body,
-        ) {
+        // Named class expressions are handled in visit_expression
+        if class_expression.id.is_some() {
+          return;
+        }
+        if let Some(element) = self.keep_name_helper_for_class(keep_name_id, &class_expression.body)
+        {
           class_expression.body.body.insert(0, element);
         }
       }
       ast::Expression::FunctionExpression(fn_expression) => {
-        if let Some((_insert_position, original_name, _)) = self.process_fn(
-          keep_name_id,
-          fn_expression
-            .id
-            .as_ref()
-            .and_then(|id| id.symbol_id.get().map(KeepNameId::SymbolId))
-            .or(keep_name_id),
-        ) {
+        // Named function expressions are handled in visit_expression
+        if fn_expression.id.is_some() {
+          return;
+        }
+        if let Some((_insert_position, original_name, _)) =
+          self.process_fn(keep_name_id, keep_name_id)
+        {
           let fn_expr = expr.take_in(self.alloc);
           let name_ref = self.canonical_ref_for_runtime("__name");
           let (finalized_callee, _) = self.finalized_expr_for_symbol_ref(name_ref, false, false);
@@ -1650,7 +1647,7 @@ impl<'me, 'ast> ScopeHoistingFinalizer<'me, 'ast> {
         name.clone()
       }
       KeepNameId::SymbolId(_) | KeepNameId::ReferenceId(_) => {
-        let (original_name, _) = self.get_conflicted_info(keep_name_id)?;
+        let (original_name, _) = self.get_keep_name_info(keep_name_id)?;
         let original_name: CompactStr = CompactStr::new(original_name);
         original_name
       }
@@ -1795,7 +1792,7 @@ impl<'me, 'ast> ScopeHoistingFinalizer<'me, 'ast> {
       // For wrapped modules (CJS/ESM), look up the wrapper_ref; for others, look up the namespace symbol
       let primary_export_symbol = match wrap_kind {
         WrapKind::Cjs | WrapKind::Esm => importee_meta.wrapper_ref,
-        WrapKind::None => Some(SymbolId::module_namespace_symbol_ref(importee_idx)),
+        WrapKind::None => self.ctx.modules[importee_idx].namespace_object_ref(),
       };
 
       let primary_export_name = primary_export_symbol.and_then(|sym| {
@@ -1804,10 +1801,9 @@ impl<'me, 'ast> ScopeHoistingFinalizer<'me, 'ast> {
 
       // For ESM wrapped modules, we also need the namespace symbol
       let namespace_export_name = if matches!(wrap_kind, WrapKind::Esm) {
-        importee_chunk
-          .exports_to_other_chunks
-          .get(&SymbolId::module_namespace_symbol_ref(importee_idx))
-          .and_then(|names| names.first())
+        self.ctx.modules[importee_idx].namespace_object_ref().and_then(|ns_ref| {
+          importee_chunk.exports_to_other_chunks.get(&ns_ref).and_then(|names| names.first())
+        })
       } else {
         None
       };
@@ -1987,7 +1983,7 @@ impl<'me, 'ast> ScopeHoistingFinalizer<'me, 'ast> {
         needs_to_esm_helper = importee.exports_kind.is_commonjs();
       }
       Module::External(importee) => {
-        let import_path = importee.get_import_path(self.ctx.chunk, self.ctx.options.paths.as_ref());
+        let import_path = importee.get_import_path(self.ctx.chunk, self.ctx.resolved_paths);
         if str != import_path {
           expr.source = Expression::StringLiteral(
             self.snippet.alloc_string_literal(&import_path, expr.source.span()),
