@@ -155,5 +155,7 @@ pub struct BindingOutputOptions<'env> {
   pub minify_internal_exports: Option<bool>,
   pub clean_dir: Option<bool>,
   pub strict_execution_order: Option<bool>,
+  // MARK: - Rollipop
+  pub persistent_cache: Option<bool>,
   pub global_identifiers: Option<Vec<String>>,
 }

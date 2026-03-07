@@ -108,4 +108,6 @@ pub struct BindingInputOptions<'env> {
   pub context: Option<String>,
   #[napi(ts_type = "boolean | string")]
   pub tsconfig: Option<Either<bool, String>>,
+  // MARK: - Rollipop
+  pub id: Option<String>,
 }

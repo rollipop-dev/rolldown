@@ -21,6 +21,7 @@ use tokio::sync::{Mutex, broadcast};
 use crate::{
   __inner::SharedPluginable,
   PluginContext,
+  plugin_context::PluginContextMeta,
   plugin_driver::hook_orders::PluginHookOrders,
   type_aliases::{IndexPluginContext, IndexPluginable},
   types::hook_timing::HookTimingCollector,
@@ -41,6 +42,7 @@ pub struct PluginDriver {
   pub(crate) tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<ModuleLoaderMsg>>>>,
   /// Timing collector for plugin hooks (None if plugin timing is disabled)
   pub hook_timing_collector: Option<Arc<HookTimingCollector>>,
+  pub(crate) meta: Arc<PluginContextMeta>,
 }
 
 impl PluginDriver {

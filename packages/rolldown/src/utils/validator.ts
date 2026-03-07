@@ -650,6 +650,8 @@ const InputOptionsSchema = v.strictObject({
     v.optional(v.union([v.boolean(), v.string()])),
     v.description('Path to the tsconfig.json file.'),
   ),
+  // MARK: - Rollipop
+  id: v.pipe(v.optional(v.string()), v.description('Unique identifier for build task')),
 });
 isTypeTrue<IsSchemaSubType<typeof InputOptionsSchema, InputOptions>>();
 
@@ -940,6 +942,10 @@ const OutputOptionsSchema = v.strictObject({
   strict: v.pipe(
     v.optional(v.union([v.boolean(), v.literal('auto')])),
     v.description('Whether to always output `"use strict"` directive in non-ES module outputs.'),
+  ),
+  persistentCache: v.pipe(
+    v.optional(v.boolean()),
+    v.description('Enable persistent transform cache to disk.'),
   ),
   globalIdentifiers: v.pipe(
     v.optional(v.array(v.string())),

@@ -730,6 +730,11 @@ export interface OutputOptions {
    * @default []
    */
   globalIdentifiers?: string[];
+  /**
+   * Enable persistent transform cache to disk.
+   * @default false
+   */
+  persistentCache?: boolean;
 }
 
 export type CodeSplittingGroup = {

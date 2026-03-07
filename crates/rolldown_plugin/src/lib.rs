@@ -54,6 +54,8 @@ pub use crate::{
   types::hook_write_bundle_args::HookWriteBundleArgs,
   types::plugin_context_resolve_options::PluginContextResolveOptions,
   types::plugin_hook_meta::{PluginHookMeta, PluginOrder},
+  // MARK: - Rollipop
+  types::transform_cache::TransformCache,
 };
 
 pub use rolldown_common::PluginIdx;

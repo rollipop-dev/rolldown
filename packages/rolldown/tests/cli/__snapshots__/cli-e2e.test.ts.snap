@@ -63,6 +63,7 @@ OPTIONS
   --generated-code.symbols    Whether to use Symbol.toStringTag for namespace objects.
   --global-identifiers <global-identifiers>Reserved global identifiers to be avoided when generating export binding names for module chunks.
   --hash-characters <hash-characters>Use the specified character set for file hashes.
+  --id <id>                   Unique identifier for build task.
   --inline-dynamic-imports    Inline dynamic imports.
   --input <input>             Entry file.
   --intro <intro>             Code to insert the top of the bundled file (inside the wrapper function).
@@ -79,6 +80,7 @@ OPTIONS
   --optimization.pife-for-module-wrappers Use PIFE pattern for module wrappers.
   --outro <outro>             Code to insert the bottom of the bundled file (inside the wrapper function).
   --paths <paths>             Maps external module IDs to paths.
+  --persistent-cache          Enable persistent transform cache to disk.
   --polyfill-require          Disable require polyfill injection.
   --post-banner <post-banner> A string to prepend to the top of each chunk. Applied after the \`renderChunk\` hook and minification.
   --post-footer <post-footer> A string to append to the bottom of each chunk. Applied after the \`renderChunk\` hook and minification.

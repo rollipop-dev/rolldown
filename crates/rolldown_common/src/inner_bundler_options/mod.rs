@@ -235,6 +235,9 @@ pub struct BundlerOptions {
   pub tsconfig: Option<TsConfig>,
   pub strict_execution_order: Option<bool>,
   pub strict: Option<StrictMode>,
+  // MARK: - Rollipop
+  pub id: Option<String>,
+  pub persistent_cache: Option<bool>,
   pub global_identifiers: Option<Vec<String>>,
 }
 

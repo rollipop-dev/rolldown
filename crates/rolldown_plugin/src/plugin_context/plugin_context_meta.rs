@@ -28,4 +28,14 @@ impl PluginContextMeta {
       .downcast::<T>()
       .expect("PluginContextMeta: type mismatch for inserted value")
   }
+
+  pub fn get_or_insert_with<T: Any + Send + Sync>(&self, f: impl FnOnce() -> T) -> Arc<T> {
+    self
+      .inner
+      .entry(TypeId::of::<T>())
+      .or_insert_with(|| Arc::new(f()))
+      .clone()
+      .downcast::<T>()
+      .expect("PluginContextMeta: type mismatch for inserted value")
+  }
 }
