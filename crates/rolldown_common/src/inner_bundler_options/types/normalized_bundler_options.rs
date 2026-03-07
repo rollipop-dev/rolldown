@@ -115,6 +115,9 @@ pub struct NormalizedBundlerOptions {
   pub context: String,
   pub strict_execution_order: bool,
   pub strict: StrictMode,
+  // MARK: - Rollipop
+  pub id: String,
+  pub persistent_cache: bool,
   pub global_identifiers: Vec<String>,
 }
 
@@ -192,6 +195,9 @@ impl Default for NormalizedBundlerOptions {
       context: Default::default(),
       strict_execution_order: false,
       strict: StrictMode::default(),
+      // MARK: - Rollipop
+      id: "unknown".to_string(),
+      persistent_cache: false,
       global_identifiers: Default::default(),
     }
   }

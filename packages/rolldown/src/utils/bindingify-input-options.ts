@@ -120,6 +120,8 @@ export function bindingifyInputOptions(
     optimization: inputOptions.optimization,
     context: inputOptions.context,
     tsconfig: inputOptions.resolve?.tsconfigFilename ?? inputOptions.tsconfig,
+    // MARK: - Rollipop
+    id: inputOptions.id,
   };
 }
 

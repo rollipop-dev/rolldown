@@ -580,6 +580,18 @@
             }
           ]
         },
+        "id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "persistentCache": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "globalIdentifiers": {
           "type": [
             "array",

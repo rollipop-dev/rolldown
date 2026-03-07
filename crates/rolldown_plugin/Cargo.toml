@@ -41,8 +41,9 @@ serde = { workspace = true, optional = true }
 serde_json = { workspace = true }
 string_wizard = { workspace = true }
 sugar_path = { workspace = true }
-tokio = { workspace = true, features = ["sync"] }
+tokio = { workspace = true, features = ["sync", "fs", "rt"] }
 tracing = { workspace = true, features = ["valuable"] }
+xxhash-rust = { workspace = true, features = ["xxh3"] }
 typedmap = { workspace = true, features = ["dashmap"] }
 
 [package.metadata.cargo-shear]

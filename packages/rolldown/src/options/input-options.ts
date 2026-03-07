@@ -756,6 +756,11 @@ export interface InputOptions {
    * @default true
    */
   tsconfig?: boolean | string;
+  // MARK: - Rollipop
+  /**
+   * Unique identifier for build task.
+   */
+  id?: string;
 }
 
 interface OverwriteInputOptionsForCli {

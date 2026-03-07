@@ -3340,6 +3340,7 @@ dependencies = [
  "tokio",
  "tracing",
  "typedmap",
+ "xxhash-rust",
 ]
 
 [[package]]

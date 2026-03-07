@@ -582,6 +582,9 @@ pub fn normalize_binding_options(
       Either::A(v) => TsConfig::Auto(v),
       Either::B(s) => TsConfig::Manual(s.into()),
     }),
+    // MARK: - Rollipop
+    id: input_options.id,
+    persistent_cache: output_options.persistent_cache,
     global_identifiers: output_options.global_identifiers,
   };
 

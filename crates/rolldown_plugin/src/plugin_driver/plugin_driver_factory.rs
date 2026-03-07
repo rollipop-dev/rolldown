@@ -15,7 +15,7 @@ use crate::{
   plugin_context::{NativePluginContextImpl, PluginContextMeta},
   plugin_driver::{ContextLoadCompletionManager, hook_orders::PluginHookOrders},
   type_aliases::{IndexPluginContext, IndexPluginable},
-  types::hook_timing::HookTimingCollector,
+  types::{hook_timing::HookTimingCollector, transform_cache::TransformCache},
 };
 use rolldown_error::EventKindSwitcher;
 
@@ -40,6 +40,13 @@ impl PluginDriverFactory {
   ) -> Arc<crate::plugin_driver::PluginDriver> {
     let watch_files = Arc::new(FxDashSet::default());
     let meta = Arc::new(PluginContextMeta::default());
+
+    // Initialize transform cache only when persistent cache is enabled
+    if options.persistent_cache {
+      let cache_dir = options.cwd.join(".rollipop").join("cache").join(&options.id);
+      meta.insert(Arc::new(TransformCache::new(cache_dir)));
+    }
+
     let tx = Arc::new(tokio::sync::Mutex::new(None));
     let mut plugin_usage_vec = IndexVec::new();
 
@@ -105,6 +112,7 @@ impl PluginDriverFactory {
         context_load_completion_manager: ContextLoadCompletionManager::default(),
         tx,
         hook_timing_collector: hook_timing_collector.clone(),
+        meta: Arc::clone(&meta),
       }
     })
   }

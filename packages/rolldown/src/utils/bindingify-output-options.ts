@@ -103,6 +103,7 @@ export function bindingifyOutputOptions(outputOptions: OutputOptions): BindingOu
     cleanDir,
     strictExecutionOrder,
     strict: outputOptions.strict,
+    persistentCache: outputOptions.persistentCache,
     globalIdentifiers,
   };
 }

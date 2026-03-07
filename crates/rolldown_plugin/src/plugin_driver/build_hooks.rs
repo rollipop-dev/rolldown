@@ -6,7 +6,9 @@ use crate::{
   TransformPluginContext,
   pluginable::HookTransformAstReturn,
   types::{
-    hook_resolve_id_skipped::HookResolveIdSkipped, hook_transform_ast_args::HookTransformAstArgs,
+    hook_resolve_id_skipped::HookResolveIdSkipped,
+    hook_transform_ast_args::HookTransformAstArgs,
+    transform_cache::{TransformCache, TransformCacheEntry},
   },
 };
 use anyhow::{Context, Result};
@@ -20,6 +22,7 @@ use rolldown_sourcemap::SourceMap;
 use rolldown_utils::{IndexBitSet, unique_arc::UniqueArc};
 use string_wizard::{MagicString, SourceMapOptions};
 use tracing::{Instrument, debug_span};
+use xxhash_rust::xxh3::xxh3_128;
 
 impl PluginDriver {
   #[tracing::instrument(level = "trace", skip_all)]
@@ -237,6 +240,20 @@ impl PluginDriver {
     magic_string_tx: Option<Arc<std::sync::mpsc::Sender<rolldown_common::SourceMapGenMsg>>>,
     code_changed_by_plugins: &mut Option<Vec<String>>,
   ) -> Result<String> {
+    // Check transform cache
+    let transform_cache = self.meta.get::<TransformCache>();
+    let cache_key =
+      transform_cache.as_ref().map(|_| xxh3_128(format!("{}\0{}", id, &original_code).as_bytes()));
+
+    if let (Some(cache), Some(key)) = (&transform_cache, cache_key) {
+      if let Some(entry) = cache.get(key) {
+        *sourcemap_chain = entry.sourcemap_chain;
+        *side_effects = entry.side_effects;
+        *module_type = entry.module_type;
+        return Ok(entry.code);
+      }
+    }
+
     let mut code = original_code;
     let mut original_sourcemap_chain = std::mem::take(sourcemap_chain);
     let mut plugin_sourcemap_chain = UniqueArc::new(original_sourcemap_chain);
@@ -309,6 +326,20 @@ impl PluginDriver {
       }
     }
     *sourcemap_chain = plugin_sourcemap_chain.into_inner();
+
+    // Store in transform cache
+    if let (Some(cache), Some(key)) = (&transform_cache, cache_key) {
+      cache.insert(
+        key,
+        TransformCacheEntry {
+          code: code.clone(),
+          sourcemap_chain: sourcemap_chain.clone(),
+          side_effects: *side_effects,
+          module_type: module_type.clone(),
+        },
+      );
+    }
+
     Ok(code)
   }
 
@@ -398,6 +429,12 @@ impl PluginDriver {
       self.record_timing(plugin_idx, start);
       result.with_context(|| CausedPlugin::new(plugin.call_name()))?;
     }
+
+    // Flush transform cache to disk
+    if let Some(cache) = self.meta.get::<TransformCache>() {
+      cache.flush().await;
+    }
+
     Ok(())
   }
 }

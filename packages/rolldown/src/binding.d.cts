@@ -2245,6 +2245,7 @@ export interface BindingInputOptions {
   optimization?: BindingOptimization
   context?: string
   tsconfig?: boolean | string
+  id?: string
 }
 
 export interface BindingIsolatedDeclarationPluginConfig {
@@ -2392,6 +2393,7 @@ export interface BindingOutputOptions {
   minifyInternalExports?: boolean
   cleanDir?: boolean
   strictExecutionOrder?: boolean
+  persistentCache?: boolean
   globalIdentifiers?: Array<string>
 }
 

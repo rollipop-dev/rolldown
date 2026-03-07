@@ -459,6 +459,9 @@ pub fn prepare_build_context(
     context: raw_options.context.unwrap_or_default(),
     strict_execution_order: raw_options.strict_execution_order.unwrap_or(false),
     strict: raw_options.strict.unwrap_or_default(),
+    // MARK: - Rollipop
+    id: raw_options.id.unwrap_or_else(|| "unknown".to_string()),
+    persistent_cache: raw_options.persistent_cache.unwrap_or(false),
     global_identifiers: raw_options.global_identifiers.unwrap_or_default(),
   };
 
