@@ -3134,6 +3134,7 @@ dependencies = [
  "rolldown_plugin_esm_external_require",
  "rolldown_plugin_isolated_declaration",
  "rolldown_plugin_replace",
+ "rolldown_plugin_rollipop_react_refresh_wrapper",
  "rolldown_plugin_rollipop_worklets",
  "rolldown_plugin_utils",
  "rolldown_plugin_vite_alias",
@@ -3468,6 +3469,22 @@ dependencies = [
  "rustc-hash",
  "string_wizard",
  "tokio",
+]
+
+[[package]]
+name = "rolldown_plugin_rollipop_react_refresh_wrapper"
+version = "0.1.0"
+dependencies = [
+ "arcstr",
+ "memchr",
+ "oxc",
+ "regex",
+ "rolldown_error",
+ "rolldown_plugin",
+ "rolldown_plugin_utils",
+ "rolldown_sourcemap",
+ "rolldown_utils",
+ "string_wizard",
 ]
 
 [[package]]

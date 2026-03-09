@@ -40,7 +40,9 @@ pub enum BindingBuiltinPluginName {
   #[napi(value = "builtin:vite-web-worker-post")]
   ViteWebWorkerPost,
 
-  // Rollipop built-in plugins
+  // MARK: - Rollipop
+  #[napi(value = "builtin:rollipop-react-refresh-wrapper")]
+  RollipopReactRefreshWrapper,
   #[napi(value = "builtin:rollipop-worklets")]
   RollipopWorklets,
 }
