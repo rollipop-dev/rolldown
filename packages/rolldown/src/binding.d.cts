@@ -1799,6 +1799,7 @@ export type BindingBuiltinPluginName =  'builtin:bundle-analyzer'|
 'builtin:vite-transform'|
 'builtin:vite-wasm-fallback'|
 'builtin:vite-web-worker-post'|
+'builtin:rollipop-react-refresh-wrapper'|
 'builtin:rollipop-worklets';
 
 export interface BindingBundleAnalyzerPluginConfig {
@@ -2557,6 +2558,13 @@ export interface BindingResolveOptions {
   modules?: Array<string>
   symlinks?: boolean
   yarnPnp?: boolean
+}
+
+export interface BindingRollipopReactRefreshWrapperPluginConfig {
+  cwd: string
+  include?: Array<BindingStringOrRegex>
+  exclude?: Array<BindingStringOrRegex>
+  jsxImportSource?: string
 }
 
 export interface BindingRollipopWorkletsPluginConfig {

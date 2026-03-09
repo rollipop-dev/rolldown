@@ -22,12 +22,13 @@ use rolldown_plugin_vite_wasm_fallback::ViteWasmFallbackPlugin;
 use rolldown_plugin_vite_web_worker_post::ViteWebWorkerPostPlugin;
 
 // Rollipop built-in plugins
+use rolldown_plugin_rollipop_react_refresh_wrapper::RollipopReactRefreshWrapperPlugin;
 use rolldown_plugin_rollipop_worklets::RollipopWorkletsPlugin;
 
 use crate::options::plugin::config::{
   BindingBundleAnalyzerPluginConfig, BindingEsmExternalRequirePluginConfig,
-  BindingRollipopWorkletsPluginConfig, BindingViteModulePreloadPolyfillPluginConfig,
-  BindingViteReactRefreshWrapperPluginConfig,
+  BindingRollipopReactRefreshWrapperPluginConfig, BindingRollipopWorkletsPluginConfig,
+  BindingViteModulePreloadPolyfillPluginConfig, BindingViteReactRefreshWrapperPluginConfig,
 };
 
 use super::{
@@ -203,6 +204,16 @@ impl TryFrom<BindingBuiltinPlugin<'_>> for Arc<dyn Pluginable> {
       BindingBuiltinPluginName::ViteWebWorkerPost => Arc::new(ViteWebWorkerPostPlugin),
 
       // Rollipop built-in plugins
+      BindingBuiltinPluginName::RollipopReactRefreshWrapper => {
+        let options = plugin.options.ok_or_else(|| {
+          napi::Error::new(
+            napi::Status::InvalidArg,
+            "Missing options for RollipopReactRefreshWrapperPlugin",
+          )
+        })?;
+        let config = BindingRollipopReactRefreshWrapperPluginConfig::from_unknown(options)?;
+        Arc::new(RollipopReactRefreshWrapperPlugin::new(config.into()))
+      }
       BindingBuiltinPluginName::RollipopWorklets => {
         let plugin: RollipopWorkletsPlugin = if let Some(options) = plugin.options {
           BindingRollipopWorkletsPluginConfig::from_unknown(options)?.into()

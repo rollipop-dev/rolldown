@@ -51,7 +51,14 @@ export { viteTransformPlugin } from './builtin-plugin/transform-plugin';
 export { viteManifestPlugin } from './builtin-plugin/vite-manifest-plugin';
 
 // Rollipop built-in plugins
-export { rollipopWorkletsPlugin } from './builtin-plugin/rollipop-worklets-plugin';
+export {
+  rollipopReactRefreshWrapperPlugin,
+  type RollipopReactRefreshWrapperPluginConfig,
+} from './builtin-plugin/rollipop-react-refresh-wrapper-plugin';
+export {
+  rollipopWorkletsPlugin,
+  type RollipopWorkletsPluginConfig,
+} from './builtin-plugin/rollipop-worklets-plugin';
 
 // `__volume` and `__fs` only exist in `rolldown-binding.wasi-browser.js`, so we need to use namespace import to prevent static import error.
 import * as binding from './binding.cjs';
