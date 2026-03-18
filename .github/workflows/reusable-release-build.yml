@@ -47,11 +47,6 @@ jobs:
             target: aarch64-unknown-linux-musl
             build: pnpm ci:build-release-binding -x --target aarch64-unknown-linux-musl
 
-          - os: ubuntu-latest
-            target: s390x-unknown-linux-gnu
-            build: |
-              pnpm ci:build-release-binding -x --target aarch64-unknown-linux-musl
-
     name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     steps:
