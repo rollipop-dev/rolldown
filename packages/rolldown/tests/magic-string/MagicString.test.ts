@@ -1,7 +1,7 @@
 // @ts-nocheck
 import assert from 'node:assert';
 import { SourceMapConsumer } from 'source-map-js';
-import { BindingMagicString as MagicString } from '@rollipop/rolldown';
+import { RolldownMagicString as MagicString } from '@rollipop/rolldown';
 import { describe, it } from 'vitest';
 
 describe('MagicString', () => {
@@ -14,7 +14,7 @@ describe('MagicString', () => {
       assert.equal(s.filename, 'foo.js');
     });
 
-    it.skip('stores ignore-list hint', () => {
+    it('stores ignore-list hint', () => {
       const s = new MagicString('abc', { ignoreList: true });
 
       assert.equal(s.ignoreList, true);
@@ -44,7 +44,7 @@ describe('MagicString', () => {
   });
 
   describe('(ap|pre)pend(Left|Right)', () => {
-    it.skip('preserves intended order', () => {
+    it('preserves intended order', () => {
       const s = new MagicString('0123456789');
 
       s.appendLeft(5, 'A');
@@ -78,7 +78,7 @@ describe('MagicString', () => {
       assert.equal(s.slice(5), '])cba>}56789');
     });
 
-    it.skip('preserves intended order at beginning of string', () => {
+    it('preserves intended order at beginning of string', () => {
       const s = new MagicString('x');
 
       s.appendLeft(0, '1');
@@ -89,7 +89,7 @@ describe('MagicString', () => {
       assert.equal(s.toString(), '4213x');
     });
 
-    it.skip('preserves intended order at end of string', () => {
+    it('preserves intended order at end of string', () => {
       const s = new MagicString('x');
 
       s.appendRight(1, '1');
@@ -100,7 +100,7 @@ describe('MagicString', () => {
       assert.equal(s.toString(), 'x4213');
     });
 
-    it.skip('should append/prepend at end of string when index is out of upper bound', () => {
+    it('should append/prepend at end of string when index is out of upper bound', () => {
       const s = new MagicString('x');
       s.prependLeft(6, 'A');
       s.appendLeft(6, 'B');
@@ -110,7 +110,7 @@ describe('MagicString', () => {
       assert.equal(s.toString(), 'ABxCD');
     });
 
-    it.skip('should append/prepend on empty string when index is out of upper bound', () => {
+    it('should append/prepend on empty string when index is out of upper bound', () => {
       const s = new MagicString('');
       s.prependLeft(6, 'A');
       s.appendLeft(6, 'B');
@@ -153,7 +153,7 @@ describe('MagicString', () => {
       assert.equal(c.filename, 'foo.js');
     });
 
-    it.skip('should clone indentExclusionRanges', () => {
+    it('should clone indentExclusionRanges', () => {
       const array = [3, 6];
       const source = new MagicString('abcdefghijkl', {
         filename: 'foo.js',
@@ -166,7 +166,7 @@ describe('MagicString', () => {
       assert.deepEqual(source.indentExclusionRanges, clone.indentExclusionRanges);
     });
 
-    it.skip('should clone complex indentExclusionRanges', () => {
+    it('should clone complex indentExclusionRanges', () => {
       const array = [
         [3, 6],
         [7, 9],
@@ -471,7 +471,7 @@ describe('MagicString', () => {
       assert.equal(map.mappings, 'IAAA');
     });
 
-    it.skip('generates x_google_ignoreList', () => {
+    it('generates x_google_ignoreList', () => {
       const s = new MagicString('function foo(){}', {
         ignoreList: true,
       });
@@ -622,7 +622,7 @@ describe('MagicString', () => {
     });
   });
 
-  describe.skip('getIndentString', () => {
+  describe('getIndentString', () => {
     it('should guess the indent string', () => {
       const s = new MagicString('abc\n  def\nghi');
       assert.equal(s.getIndentString(), '  ');
@@ -679,7 +679,7 @@ describe('MagicString', () => {
       assert.equal(s.toString(), 'abc\ndef\nghi\njkl');
     });
 
-    it.skip('should prevent excluded characters from being indented', () => {
+    it('should prevent excluded characters from being indented', () => {
       const s = new MagicString('abc\ndef\nghi\njkl');
 
       s.indent('  ', { exclude: [7, 15] });
@@ -947,7 +947,7 @@ describe('MagicString', () => {
       assert.equal(s.toString(), 'abcdefyes');
     });
 
-    it.skip('should allow contiguous but non-overlapping replacements', () => {
+    it('should allow contiguous but non-overlapping replacements', () => {
       const s = new MagicString('abcdefghijkl');
 
       s.overwrite(3, 6, 'DEF');
@@ -1088,7 +1088,7 @@ describe('MagicString', () => {
       assert.equal(s.toString(), 'abcdefyes');
     });
 
-    it.skip('should allow contiguous but non-overlapping replacements', () => {
+    it('should allow contiguous but non-overlapping replacements', () => {
       const s = new MagicString('abcdefghijkl');
 
       s.update(3, 6, 'DEF');
@@ -1261,14 +1261,14 @@ describe('MagicString', () => {
       assert.equal(s.toString(), 'abcdef');
     });
 
-    it.skip('should treat zero-length removals as a no-op', () => {
+    it('should treat zero-length removals as a no-op', () => {
       const s = new MagicString('abcdefghijkl');
 
       s.remove(0, 0).remove(6, 6).remove(9, -3);
       assert.equal(s.toString(), 'abcdefghijkl');
     });
 
-    it.skip('should remove overlapping ranges', () => {
+    it('should remove overlapping ranges', () => {
       const s1 = new MagicString('abcdefghijkl');
 
       s1.remove(3, 7).remove(5, 9);
@@ -1280,7 +1280,7 @@ describe('MagicString', () => {
       assert.equal(s2.toString(), 'abchijkl');
     });
 
-    it.skip('should remove overlapping ranges, redux', () => {
+    it('should remove overlapping ranges, redux', () => {
       const s = new MagicString('abccde');
 
       s.remove(2, 3); // c
@@ -1288,7 +1288,7 @@ describe('MagicString', () => {
       assert.equal(s.toString(), 'acde');
     });
 
-    it.skip('should remove modified ranges', () => {
+    it('should remove modified ranges', () => {
       const s = new MagicString('abcdefghi');
 
       s.overwrite(3, 6, 'DEF');
@@ -1297,7 +1297,7 @@ describe('MagicString', () => {
       assert.equal(s.toString(), 'abhi');
     });
 
-    it.skip('should not remove content inserted after the end of removed range', () => {
+    it('should not remove content inserted after the end of removed range', () => {
       const s = new MagicString('ab.c;');
 
       s.prependRight(0, '(');
@@ -1306,7 +1306,7 @@ describe('MagicString', () => {
       assert.equal(s.toString(), '(ab);');
     });
 
-    it.skip('should remove interior inserts', () => {
+    it('should remove interior inserts', () => {
       const s = new MagicString('abc;');
 
       s.appendLeft(1, '[');
@@ -1317,7 +1317,7 @@ describe('MagicString', () => {
       assert.equal(s.toString(), 'a[]c;');
     });
 
-    it.skip('should provide a useful error when illegal removals are attempted', () => {
+    it('should provide a useful error when illegal removals are attempted', () => {
       const s = new MagicString('abcdefghijkl');
 
       s.overwrite(5, 7, 'XX');
@@ -1330,7 +1330,7 @@ describe('MagicString', () => {
       assert.strictEqual(s.remove(3, 4), s);
     });
 
-    it.skip('removes across moved content', () => {
+    it('removes across moved content', () => {
       const s = new MagicString('abcdefghijkl');
 
       s.move(6, 9, 3);
@@ -1339,7 +1339,7 @@ describe('MagicString', () => {
       assert.equal(s.toString(), 'abchidejkl');
     });
 
-    it.skip('should accept negative indices', () => {
+    it('should accept negative indices', () => {
       const s = new MagicString('abcde');
       // "abcde"
       //     ^
@@ -1347,7 +1347,7 @@ describe('MagicString', () => {
       assert.equal(s.toString(), 'abce');
     });
 
-    it.skip('should throw error when using negative indices with empty string', () => {
+    it('should throw error when using negative indices with empty string', () => {
       const s = new MagicString('');
       assert.throws(() => s.remove(-2, -1), /Error: Character is out of bounds/);
     });
@@ -1419,7 +1419,7 @@ describe('MagicString', () => {
       assert.equal(s.toString(), 'bc');
     });
 
-    it.skip('should reset modified ranges', () => {
+    it('should reset modified ranges', () => {
       const s = new MagicString('abcdefghi');
 
       s.overwrite(3, 6, 'DEF');
@@ -1451,7 +1451,7 @@ describe('MagicString', () => {
       assert.equal(s.toString(), '(a.c);');
     });
 
-    it.skip('should provide a useful error when illegal removals are attempted', () => {
+    it('should provide a useful error when illegal removals are attempted', () => {
       const s = new MagicString('abcdefghijkl');
 
       s.remove(4, 8);
@@ -1479,7 +1479,7 @@ describe('MagicString', () => {
   });
 
   describe('slice', () => {
-    it.skip('should return the generated content between the specified original characters', () => {
+    it('should return the generated content between the specified original characters', () => {
       const s = new MagicString('abcdefghijkl');
 
       assert.equal(s.slice(3, 9), 'defghi');
@@ -1519,7 +1519,7 @@ describe('MagicString', () => {
       assert.equal(s.slice(3, 6), 'fghij');
     });
 
-    it.skip('supports characters moved outward', () => {
+    it('supports characters moved outward', () => {
       const s = new MagicString('abcdEFghIJklmn');
 
       s.move(4, 6, 2);
@@ -1534,7 +1534,7 @@ describe('MagicString', () => {
       assert.equal(s.slice(6, -6), 'gh');
     });
 
-    it.skip('supports characters moved inward', () => {
+    it('supports characters moved inward', () => {
       const s = new MagicString('abCDefghijKLmn');
 
       s.move(2, 4, 6);
@@ -1549,7 +1549,7 @@ describe('MagicString', () => {
       assert.equal(s.slice(6, -6), 'gh');
     });
 
-    it.skip('supports characters moved opposing', () => {
+    it('supports characters moved opposing', () => {
       const s = new MagicString('abCDefghIJkl');
 
       s.move(2, 4, 8);
@@ -1726,7 +1726,7 @@ describe('MagicString', () => {
   });
 
   describe('isEmpty', () => {
-    it.skip('should support isEmpty', () => {
+    it('should support isEmpty', () => {
       const s = new MagicString(' abcde   fghijkl ');
 
       assert.equal(s.isEmpty(), false);
@@ -1745,7 +1745,7 @@ describe('MagicString', () => {
   });
 
   describe('length', () => {
-    it.skip('should support length', () => {
+    it('should support length', () => {
       const s = new MagicString(' abcde   fghijkl ');
 
       assert.equal(s.length(), 17);
@@ -1787,7 +1787,7 @@ describe('MagicString', () => {
   });
 
   describe('hasChanged', () => {
-    it.skip('should works', () => {
+    it('should works', () => {
       const s = new MagicString(' abcde   fghijkl ');
 
       assert.ok(!s.hasChanged());
@@ -1845,7 +1845,7 @@ describe('MagicString', () => {
       assert.strictEqual(new MagicString('122121').replace('12', '21').toString(), '212121');
     });
 
-    it.skip('works with global regex replace', () => {
+    it('works with global regex replace', () => {
       const s = new MagicString('1 2 3 4 a b c');
 
       s.replace(/(\d)/g, 'xx$1$10');
@@ -1853,7 +1853,7 @@ describe('MagicString', () => {
       assert.strictEqual(s.toString(), 'xx1$10 xx2$10 xx3$10 xx4$10 a b c');
     });
 
-    it.skip('works with global regex replace $$', () => {
+    it('works with global regex replace $$', () => {
       const s = new MagicString('1 2 3 4 a b c');
 
       s.replace(/(\d)/g, '$$');

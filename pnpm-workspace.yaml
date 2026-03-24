@@ -15,7 +15,7 @@ packages:
 
 catalog:
   # upstream rolldown
-  rolldown: 1.0.0-rc.6
+  rolldown: 1.0.0-rc.11
   # =================
   '@babel/core': ^7.24.7
   '@babel/preset-env': ^7.24.7
@@ -24,8 +24,8 @@ catalog:
   '@napi-rs/wasm-runtime': ^1.0.0
   '@oxc-node/cli': ^0.0.35
   '@oxc-node/core': ^0.0.35
-  '@oxc-project/runtime': '=0.115.0'
-  '@oxc-project/types': '=0.115.0'
+  '@oxc-project/runtime': '=0.121.0'
+  '@oxc-project/types': '=0.122.0'
   '@pnpm/find-workspace-packages': ^6.0.9
   '@rollup/plugin-commonjs': ^29.0.0
   '@rollup/plugin-json': ^6.1.0
@@ -45,6 +45,7 @@ catalog:
   acorn-import-assertions: ^1.9.0
   astring: ^1.9.0
   buble: ^0.20.0
+  cac: ^7.0.0
   chalk: ^5.3.0
   change-case: ^5.4.4
   connect: ^3.7.0
@@ -62,9 +63,9 @@ catalog:
   lodash-es: ^4.17.21
   micromatch: ^4.0.8
   mocha: ^11.7.5
-  oxc-minify: '=0.115.0'
-  oxc-parser: '=0.115.0'
-  oxc-transform: '=0.115.0'
+  oxc-minify: '=0.121.0'
+  oxc-parser: '=0.121.0'
+  oxc-transform: '=0.121.0'
   pathe: ^2.0.3
   picomatch: ^4.0.2
   react: ^19.0.0
@@ -85,8 +86,8 @@ catalog:
   tsx: ^4.20.6
   typescript: ^5.8.3
   unified: ^11.0.5
-  valibot: 1.2.0
-  vite: ^7.0.0
+  valibot: 1.3.1
+  vite: ^8.0.0
   vitepress: ^2.0.0-alpha.15
   vitepress-plugin-group-icons: ^1.7.1
   vitepress-plugin-llms: ^1.1.0

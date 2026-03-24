@@ -603,7 +603,7 @@ impl<'me, 'ast: 'me> AstScanner<'me, 'ast> {
               }
               None => match self.try_extract_parent_static_member_expr_chain(1) {
                 Some((_span, prop)) => {
-                  self.cjs_named_exports_usage.entry(prop[0].0.clone()).or_default().read += 1;
+                  self.cjs_named_exports_usage.entry(prop[0].name.clone()).or_default().read += 1;
                 }
                 _ => {
                   self.result.ast_usage.insert(EcmaModuleAstUsage::UnknownExportsRead);
@@ -662,7 +662,7 @@ impl<'me, 'ast: 'me> AstScanner<'me, 'ast> {
 
               if matches!(ty, MemberExprObjectReferencedType::Namespace)
                 && self.traverse_state.contains(TraverseState::MemberExprIsWrite)
-                && props[0].0 == "default"
+                && props[0].name == "default"
               {
                 // Write through namespace default (e.g. `ns.default.a = value`). Since
                 // `ns.default` is the raw CJS exports object, any property write on it may
@@ -735,7 +735,10 @@ impl<'me, 'ast: 'me> AstScanner<'me, 'ast> {
   ) -> Option<()> {
     let parent = self.visit_path.last()?;
     if let AstKind::CallExpression(call_expr) = parent {
-      if ident_ref.name == "eval" && call_expr.callee.address() == ident_ref.unstable_address() {
+      if ident_ref.name == "eval"
+        && !call_expr.optional
+        && call_expr.callee.address() == ident_ref.unstable_address()
+      {
         // TODO: esbuild track has_eval for each scope, this could reduce bailout range, and may
         // improve treeshaking performance. https://github.com/evanw/esbuild/blob/360d47230813e67d0312ad754cad2b6ee09b151b/internal/js_ast/js_ast.go#L1288-L1291
         self.result.ecma_view_meta.insert(EcmaViewMeta::Eval);

@@ -13,14 +13,15 @@ export {
   type NapiResolveOptions as ResolveOptions,
   type ResolveResult,
   ResolverFactory,
-  resolveTsconfig,
 } from './binding.cjs';
+export { resolveTsconfig } from './utils/resolve-tsconfig';
 
 export { defineParallelPlugin } from './plugin/parallel-plugin';
 
 // Builtin plugin factory
 export {
   isolatedDeclarationPlugin,
+  oxcRuntimePlugin,
   viteBuildImportAnalysisPlugin,
   viteDynamicImportVarsPlugin,
   viteImportGlobPlugin,
@@ -128,12 +129,12 @@ export type MinifyResult = MinifyResult_;
 import {
   transform as transform_,
   transformSync as transformSync_,
-  TsconfigCache as TsconfigCache_,
   type TransformOptions as TransformOptions_,
   type TransformResult as TransformResult_,
   type TsconfigCompilerOptions as TsconfigCompilerOptions_,
   type TsconfigRawOptions as TsconfigRawOptions_,
 } from './utils/transform';
+import { TsconfigCache as TsconfigCache_ } from './utils/resolve-tsconfig';
 /** @deprecated Use from `rolldown/utils` instead. */
 export const transform: typeof transform_ = transform_;
 /** @deprecated Use from `rolldown/utils` instead. */

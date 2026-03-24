@@ -39,6 +39,8 @@ pub enum BindingBuiltinPluginName {
   ViteWasmFallback,
   #[napi(value = "builtin:vite-web-worker-post")]
   ViteWebWorkerPost,
+  #[napi(value = "builtin:oxc-runtime")]
+  OxcRuntime,
 
   // MARK: - Rollipop
   #[napi(value = "builtin:rollipop-react-refresh-wrapper")]

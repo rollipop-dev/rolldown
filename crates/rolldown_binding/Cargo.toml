@@ -44,6 +44,7 @@ rolldown_plugin = { workspace = true }
 rolldown_plugin_bundle_analyzer = { workspace = true }
 rolldown_plugin_esm_external_require = { workspace = true }
 rolldown_plugin_isolated_declaration = { workspace = true }
+rolldown_plugin_oxc_runtime = { workspace = true }
 rolldown_plugin_replace = { workspace = true }
 rolldown_plugin_utils = { workspace = true }
 rolldown_plugin_vite_alias = { workspace = true }
@@ -60,6 +61,8 @@ rolldown_plugin_vite_resolve = { workspace = true }
 rolldown_plugin_vite_transform = { workspace = true }
 rolldown_plugin_vite_wasm_fallback = { workspace = true }
 rolldown_plugin_vite_web_worker_post = { workspace = true }
+regex = { workspace = true }
+regress = { workspace = true }
 rolldown_sourcemap = { workspace = true }
 rolldown_tracing = { workspace = true }
 rolldown_utils = { workspace = true }

@@ -11,11 +11,23 @@ function cliFixturesDir(...joined: string[]) {
 
 // remove `Finished in x ms` since it is not deterministic
 // remove Ansi colors for snapshot testing
+// replace version number for snapshot testing
 function cleanStdout(stdout: string) {
-  return stripAnsi(stdout).replace(
-    /rolldown v(?<version>\S+) Finished in \d+(\.\d+)? (s|ms|us|ns)/g,
-    '',
-  );
+  return stripAnsi(stdout)
+    .replace(/rolldown v(?<version>\S+) Finished in \d+(\.\d+)? (s|ms|us|ns)/g, '')
+    .replace(/* Match `rolldown v*)` */ /rolldown\sv.*\)/, 'rolldown VERSION)');
+}
+
+function createStreamWaiter(stream: NodeJS.ReadableStream) {
+  let output = '';
+  stream.on('data', (data) => {
+    output += data.toString();
+  });
+  return {
+    waitFor(predicate: string, options?: { timeout?: number }) {
+      return vi.waitUntil(() => output.includes(predicate), options);
+    },
+  };
 }
 
 describe('should not hang after running', () => {
@@ -30,12 +42,7 @@ describe('basic arguments', () => {
     const ret = await execa`rolldown`;
 
     expect(ret.exitCode).toBe(0);
-    expect(
-      cleanStdout(
-        // Prevent snapshot from breaking when version changes
-        ret.stdout.replace(/* Match `rolldown v*)` */ /rolldown\sv.*\)/, 'rolldown VERSION)'),
-      ),
-    ).toMatchSnapshot();
+    expect(cleanStdout(ret.stdout)).toMatchSnapshot();
   });
 
   test('should not show warning with supported Node.js version', async () => {
@@ -45,6 +52,42 @@ describe('basic arguments', () => {
     expect(ret.exitCode).toBe(0);
     expect(ret.stdout).toContain('rolldown v');
     expect(ret.stdout).not.toContain('Please upgrade your Node.js version');
+  });
+
+  test('should print version with --version', async () => {
+    const ret = await execa`rolldown --version`;
+
+    expect(ret.exitCode).toBe(0);
+    expect(ret.stdout).toMatch(/rolldown v\d+/);
+  });
+
+  test('should print version with -v', async () => {
+    const ret = await execa`rolldown -v`;
+
+    expect(ret.exitCode).toBe(0);
+    expect(ret.stdout).toMatch(/rolldown v\d+/);
+  });
+
+  test('should print help with --help', async () => {
+    const ret = await execa`rolldown --help`;
+
+    expect(ret.exitCode).toBe(0);
+    expect(cleanStdout(ret.stdout)).toMatchSnapshot();
+  });
+
+  test('should print help with -h', async () => {
+    const ret = await execa`rolldown -h`;
+
+    expect(ret.exitCode).toBe(0);
+    expect(cleanStdout(ret.stdout)).toMatchSnapshot();
+  });
+
+  test('should show help when --help is used with other arguments (#8523)', async () => {
+    const cwd = cliFixturesDir('cli-option-string');
+    const ret = await execa({ cwd })`rolldown index.ts -o dist/lib.js --help`;
+
+    expect(ret.exitCode).toBe(0);
+    expect(cleanStdout(ret.stdout)).toMatchSnapshot();
   });
 });
 
@@ -92,9 +135,39 @@ describe('cli options for bundling', () => {
     const cwd = cliFixturesDir('cli-option-object');
     const status = await $({
       cwd,
-    })`rolldown index.ts --module-types .123=text --module-types notjson=json --module-types .b64=base64 -d dist`;
+    })`rolldown index.ts --module-types .123:text --module-types notjson:json --module-types .b64:base64 -d dist`;
     expect(status.exitCode).toBe(0);
     expect(cleanStdout(status.stdout)).toMatchSnapshot();
+  });
+
+  it('should handle comma-separated object options', async () => {
+    const cwd = cliFixturesDir('cli-option-object');
+    const status = await $({
+      cwd,
+    })`rolldown index.ts --module-types .123:text,notjson:json,.b64:base64 -d dist`;
+    expect(status.exitCode).toBe(0);
+    expect(cleanStdout(status.stdout)).toMatchSnapshot();
+  });
+
+  it('should handle comma-separated object options mixed with single object', async () => {
+    const cwd = cliFixturesDir('cli-option-object');
+    const status = await $({
+      cwd,
+    })`rolldown index.ts --module-types .123:text,notjson:json --module-types .b64:base64 -d dist`;
+    expect(status.exitCode).toBe(0);
+    expect(cleanStdout(status.stdout)).toMatchSnapshot();
+  });
+
+  it('should handle deprecated key=value syntax with warning', async () => {
+    const cwd = cliFixturesDir('cli-option-object');
+    const status = await $({
+      cwd,
+    })`rolldown index.ts --module-types .123=text,notjson=json,.b64=base64 -d dist`;
+    expect(status.exitCode).toBe(0);
+    expect(cleanStdout(status.stdout)).toMatchSnapshot();
+    expect(status.stdout).toContain(
+      'Using `key=value` syntax for `--module-types` is deprecated. Use `key:value` instead.',
+    );
   });
 
   it('should handle negative boolean options', async () => {
@@ -106,18 +179,18 @@ describe('cli options for bundling', () => {
     expect(cleanStdout(status.stdout)).toMatchSnapshot();
   });
 
-  it('should handle pass `-s` options', async () => {
+  it('should handle pass `-s` options in any position', async () => {
     const cwd = cliFixturesDir('cli-option-sourcemap');
-    const status = await $({ cwd })`rolldown index.ts -d dist -s`;
+    const status = await $({ cwd })`rolldown index.ts -s -d dist`;
     expect(status.exitCode).toBe(0);
-    expect(cleanStdout(status.stdout)).toMatchSnapshot();
+    expect(fs.existsSync(path.join(cwd, 'dist/index.js.map'))).toBe(true);
   });
 
   it('should handle nested options', async () => {
     const cwd = cliFixturesDir('cli-option-nested');
     const status = await $({
       cwd,
-    })`rolldown index.js --transform.define __DEFINE__=defined`;
+    })`rolldown index.js --transform.define __DEFINE__:defined`;
     expect(status.exitCode).toBe(0);
     expect(cleanStdout(status.stdout)).toMatchSnapshot();
   });
@@ -126,7 +199,7 @@ describe('cli options for bundling', () => {
     const cwd = cliFixturesDir('cli-option-multiple-define');
     const status = await $({
       cwd,
-    })`rolldown index.js --transform.define __A__=A,__B__=B,__C__=C -d dist`;
+    })`rolldown index.js --transform.define __A__:A,__B__:B,__C__:C -d dist`;
     expect(status.exitCode).toBe(0);
     expect(cleanStdout(status.stdout)).toMatchSnapshot();
     const file = path.resolve(cwd, 'dist/index.js');
@@ -203,6 +276,22 @@ describe('cli options for bundling', () => {
     } catch (error: any) {
       expect(error.stdout).toContain('Option `--file` requires a value');
     }
+  });
+
+  it('should warn on unrecognized options but still bundle', async () => {
+    const cwd = cliFixturesDir('cli-option-string');
+    const status = await $({ cwd })`rolldown index.ts --someRandomFlag -d dist`;
+    expect(status.exitCode).toBe(0);
+    expect(status.stdout).toContain('unrecognized');
+  });
+
+  it('should handle camelCase options (e.g. --moduleTypes) (#8410)', async () => {
+    const cwd = cliFixturesDir('cli-option-object');
+    const status = await $({
+      cwd,
+    })`rolldown index.ts --moduleTypes .123:text,notjson:json,.b64:base64 -d dist`;
+    expect(status.exitCode).toBe(0);
+    expect(cleanStdout(status.stdout)).toMatchSnapshot();
   });
 });
 
@@ -362,6 +451,31 @@ describe('config', () => {
       expect(error.stdout).toContain('expected object or array, got 123');
     }
   });
+
+  it('should allow CLI options to override config values', async () => {
+    const cwd = cliFixturesDir('cli-override-config');
+    const status = await $({ cwd })`rolldown -c rolldown.config.js --format cjs`;
+    expect(status.exitCode).toBe(0);
+    const file = path.resolve(cwd, 'dist/index.js');
+    const content = fs.readFileSync(file, 'utf-8');
+    // Config has format: 'esm', CLI overrides with --format cjs
+    expect(content).toContain('exports.foo');
+    expect(content).not.toContain('export {');
+  });
+
+  it('should handle `-c -w` without `-w` being consumed as config filename (#3248)', async () => {
+    const cwd = cliFixturesDir('cli-config-with-watch');
+    const controller = new AbortController();
+    execa({
+      cwd,
+      reject: false,
+      cancelSignal: controller.signal,
+    })`rolldown -c -w`;
+    await vi.waitFor(() => {
+      expect(fs.existsSync(path.join(cwd, 'dist/index.js'))).toBe(true);
+    });
+    controller.abort();
+  });
 });
 
 describe('watch cli', () => {
@@ -372,49 +486,61 @@ describe('watch cli', () => {
     expect(status.exitCode).toBe(0);
   });
 
-  it('should handle output options', async () => {
+  it.skipIf(process.platform === 'win32')('should handle output options', async () => {
     const cwd = cliFixturesDir('watch-cli-option');
     const controller = new AbortController();
-    execa({
+    const process = execa({
       cwd,
       reject: false,
       cancelSignal: controller.signal,
     })`rolldown index.ts -d dist -w -s`;
+    const stdoutWaiter = createStreamWaiter(process.stdout);
+    await stdoutWaiter.waitFor('Waiting for changes...', { timeout: 5_000 });
     await vi.waitFor(() => {
       expect(fs.existsSync(path.join(cwd, 'dist'))).toBe(true);
       expect(fs.existsSync(path.join(cwd, 'dist/index.js.map'))).toBe(true);
     });
     controller.abort();
+    await process;
+    expect([process.exitCode, process.signalCode]).toStrictEqual([0, null]);
   });
 
-  it('should allow multiply options', async () => {
+  it.skipIf(process.platform === 'win32')('should allow multiply options', async () => {
     const cwd = cliFixturesDir('config-multiply-options');
     const controller = new AbortController();
-    execa({
+    const process = execa({
       cwd,
       reject: false,
       cancelSignal: controller.signal,
     })`rolldown -c rolldown.config.ts -d watch-dist-options -w`;
+    const stdoutWaiter = createStreamWaiter(process.stdout);
+    await stdoutWaiter.waitFor('Waiting for changes...', { timeout: 5_000 });
     await vi.waitFor(() => {
       expect(fs.existsSync(path.join(cwd, 'watch-dist-options/esm.js'))).toBe(true);
       expect(fs.existsSync(path.join(cwd, 'watch-dist-options/cjs.js'))).toBe(true);
     });
     controller.abort();
+    await process;
+    expect([process.exitCode, process.signalCode]).toStrictEqual([0, null]);
   });
 
-  it('should allow multiply output', async () => {
+  it.skipIf(process.platform === 'win32')('should allow multiply output', async () => {
     const cwd = cliFixturesDir('config-multiply-output');
     const controller = new AbortController();
-    execa({
+    const process = execa({
       cwd,
       reject: false,
       cancelSignal: controller.signal,
     })`rolldown -c rolldown.config.ts -d watch-dist-output -w`;
+    const stdoutWaiter = createStreamWaiter(process.stdout);
+    await stdoutWaiter.waitFor('Waiting for changes...', { timeout: 5_000 });
     await vi.waitFor(() => {
       expect(fs.existsSync(path.join(cwd, 'watch-dist-output/esm.js'))).toBe(true);
       expect(fs.existsSync(path.join(cwd, 'watch-dist-output/cjs.js'))).toBe(true);
     });
     controller.abort();
+    await process;
+    expect([process.exitCode, process.signalCode]).toStrictEqual([0, null]);
   });
 
   it('should allow multiply output + call options hook once + call outputOptions hook', async () => {
@@ -435,4 +561,36 @@ describe('watch cli', () => {
     const status = await $({ cwd })`rolldown -w -c`;
     expect(cleanStdout(status.stdout)).toMatchSnapshot();
   });
+
+  it.skipIf(process.platform === 'win32')(
+    'should close with exit code 0 even when there are errors',
+    {
+      // `stdoutWaiter.waitFor('UNRESOLVED_IMPORT')` is flaky
+      retry: 3,
+    },
+    async () => {
+      const cwd = cliFixturesDir('watch-error');
+      const controller = new AbortController();
+      const process = execa({
+        cwd,
+        reject: false,
+        cancelSignal: controller.signal,
+      })`rolldown index.ts -d dist -w`;
+      const stdoutWaiter = createStreamWaiter(process.stdout);
+      await stdoutWaiter.waitFor('Waiting for changes...', { timeout: 5_000 });
+
+      fs.writeFileSync(
+        path.join(cwd, 'index.ts'),
+        `import { foo } from './non-existent';\n\nconsole.log(foo);\n`,
+      );
+      try {
+        await stdoutWaiter.waitFor('UNRESOLVED_IMPORT', { timeout: 5_000 });
+        controller.abort();
+        await process;
+        expect([process.exitCode, process.signalCode]).toStrictEqual([0, null]);
+      } finally {
+        fs.writeFileSync(path.join(cwd, 'index.ts'), `var foo = '';\n\nconsole.log(foo);\n`);
+      }
+    },
+  );
 });

@@ -3,7 +3,6 @@ use std::{sync::Arc, thread};
 use arcstr::ArcStr;
 use futures::future::join_all;
 use oxc_index::IndexVec;
-#[cfg(not(target_os = "macos"))]
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use rolldown_common::SourceMapGenMsg;
 use rolldown_common::{
@@ -13,7 +12,7 @@ use rolldown_common::{
 };
 use rolldown_ecmascript::EcmaAst;
 use rolldown_error::{BuildDiagnostic, BuildResult};
-use rolldown_fs::OsFileSystem;
+use rolldown_fs::FileSystem;
 use rolldown_plugin::SharedPluginDriver;
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -30,11 +29,11 @@ type SourcemapChannel = (
   Option<thread::JoinHandle<FxHashMap<ModuleIdx, Vec<SourcemapChainElement>>>>,
 );
 
-pub struct ScanStage {
+pub struct ScanStage<Fs: FileSystem + Clone + 'static> {
   options: SharedOptions,
   plugin_driver: SharedPluginDriver,
-  fs: OsFileSystem,
-  resolver: SharedResolver,
+  fs: Fs,
+  resolver: SharedResolver<Fs>,
 }
 
 #[derive(Debug)]
@@ -61,10 +60,7 @@ impl NormalizedScanStageOutput {
     Self {
       module_table: self.module_table.clone(),
       index_ecma_ast: {
-        #[cfg(not(target_os = "macos"))]
         let iter = self.index_ecma_ast.raw.par_iter();
-        #[cfg(target_os = "macos")]
-        let iter = self.index_ecma_ast.raw.iter();
 
         let index_ecma_ast = iter
           .map(|ast| ast.as_ref().map(rolldown_ecmascript::EcmaAst::clone_with_another_arena))
@@ -132,12 +128,12 @@ pub struct ScanStageOutput {
   pub tla_module_count: usize,
 }
 
-impl ScanStage {
+impl<Fs: FileSystem + Clone + 'static> ScanStage<Fs> {
   pub fn new(
     options: SharedOptions,
     plugin_driver: SharedPluginDriver,
-    fs: OsFileSystem,
-    resolver: SharedResolver,
+    fs: Fs,
+    resolver: SharedResolver<Fs>,
   ) -> Self {
     Self { options, plugin_driver, fs, resolver }
   }

@@ -22,10 +22,10 @@ jobs:
       version_changed: ${{ steps.version.outputs.changed }}
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: taiki-e/checkout-action@3ab630d442e198ebb0ca30872832406ca01c46eb # v1.4.0
+      - uses: taiki-e/checkout-action@83ed61bfbe2b8abbb3c66e8b65b1335484c70009 # v1.4.1
 
       - name: Check version changes
-        uses: EndBug/version-check@5102328418c0130d66ca712d755c303e93368ce2 # v2.1.7
+        uses: EndBug/version-check@095362f3cd50f690c8fa0e6afeea81834bd8d320 # v3.0.0
         id: version
         with:
           static-checking: localIsNew
@@ -54,42 +54,44 @@ jobs:
       id-token: write # for `npm publish --provenance`
       contents: write # for `git push`
     steps:
-      - uses: taiki-e/checkout-action@3ab630d442e198ebb0ca30872832406ca01c46eb # v1.4.0
+      - uses: taiki-e/checkout-action@83ed61bfbe2b8abbb3c66e8b65b1335484c70009 # v1.4.1
 
-      - uses: oxc-project/setup-node@8958a8e040102244b619c4a94fccb657a44b1c21 # v1.0.6
+      - uses: voidzero-dev/setup-vp@e1609b468742ba9232ce5e12b3a77bdf14495277 # v1.1.0
+        with:
+          cache: true
 
       - name: Git Reset Hard
         run: git reset --hard # fix pnpm install add new line for package.json
 
       - name: Download Binding Artifacts
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: packages/rolldown/artifacts
 
       - name: Create rolldown/npm dirs
-        run: pnpm --filter '@rollipop/rolldown' exec napi create-npm-dirs
+        run: vp exec --filter '@rollipop/rolldown' napi create-npm-dirs
 
       - name: Move Binding Artifacts
-        run: pnpm --filter '@rollipop/rolldown' artifacts
+        run: vp run --filter '@rollipop/rolldown' artifacts
 
       - name: List Rolldown Bindings
         run: ls -R ./packages/rolldown/npm
         shell: bash
 
       - name: Download Node Artifacts
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: packages/rolldown/dist
           name: node-artifact
 
       - name: Download `@rolldown/debug` Artifacts
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: packages/debug/dist
           name: debug-artifact
 
       - name: Download Pluginutils Artifacts
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: packages/pluginutils/dist
           name: pluginutils-artifact
@@ -101,12 +103,12 @@ jobs:
 
       - name: Publish(Dry Run)
         run: |
-          pnpm publish -r --tag latest --dry-run --no-git-checks --filter '!@rolldown/browser'
+          vp pm publish -r --tag latest --dry-run --no-git-checks --filter '!@rolldown/browser'
 
       - name: Publish
         run: |
           npm install -g npm
-          pnpm publish -r --tag latest --no-git-checks --filter '!@rolldown/browser'
+          vp pm publish -r --tag latest --no-git-checks --filter '!@rolldown/browser'
 
       - name: Create Git Tag
         run: |

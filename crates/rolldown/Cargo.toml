@@ -8,11 +8,6 @@ publish = true
 repository.workspace = true
 description = "Fast JavaScript bundler in Rust, designed for the future of Vite"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[lib]
-doctest = false
-
 [lints]
 workspace = true
 
@@ -51,6 +46,7 @@ rolldown_error = { workspace = true }
 rolldown_fs = { workspace = true, features = ["os"] }
 rolldown_plugin = { workspace = true }
 rolldown_plugin_chunk_import_map = { workspace = true }
+rolldown_plugin_asset_module = { workspace = true }
 rolldown_plugin_copy_module = { workspace = true }
 rolldown_plugin_data_url = { workspace = true }
 rolldown_plugin_hmr = { workspace = true }
@@ -73,8 +69,6 @@ xxhash-rust = { workspace = true, features = ["xxh3"] }
 
 [dev-dependencies]
 cow-utils = { workspace = true }
-dunce = { workspace = true }
-glob = { workspace = true }
 insta = { workspace = true }
 regex = { workspace = true }
 rolldown_common = { workspace = true }
@@ -88,6 +82,9 @@ sugar_path = { workspace = true }
 testing_macros = { workspace = true }
 tokio = { workspace = true, features = ["rt", "macros", "sync", "rt-multi-thread"] }
 walkdir = { workspace = true }
+
+[lib]
+doctest = false
 
 [package.metadata.cargo-shear]
 # `serde` is used via feature flag.

@@ -245,7 +245,7 @@ const TransformOptionsSchema = v.object({
   ),
   define: v.pipe(
     v.optional(v.record(v.string(), v.string())),
-    v.description('Define global variables (syntax: key=value,key2=value2)'),
+    v.description('Define global variables (syntax: key:value,key2:value2)'),
   ),
   inject: v.pipe(
     v.optional(v.record(v.string(), v.union([v.string(), v.tuple([v.string(), v.string()])]))),
@@ -273,6 +273,18 @@ const WatcherFileWatcherOptionsSchema = v.strictObject({
     v.description(
       'Compare file contents for poll-based watchers (only used when usePolling is true)',
     ),
+  ),
+  useDebounce: v.pipe(
+    v.optional(v.boolean()),
+    v.description('Use debounced event delivery at the filesystem level'),
+  ),
+  debounceDelay: v.pipe(
+    v.optional(v.number()),
+    v.description('Debounce delay in milliseconds (only used when useDebounce is true)'),
+  ),
+  debounceTickRate: v.pipe(
+    v.optional(v.number()),
+    v.description('Tick rate in milliseconds for debouncer (only used when useDebounce is true)'),
   ),
 });
 
@@ -836,18 +848,17 @@ const OutputOptionsSchema = v.strictObject({
   ),
   sourcemap: v.pipe(
     v.optional(v.union([v.boolean(), v.literal('inline'), v.literal('hidden')])),
-    v.description(
-      `Generate sourcemap (\`-s inline\` for inline, or ${styleText(
-        'bold',
-        'pass the `-s` on the last argument if you want to generate `.map` file',
-      )})`,
-    ),
+    v.description(`Generate sourcemap (\`-s inline\` for inline, or \`-s\` for \`.map\` file)`),
   ),
   sourcemapBaseUrl: v.pipe(
     v.optional(v.string()),
     v.description('Base URL used to prefix sourcemap paths'),
   ),
   sourcemapDebugIds: v.pipe(v.optional(v.boolean()), v.description('Inject sourcemap debug IDs')),
+  sourcemapExcludeSources: v.pipe(
+    v.optional(v.boolean()),
+    v.description('Exclude source content from sourcemaps'),
+  ),
   sourcemapIgnoreList: v.optional(
     v.union([v.boolean(), v.custom<SourcemapIgnoreListOption>(() => true), StringOrRegExpSchema]),
   ),
@@ -874,7 +885,7 @@ const OutputOptionsSchema = v.strictObject({
   name: v.pipe(v.optional(v.string()), v.description('Name for UMD / IIFE format outputs')),
   globals: v.pipe(
     v.optional(v.union([v.record(v.string(), v.string()), GlobalsFunctionSchema])),
-    v.description('Global variable of UMD / IIFE dependencies (syntax: `key=value`)'),
+    v.description('Global variable of UMD / IIFE dependencies (syntax: `key:value`)'),
   ),
   paths: v.pipe(
     v.optional(v.union([v.record(v.string(), v.string()), PathsFunctionSchema])),
@@ -1000,7 +1011,7 @@ const OutputCliOverrideSchema = v.strictObject({
   ),
   globals: v.pipe(
     v.optional(v.record(v.string(), v.string())),
-    v.description('Global variable of UMD / IIFE dependencies (syntax: `key=value`)'),
+    v.description('Global variable of UMD / IIFE dependencies (syntax: `key:value`)'),
   ),
   codeSplitting: v.pipe(
     v.optional(

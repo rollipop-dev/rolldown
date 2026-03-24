@@ -1,4 +1,3 @@
-mod asset;
 mod chunk;
 mod ecmascript;
 mod file_emitter;
@@ -102,7 +101,6 @@ pub mod bundler_options {
 
 // We don't want internal position adjustment of files affect users, so all items are exported in the root.
 pub use crate::{
-  asset::asset_view::AssetView,
   chunk::{
     Chunk, ChunkMeta, PostChunkOptimizationOperation,
     chunk_table::ChunkTable,
@@ -120,8 +118,8 @@ pub use crate::{
     dynamic_import_usage,
     ecma_asset_meta::EcmaAssetMeta,
     ecma_view::{
-      EcmaModuleAstUsage, EcmaView, EcmaViewMeta, ImportMetaRolldownAssetReplacer,
-      PrependRenderedImport, ThisExprReplaceKind, generate_replace_this_expr_map,
+      EcmaModuleAstUsage, EcmaView, EcmaViewMeta, PrependRenderedImport, ThisExprReplaceKind,
+      generate_replace_this_expr_map,
     },
     json_to_program::{json_value_to_ecma_ast, json_value_to_expression},
     module_idx::ModuleIdx,
@@ -181,7 +179,7 @@ pub use crate::{
     BarrelInfo, BarrelState, ExportSource, ImportedExports, LazyBarrelInfo,
     try_extract_lazy_barrel_info,
   },
-  types::member_expr_ref::{MemberExprObjectReferencedType, MemberExprRef},
+  types::member_expr_ref::{MemberExprObjectReferencedType, MemberExprProp, MemberExprRef},
   types::member_expr_ref_resolution::MemberExprRefResolution,
   types::module_def_format::ModuleDefFormat,
   types::module_id::ModuleId,

@@ -11,7 +11,7 @@
  * 3. Skips tests that use unsupported features
  *
  * BindingMagicString API (supported methods):
- *   - constructor(source: string, options?: { filename?, offset? })
+ *   - constructor(source: string, options?: { filename?, offset?, indentExclusionRanges? })
  *   - offset: number (getter/setter — shifts all position-based operations)
  *   - replace(from: string, to: string): this
  *   - replaceAll(from: string, to: string): this
@@ -30,7 +30,7 @@
  *   - update(start: number, end: number, content: string): this
  *   - relocate(start: number, end: number, to: number): this
  *   - move(start: number, end: number, index: number): this (alias for relocate)
- *   - indent(indentor?: string | undefined | null): this
+ *   - indent(indentor?: string | undefined | null, options?: { exclude? }): this
  *   - slice(start?: number, end?: number): string
  *   - insert(index: number, content: string): throws Error (deprecated)
  *   - clone(): BindingMagicString
@@ -42,12 +42,10 @@
  *   - generateDecodedMap(options?): BindingDecodedMap (returns object with decoded mappings array)
  *
  * NOT supported (will be skipped):
- *   - constructor options (ignoreList, indentExclusionRanges) — filename and offset ARE supported
- *   - reset tests (most require splitting inside edited chunks)
+ *   - constructor options: filename, offset, indentExclusionRanges, and ignoreList ARE supported
  *   - addSourcemapLocation (not in string_wizard)
- *   - storeName option in overwrite (not in string_wizard)
- *   - x_google_ignoreList / ignoreList (not in string_wizard)
- *   - original property (getter — not yet implemented)
+ *   - storeName option in overwrite/update (not exposed in binding)
+ *   - x_google_ignoreList / ignoreList in generateMap output is now supported
  *   - replace/replaceAll with regex or function replacer
  */
 
@@ -65,7 +63,7 @@ const BASE_URL = 'https://raw.githubusercontent.com/Rich-Harris/magic-string/mas
 // Describe blocks to skip entirely (unsupported features)
 const SKIP_DESCRIBE_BLOCKS = [
   'addSourcemapLocation', // not in string_wizard
-  'getIndentString', // not supported
+  // Note: 'getIndentString' is now supported
   'original', // not supported
   // Note: 'generateMap' is now supported (returns BindingSourceMap object)
   // Note: 'generateDecodedMap' is now supported (returns BindingDecodedMap object)
@@ -73,7 +71,7 @@ const SKIP_DESCRIBE_BLOCKS = [
   // Note: 'snip' is now supported
   // Note: 'lastChar' is now supported
   // Note: 'lastLine' is now supported
-  // Note: 'options' is now partially supported (filename works, ignoreList doesn't)
+  // Note: 'options' is now supported (filename, offset, indentExclusionRanges, ignoreList)
   // Note: 'insert' is now supported (throws deprecated error as expected)
   // Note: 'slice' is now supported
   // Note: 'clone' is now supported (some individual tests skipped)
@@ -86,29 +84,29 @@ const SKIP_TESTS = [
   'should throw when given non-string content', // error handling differs
   'should throw', // error handling differs
   // options-specific skips
-  'stores ignore-list hint', // ignoreList option not supported
-  'indentExclusionRanges', // not supported
+  // Note: 'stores ignore-list hint' is now supported (ignoreList option)
+  // Note: 'indentExclusionRanges' is now supported (constructor option + getter + clone)
   'sourcemapLocations', // not supported
   'should return cloned content', // clone-related
   'should noop', // edge cases that may differ
   'negative indices', // may not be supported
   'should split original chunk', // internal behavior
-  'out of upper bound', // out of bounds indices cause panic
-  'out of bounds', // out of bounds indices cause panic
+  // Note: 'out of upper bound' and 'out of bounds' are now supported (indices clamp to intro/outro)
   'replaces an empty string', // empty string edge case
   'empty string should be movable', // empty string edge case
   'split point', // split point errors cause panic
   'storeName', // storeName option not supported
   'contentOnly', // contentOnly option not supported
   'should remove overlapping ranges', // overlapping replacements cause panic
-  'overlapping replacements', // overlapping replacements cause panic
+  'error if overlapping replacements', // overlapping replacements cause panic
+  // Note: 'should allow contiguous but non-overlapping replacements' now works
   'already been edited', // Cannot split a chunk that has already been edited
   'non-zero-length inserts inside', // causes split chunk panic
   'should remove modified ranges', // causes split chunk panic
 
   'should replace then remove', // causes split chunk panic
-  'preserves intended order', // complex append/prepend ordering with slice
-  'excluded characters', // indent exclude option not supported
+  // Note: 'preserves intended order' now works (append/prepend ordering with slice)
+  // Note: 'excluded characters' (indent exclude option) is now supported
   // remove-specific skips
   'should remove everything', // edge case
   'should adjust other removals', // complex removal interaction
@@ -124,38 +122,35 @@ const SKIP_TESTS = [
   // remove-specific complex cases
   // Note: "removes across moved content" appears in both remove and reset sections
   // The reset version passes, so we handle this with a special transformation below
-  'should not remove content inserted', // complex interaction
+  // Note: 'should not remove content inserted after the end of removed range' now works
   'should remove interior inserts', // causes panic
-  'should provide a useful error', // expects throw but gets panic
+  // Note: 'should provide a useful error' now works — errors are properly thrown, not panicked
   // slice-specific skips
-  'should return the generated content between the specified original characters', // nested overwrites + slice
-  'supports characters moved', // complex move + slice interaction
+  // Note: 'should return the generated content between the specified original characters' now works
+  // Note: 'supports characters moved opposing' now works (reversed slice range fix)
   // clone-specific skips (tests that use unsupported constructor options)
   // Note: 'should clone filename info' now works since filename is supported
-  'should clone indentExclusionRanges', // uses indentExclusionRanges constructor option
-  'should clone complex indentExclusionRanges', // uses indentExclusionRanges constructor option
+  // Note: 'should clone indentExclusionRanges' now works since indentExclusionRanges is supported
   'should clone sourcemapLocations', // uses sourcemapLocations
-  // hasChanged tests that use clone
-  'should not report change if content is identical', // uses clone
-  'should works', // uses clone
-  // replace/replaceAll tests that use regex or function replacer
-  'works with global regex replace', // regex not supported
-  'works with global regex replace $$', // regex not supported
+  // Note: 'should works' (hasChanged) now works — clone preserves hasChanged state
+  // Note: 'should not report change if content is identical' no longer in upstream tests
+  // replace/replaceAll — regex with string replacement now supported in Rust binding
+  // Note: 'works with global regex replace' now works
+  // Note: 'works with global regex replace $$' now works
+  'rejects with non-global regexp', // napi-rs can't throw TypeError (only Error), test expects TypeError
+  // Note: 'global regex result the same as .replace' — has function replacer parts, kept skipped
   'works with global regex replace function', // function replacer not supported
   'replace function offset', // function replacer not supported
   'works with string replace and function replacer', // function replacer not supported
   'should ignore non-changed replacements', // uses function replacer
-  'global regex result the same as .replace', // regex not supported
-  'rejects with non-global regexp', // regex not supported
-  // length/isEmpty tests that rely on modified length
-  'should support length', // length returns original length
-  'should support isEmpty', // isEmpty behavior differs
+  'global regex result the same as .replace', // uses function replacer in one assertion
+  // Note: 'should support length' and 'should support isEmpty' now work correctly
   // generateMap-specific skips (features not in string_wizard)
   'should generate a correct sourcemap including correct lines', // uses generateDecodedMap which has different mappings count
   'should generate a sourcemap using specified locations', // addSourcemapLocation not implemented
   'should recover original names', // storeName option not implemented
   'generates a map with trimmed content', // trim sourcemap behavior differs
-  'generates x_google_ignoreList', // ignoreList not implemented
+  // Note: 'generates x_google_ignoreList' is now supported
   'generates segments per word boundary with hires "boundary" in the next line', // multiline boundary mappings differ
   'generates a correct source map with update using a content containing a new line', // multiline update mappings differ
   'generates a correct source map with update using content ending with a new line', // multiline update mappings differ
@@ -180,12 +175,12 @@ function transformTestFile(content, filename) {
   // Replace imports
   transformed = transformed.replace(
     /import MagicString from ['"]\.\/utils\/IntegrityCheckingMagicString['"];?/g,
-    "import { BindingMagicString as MagicString } from '@rollipop/rolldown';",
+    "import { RolldownMagicString as MagicString } from '@rollipop/rolldown';",
   );
 
   transformed = transformed.replace(
     /import MagicString from ['"]\.\.\/src\/MagicString['"];?/g,
-    "import { BindingMagicString as MagicString } from '@rollipop/rolldown';",
+    "import { RolldownMagicString as MagicString } from '@rollipop/rolldown';",
   );
 
   // Handle Bundle import - Bundle is not supported, so we import MagicString and skip all Bundle tests
@@ -264,12 +259,7 @@ function transformTestFile(content, filename) {
     "$1\n$2it.skip('removes across moved content'",
   );
 
-  // Special case: skip "should reset modified ranges" but not "should reset modified ranges, redux"
-  // The "redux" version passes, but the first one uses overwrite+remove+reset which fails
-  transformed = transformed.replace(
-    /it\('should reset modified ranges', /g,
-    "it.skip('should reset modified ranges', ",
-  );
+  // Note: "should reset modified ranges" now passes (overwrite+remove+reset works correctly)
 
   return transformed;
 }

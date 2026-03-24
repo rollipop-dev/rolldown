@@ -12,7 +12,7 @@ concurrency:
 jobs:
   prepare:
     name: Prepare Release
-    if: github.repository == 'rolldown/rolldown'
+    if: github.repository == 'leegeunhyeok/rolldown'
     runs-on: ubuntu-latest
     permissions:
       contents: write # for create-pull-request
@@ -23,11 +23,13 @@ jobs:
           fetch-depth: 0 # for changelog
           persist-credentials: true # for create-pull-request
 
-      - uses: taiki-e/install-action@f92912fad184299a31e22ad070a5059fd07d4f59 # v2.68.7
+      - uses: taiki-e/install-action@06203676c62f0d3c765be3f2fcfbebbcb02d09f5 # v2.69.6
         with:
           tool: just
 
-      - uses: oxc-project/setup-node@8958a8e040102244b619c4a94fccb657a44b1c21 # v1.0.6
+      - uses: voidzero-dev/setup-vp@e1609b468742ba9232ce5e12b3a77bdf14495277 # v1.1.0
+        with:
+          cache: true
 
       - name: Get and bump version
         run: |
@@ -41,7 +43,7 @@ jobs:
       - run: just bump-packages ${VERSION}
 
       - name: Regenerate binding.js after version bump
-        run: pnpm --filter '@rollipop/rolldown' build-binding
+        run: vp run --filter '@rollipop/rolldown' build-binding
 
       - name: Generate changelog via git cliff
         id: changelog

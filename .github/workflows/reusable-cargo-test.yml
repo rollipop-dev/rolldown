@@ -16,23 +16,34 @@ jobs:
   run:
     if: ${{ inputs.changed }}
     name: Cargo Test
-    runs-on: ${{ inputs.os }}
+    runs-on: ${{ inputs.os == 'ubuntu-latest' && 'namespace-profile-linux-x64-default' || inputs.os == 'macos-latest' && 'namespace-profile-mac-default' || inputs.os }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           submodules: true # Pull submodules for additional files
           persist-credentials: false
 
+      - uses: samypr100/setup-dev-drive@30f0f98ae5636b2b6501e181dfb3631b9974818d # v4.0.0
+        if: runner.os == 'Windows'
+        with:
+          drive-size: 20GB
+          drive-format: ReFS
+          env-mapping: |
+            CARGO_HOME,{{ DEV_DRIVE }}/.cargo
+            RUSTUP_HOME,{{ DEV_DRIVE }}/.rustup
+            PNPM_HOME,{{ DEV_DRIVE }}/.pnpm
+
       - name: Setup Rust
-        uses: oxc-project/setup-rust@c8224157c0bf235aabc633e8cd50d344f087a7de # v1.0.12
+        uses: oxc-project/setup-rust@23f38cfb0c04af97a055f76acee94d5be71c7c82 # v1.0.16
         with:
           tools: just
-          cache-key: debug-build
+          cache-key: cargo-test
+          save-cache: ${{ github.ref_name == 'main' }}
+          target-dir: ${{ runner.os == 'Windows' && format('{0}/target', env.DEV_DRIVE) || '' }}
 
-      - uses: oxc-project/setup-node@8958a8e040102244b619c4a94fccb657a44b1c21 # v1.0.6
-
-      - name: Build
-        run: cargo test --workspace --exclude rolldown_binding --no-run
+      - uses: voidzero-dev/setup-vp@e1609b468742ba9232ce5e12b3a77bdf14495277 # v1.1.0
+        with:
+          cache: true
 
       - name: Run Test
         run: just test-rust

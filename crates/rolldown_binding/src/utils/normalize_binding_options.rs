@@ -349,6 +349,7 @@ pub fn normalize_binding_options(
     sourcemap_ignore_list,
     sourcemap_path_transform,
     sourcemap_debug_ids: output_options.sourcemap_debug_ids,
+    sourcemap_exclude_sources: output_options.sourcemap_exclude_sources,
     exports: output_options
       .exports
       .map(|format_str| {
@@ -606,10 +607,10 @@ pub fn normalize_binding_options(
             .and_then(|plugin| plugin.remove(&index))
             .unwrap_or_default();
           let worker_manager = worker_manager.as_ref().unwrap();
-          Ok(ParallelJsPlugin::new_shared(plugins, Arc::clone(worker_manager)))
+          ParallelJsPlugin::new_shared(plugins, Arc::clone(worker_manager))
         },
         |plugin| match plugin {
-          Either::A(plugin_options) => Ok(JsPlugin::new_shared(plugin_options)),
+          Either::A(plugin_options) => JsPlugin::new_shared(plugin_options),
           Either::B(builtin) => {
             // Needs to save the name, since `try_into` will consume the ownership
             let name = format!("{:?}", builtin.__name);
@@ -632,7 +633,7 @@ pub fn normalize_binding_options(
     .chain(output_options.plugins)
     .filter_map(|plugin| {
       plugin.map(|plugin| match plugin {
-        Either::A(plugin_options) => Ok(JsPlugin::new_shared(plugin_options)),
+        Either::A(plugin_options) => JsPlugin::new_shared(plugin_options),
         Either::B(builtin) => {
           // Needs to save the name, since `try_into` will consume the ownership
           let name = format!("{:?}", builtin.__name);

@@ -246,6 +246,16 @@ export interface OutputOptions {
    */
   sourcemapPathTransform?: SourcemapPathTransformOption;
   /**
+   * Whether to exclude the original source code from sourcemaps.
+   *
+   * When `true`, the `sourcesContent` field is omitted from the generated sourcemap,
+   * reducing the sourcemap file size. The sourcemap will still contain source file paths
+   * and mappings, so debugging works if the original files are available.
+   *
+   * @default false
+   */
+  sourcemapExcludeSources?: boolean;
+  /**
    * A string to prepend to the bundle before {@linkcode Plugin.renderChunk | renderChunk} hook.
    *
    * See {@linkcode intro | output.intro}, {@linkcode postBanner | output.postBanner} as well.
@@ -376,11 +386,11 @@ export interface OutputOptions {
    * Rolldown uses Oxc Minifier under the hood. See Oxc's [minification documentation](https://oxc.rs/docs/guide/usage/minifier#features) for more details.
    *
    * - `true`: Enable full minification including code compression and dead code elimination
-   * - `false`: Disable minification (default)
-   * - `'dce-only'`: Only perform dead code elimination without code compression
+   * - `false`: Disable minification
+   * - `'dce-only'`: Only perform dead code elimination without code compression (default)
    * - `MinifyOptions`: Fine-grained control over minification settings
    *
-   * @default false
+   * @default 'dce-only'
    */
   minify?: boolean | 'dce-only' | MinifyOptions;
   /**

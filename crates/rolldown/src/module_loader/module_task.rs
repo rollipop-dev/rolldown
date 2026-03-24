@@ -15,8 +15,9 @@ use rolldown_error::{
 use rolldown_std_utils::PathExt as _;
 use rolldown_utils::{ecmascript::legitimize_identifier_name, indexmap::FxIndexSet};
 
+use rolldown_fs::FileSystem;
+
 use crate::{
-  asset::create_asset_view,
   ecmascript::ecma_module_view_factory::{CreateEcmaViewReturn, create_ecma_view},
   types::module_factory::{CreateModuleContext, CreateModuleViewArgs},
   utils::{load_source::load_source, transform_source::transform_source},
@@ -40,8 +41,8 @@ impl ModuleTaskOwner {
   }
 }
 
-pub struct ModuleTask {
-  ctx: Arc<TaskContext>,
+pub struct ModuleTask<Fs: FileSystem + Clone + 'static> {
+  ctx: Arc<TaskContext<Fs>>,
   module_idx: ModuleIdx,
   resolved_id: ResolvedId,
   owner: Option<ModuleTaskOwner>,
@@ -52,10 +53,10 @@ pub struct ModuleTask {
   magic_string_tx: Option<std::sync::Arc<std::sync::mpsc::Sender<SourceMapGenMsg>>>,
 }
 
-impl ModuleTask {
+impl<Fs: FileSystem + Clone + 'static> ModuleTask<Fs> {
   #[expect(clippy::too_many_arguments)]
   pub fn new(
-    ctx: Arc<TaskContext>,
+    ctx: Arc<TaskContext<Fs>>,
     idx: ModuleIdx,
     resolved_id: ResolvedId,
     owner: Option<ModuleTaskOwner>,
@@ -109,26 +110,17 @@ impl ModuleTask {
 
     let mut sourcemap_chain = vec![];
     let mut hook_side_effects = self.resolved_id.side_effects.take();
-    let (mut source, module_type) = self
+    let (source, module_type) = self
       .load_source(&mut sourcemap_chain, &mut hook_side_effects, self.magic_string_tx.clone())
       .await?;
 
     let stable_id = id.stabilize(&self.ctx.options.cwd);
 
-    let asset_view = match module_type {
-      ModuleType::Asset => {
-        let asset_view = create_asset_view(source);
-        source = StrOrBytes::Str(String::new());
-        Some(asset_view)
-      }
-      ModuleType::Css => {
-        Err(anyhow::anyhow!(
-          "Bundling CSS is no longer supported (experimental support has been removed). See https://github.com/rolldown/rolldown/issues/4271 for details."
-        ))?;
-        unreachable!()
-      }
-      _ => None,
-    };
+    if matches!(module_type, ModuleType::Css) {
+      Err(anyhow::anyhow!(
+        "Bundling CSS is no longer supported (experimental support has been removed). See https://github.com/rolldown/rolldown/issues/4271 for details."
+      ))?;
+    }
 
     let mut warnings = vec![];
 
@@ -204,7 +196,6 @@ impl ModuleTask {
       exec_order: u32::MAX,
       module_type: module_type.clone(),
       ecma_view,
-      asset_view,
       originative_resolved_id: self.resolved_id.clone(),
     };
 

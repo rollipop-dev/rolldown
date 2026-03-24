@@ -1422,6 +1422,7 @@ export declare class BindingBundler {
 
 export declare class BindingCallableBuiltinPlugin {
   constructor(plugin: BindingBuiltinPlugin)
+  getOrder(hookName: string): string | null
   resolveId(id: string, importer?: string | undefined | null, options?: BindingHookJsResolveIdOptions | undefined | null): Promise<BindingHookJsResolveIdOutput | undefined | null>
   load(id: string): Promise<BindingHookJsLoadOutput | undefined | null>
   transform(code: string, id: string, options: BindingTransformHookExtraArgs): Promise<BindingHookTransformOutput | undefined | null>
@@ -1449,6 +1450,8 @@ export declare class BindingDecodedMap {
    * Each line is an array of segments, where each segment is [generatedColumn, sourceIndex, originalLine, originalColumn, nameIndex?].
    */
   get mappings(): Array<Array<Array<number>>>
+  /** The list of source indices that should be excluded from debugging. */
+  get x_google_ignoreList(): Array<number> | null
 }
 
 export declare class BindingDevEngine {
@@ -1480,10 +1483,18 @@ export declare class BindingMagicString {
   constructor(source: string, options?: BindingMagicStringOptions | undefined | null)
   get original(): string
   get filename(): string | null
+  get indentExclusionRanges(): Array<Array<number>> | Array<number> | null
+  get ignoreList(): boolean
   get offset(): number
   set offset(offset: number)
   replace(from: string, to: string): this
   replaceAll(from: string, to: string): this
+  /**
+   * Returns the UTF-16 offset past the last match, or -1 if no match was found.
+   * The JS wrapper uses this to update `lastIndex` on the caller's RegExp.
+   * Global/sticky behavior is derived from the regex's own flags.
+   */
+  replaceRegex(from: RegExp, to: string): number
   prepend(content: string): this
   append(content: string): this
   prependLeft(index: number, content: string): this
@@ -1504,7 +1515,7 @@ export declare class BindingMagicString {
    * Returns `this` for method chaining.
    */
   move(start: number, end: number, index: number): this
-  indent(indentor?: string | undefined | null): this
+  indent(indentor?: string | undefined | null, options?: BindingIndentOptions | undefined | null): this
   /** Trims whitespace or specified characters from the start and end. */
   trim(charType?: string | undefined | null): this
   /** Trims whitespace or specified characters from the start. */
@@ -1524,6 +1535,8 @@ export declare class BindingMagicString {
   lastChar(): string
   /** Returns the content after the last newline in the generated string. */
   lastLine(): string
+  /** Returns the guessed indentation string, or `\t` if none is found. */
+  getIndentString(): string
   /** Returns a clone with content outside the specified range removed. */
   snip(start: number, end: number): BindingMagicString
   /**
@@ -1533,8 +1546,12 @@ export declare class BindingMagicString {
    */
   reset(start: number, end: number): this
   /**
-   * Returns the content between the specified original character positions.
+   * Returns the content between the specified UTF-16 code unit positions (JS string indices).
    * Supports negative indices (counting from the end).
+   *
+   * When an index falls in the middle of a surrogate pair, the lone surrogate is
+   * included in the result (matching the original magic-string / JS behavior).
+   * This is done by returning a UTF-16 encoded JS string via `napi_create_string_utf16`.
    */
   slice(start?: number | undefined | null, end?: number | undefined | null): string
   /**
@@ -1590,6 +1607,7 @@ export declare class BindingNormalizedOptions {
   get globals(): Record<string, string> | undefined
   get hashCharacters(): 'base64' | 'base36' | 'hex'
   get sourcemapDebugIds(): boolean
+  get sourcemapExcludeSources(): boolean
   get polyfillRequire(): boolean
   get minify(): false | 'dce-only' | MinifyOptions
   get legalComments(): 'none' | 'inline'
@@ -1678,6 +1696,8 @@ export declare class BindingSourceMap {
   get names(): Array<string>
   /** The VLQ-encoded mappings string. */
   get mappings(): string
+  /** The list of source indices that should be excluded from debugging. */
+  get x_google_ignoreList(): Array<number> | null
   /** Returns the source map as a JSON string. */
   toString(): string
   /** Returns the source map as a base64-encoded data URL. */
@@ -1738,19 +1758,9 @@ export declare class TraceSubscriberGuard {
   close(): void
 }
 
-/**
- * Cache for tsconfig resolution to avoid redundant file system operations.
- *
- * The cache stores resolved tsconfig configurations keyed by their file paths.
- * When transforming multiple files in the same project, tsconfig lookups are
- * deduplicated, improving performance.
- *
- * @category Utilities
- * @experimental
- */
 export declare class TsconfigCache {
   /** Create a new transform cache with auto tsconfig discovery enabled. */
-  constructor()
+  constructor(yarnPnp: boolean)
   /**
    * Clear the cache.
    *
@@ -1799,6 +1809,7 @@ export type BindingBuiltinPluginName =  'builtin:bundle-analyzer'|
 'builtin:vite-transform'|
 'builtin:vite-wasm-fallback'|
 'builtin:vite-web-worker-post'|
+'builtin:oxc-runtime'|
 'builtin:rollipop-react-refresh-wrapper'|
 'builtin:rollipop-worklets';
 
@@ -2194,6 +2205,10 @@ export interface BindingHookTransformOutput {
   moduleType?: string
 }
 
+export interface BindingIndentOptions {
+  exclude?: Array<Array<number>> | Array<number>
+}
+
 export interface BindingInjectImportNamed {
   tagNamed: true
   imported: string
@@ -2300,6 +2315,8 @@ export interface BindingLogLocation {
 export interface BindingMagicStringOptions {
   filename?: string
   offset?: number
+  indentExclusionRanges?: Array<Array<number>> | Array<number>
+  ignoreList?: boolean
 }
 
 export type BindingMakeAbsoluteExternalsRelative =
@@ -2381,6 +2398,7 @@ export interface BindingOutputOptions {
   sourcemapIgnoreList?: boolean | string | RegExp | ((source: string, sourcemapPath: string) => boolean)
   sourcemapDebugIds?: boolean
   sourcemapPathTransform?: (source: string, sourcemapPath: string) => string
+  sourcemapExcludeSources?: boolean
   strict?: boolean | 'auto'
   minify?: boolean | 'dce-only' | MinifyOptions
   manualCodeSplitting?: BindingManualCodeSplittingOptions
@@ -2798,48 +2816,17 @@ export interface BindingWatchOption {
   usePolling?: boolean
   pollInterval?: number
   compareContentsForPolling?: boolean
+  useDebounce?: boolean
+  debounceDelay?: number
+  debounceTickRate?: number
   onInvalidate?: ((id: string) => void) | undefined
 }
 
 export declare function collapseSourcemaps(sourcemapChain: Array<BindingSourcemap>): BindingJsonSourcemap
 
-/**
- * Transpile a JavaScript or TypeScript into a target ECMAScript version, asynchronously.
- *
- * Note: This function can be slower than `transformSync` due to the overhead of spawning a thread.
- *
- * @param filename The name of the file being transformed. If this is a
- * relative path, consider setting the {@link TransformOptions#cwd} option.
- * @param sourceText The source code to transform.
- * @param options The transform options including tsconfig and inputMap. See {@link
- * BindingEnhancedTransformOptions} for more information.
- * @param cache Optional tsconfig cache for reusing resolved tsconfig across multiple transforms.
- * Only used when tsconfig auto-discovery is enabled.
- *
- * @returns a promise that resolves to an object containing the transformed code,
- * source maps, and any errors that occurred during parsing or transformation.
- *
- * @experimental
- */
-export declare function enhancedTransform(filename: string, sourceText: string, options?: BindingEnhancedTransformOptions | undefined | null, cache?: TsconfigCache | undefined | null): Promise<BindingEnhancedTransformResult>
+export declare function enhancedTransform(filename: string, sourceText: string, options: BindingEnhancedTransformOptions | undefined | null, cache: TsconfigCache | undefined | null, yarnPnp: boolean): Promise<BindingEnhancedTransformResult>
 
-/**
- * Transpile a JavaScript or TypeScript into a target ECMAScript version.
- *
- * @param filename The name of the file being transformed. If this is a
- * relative path, consider setting the {@link TransformOptions#cwd} option.
- * @param sourceText The source code to transform.
- * @param options The transform options including tsconfig and inputMap. See {@link
- * BindingEnhancedTransformOptions} for more information.
- * @param cache Optional tsconfig cache for reusing resolved tsconfig across multiple transforms.
- * Only used when tsconfig auto-discovery is enabled.
- *
- * @returns an object containing the transformed code, source maps, and any errors
- * that occurred during parsing or transformation.
- *
- * @experimental
- */
-export declare function enhancedTransformSync(filename: string, sourceText: string, options?: BindingEnhancedTransformOptions | undefined | null, cache?: TsconfigCache | undefined | null): BindingEnhancedTransformResult
+export declare function enhancedTransformSync(filename: string, sourceText: string, options: BindingEnhancedTransformOptions | undefined | null, cache: TsconfigCache | undefined | null, yarnPnp: boolean): BindingEnhancedTransformResult
 
 export interface ExtensionAliasItem {
   target: string
@@ -2926,8 +2913,7 @@ export interface PreRenderedChunk {
 
 export declare function registerPlugins(id: number, plugins: Array<BindingPluginWithIndex>): void
 
-/** @hidden This is only expected to be used by Vite */
-export declare function resolveTsconfig(filename: string, cache?: TsconfigCache | undefined | null): BindingTsconfigResult | null
+export declare function resolveTsconfig(filename: string, cache: TsconfigCache | undefined | null, yarnPnp: boolean): BindingTsconfigResult | null
 
 /**
  * Shutdown the tokio runtime manually.

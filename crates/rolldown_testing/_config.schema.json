@@ -22,6 +22,14 @@
       "type": "boolean",
       "default": false
     },
+    "expectWarning": {
+      "description": "If `true`, the fixture are expected to produce warnings. If `false`, the fixture are expected\nto produce no warnings. If not set, no assertion is made on warnings.",
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "default": null
+    },
     "_comment": {
       "description": "A workaround for writing comments in JSON.",
       "type": "string",
@@ -300,6 +308,12 @@
           ]
         },
         "sourcemapDebugIds": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "sourcemapExcludeSources": {
           "type": [
             "boolean",
             "null"
@@ -1479,6 +1493,25 @@
         "compareContentsForPolling": {
           "type": "boolean"
         },
+        "useDebounce": {
+          "type": "boolean"
+        },
+        "debounceDelay": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "debounceTickRate": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
         "include": {
           "type": [
             "array",
@@ -1502,7 +1535,8 @@
       "required": [
         "skipWrite",
         "usePolling",
-        "compareContentsForPolling"
+        "compareContentsForPolling",
+        "useDebounce"
       ]
     },
     "LegalComments": {
@@ -1863,6 +1897,16 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "comments": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CommentsOptions"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "chunkOptimization": {

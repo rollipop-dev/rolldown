@@ -25,7 +25,7 @@ concurrency:
 jobs:
   update-rollup:
     name: Update Rollup Submodule
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-linux-x64-default
     permissions:
       contents: write # for create-pull-request
       pull-requests: write # for create-pull-request
@@ -96,13 +96,16 @@ jobs:
 
       - name: Setup Rust
         if: steps.check-update.outputs.update_needed == 'true'
-        uses: oxc-project/setup-rust@c8224157c0bf235aabc633e8cd50d344f087a7de # v1.0.12
+        uses: oxc-project/setup-rust@23f38cfb0c04af97a055f76acee94d5be71c7c82 # v1.0.16
         with:
           tools: just
-          cache-key: debug-build
+          cache-key: native-build
+          save-cache: false
 
       - if: steps.check-update.outputs.update_needed == 'true'
-        uses: oxc-project/setup-node@8958a8e040102244b619c4a94fccb657a44b1c21 # v1.0.6
+        uses: voidzero-dev/setup-vp@e1609b468742ba9232ce5e12b3a77bdf14495277 # v1.1.0
+        with:
+          cache: true
 
       - if: steps.check-update.outputs.update_needed == 'true'
         name: Build Native Rolldown
@@ -111,8 +114,8 @@ jobs:
       - name: Update rollup snapshots
         if: steps.check-update.outputs.update_needed == 'true'
         run: |
-          pnpm install
-          pnpm run --filter rollup-tests test --update
+          vp install
+          vp run --filter rollup-tests test --update
 
       - name: Create Pull Request
         if: steps.check-update.outputs.update_needed == 'true'
@@ -141,7 +144,7 @@ jobs:
 
   update-test262:
     name: Update Test262 Submodule
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-linux-x64-default
     permissions:
       contents: write # for create-pull-request
       pull-requests: write # for create-pull-request
@@ -206,13 +209,16 @@ jobs:
 
       - name: Setup Rust
         if: steps.check-update.outputs.update_needed == 'true'
-        uses: oxc-project/setup-rust@c8224157c0bf235aabc633e8cd50d344f087a7de # v1.0.12
+        uses: oxc-project/setup-rust@23f38cfb0c04af97a055f76acee94d5be71c7c82 # v1.0.16
         with:
           tools: just
-          cache-key: debug-build
+          cache-key: native-build
+          save-cache: false
 
       - if: steps.check-update.outputs.update_needed == 'true'
-        uses: oxc-project/setup-node@8958a8e040102244b619c4a94fccb657a44b1c21 # v1.0.6
+        uses: voidzero-dev/setup-vp@e1609b468742ba9232ce5e12b3a77bdf14495277 # v1.1.0
+        with:
+          cache: true
 
       - name: Run Test
         if: steps.check-update.outputs.update_needed == 'true'
@@ -248,7 +254,7 @@ jobs:
 
   update-esbuild:
     name: Update esbuild Version
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-linux-x64-default
     permissions:
       contents: write # for create-pull-request
       pull-requests: write # for create-pull-request
@@ -315,19 +321,22 @@ jobs:
 
       - name: Setup Rust
         if: steps.check-update.outputs.update_needed == 'true'
-        uses: oxc-project/setup-rust@c8224157c0bf235aabc633e8cd50d344f087a7de # v1.0.12
+        uses: oxc-project/setup-rust@23f38cfb0c04af97a055f76acee94d5be71c7c82 # v1.0.16
         with:
           tools: just
-          cache-key: debug-build
+          cache-key: native-build
+          save-cache: false
 
       - if: steps.check-update.outputs.update_needed == 'true'
-        uses: oxc-project/setup-node@8958a8e040102244b619c4a94fccb657a44b1c21 # v1.0.6
+        uses: voidzero-dev/setup-vp@e1609b468742ba9232ce5e12b3a77bdf14495277 # v1.1.0
+        with:
+          cache: true
 
       - name: Generate esbuild tests
         if: steps.check-update.outputs.update_needed == 'true'
         run: |
-          pnpm install
-          pnpm run --filter scripts gen-esbuild-tests all
+          vp install
+          vp run --filter scripts gen-esbuild-tests all
 
       - name: Create Pull Request
         if: steps.check-update.outputs.update_needed == 'true'

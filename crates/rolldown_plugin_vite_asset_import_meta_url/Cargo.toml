@@ -8,11 +8,6 @@ publish = false
 repository.workspace = true
 description = "Rolldown plugin for import.meta.url asset handling"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[lib]
-doctest = false
-
 [lints]
 workspace = true
 
@@ -27,3 +22,6 @@ rolldown_plugin_utils = { workspace = true }
 rolldown_utils = { workspace = true }
 string_wizard = { workspace = true }
 sugar_path = { workspace = true }
+
+[lib]
+doctest = false

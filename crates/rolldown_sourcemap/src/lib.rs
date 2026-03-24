@@ -4,7 +4,6 @@ mod source_joiner;
 use std::sync::Arc;
 
 use oxc_sourcemap::Token;
-use rustc_hash::FxHashMap;
 
 pub use oxc_sourcemap::{JSONSourceMap, SourceMap, SourceMapBuilder, SourcemapVisualizer};
 pub use source_joiner::SourceJoiner;
@@ -45,10 +44,7 @@ pub fn adjust_sourcemap_dst_lines(sourcemap: SourceMap, lines: u32) -> SourceMap
   )
 }
 
-use rolldown_utils::rustc_hash::FxHashMapExt;
-
 // <https://github.com/rollup/rollup/blob/master/src/utils/collapseSourcemaps.ts>
-#[expect(clippy::cast_possible_truncation)]
 pub fn collapse_sourcemaps(sourcemap_chain: &[&SourceMap]) -> SourceMap {
   debug_assert!(sourcemap_chain.len() > 1);
   if sourcemap_chain.len() == 1 {
@@ -60,61 +56,44 @@ pub fn collapse_sourcemaps(sourcemap_chain: &[&SourceMap]) -> SourceMap {
   let first_map = sourcemap_chain.first().expect("sourcemap_chain should not be empty");
   let chain_without_last = &sourcemap_chain[..sourcemap_chain.len() - 1];
 
-  let sourcemap_and_lookup_table = chain_without_last
+  // Pre-compute lookup tables in reverse order so we avoid reversing on every token lookup.
+  let sourcemap_and_lookup_table: Vec<_> = chain_without_last
     .iter()
-    .map(|sourcemap| (sourcemap, sourcemap.generate_lookup_table()))
-    .collect::<Vec<_>>();
+    .rev()
+    .map(|sourcemap| (*sourcemap, sourcemap.generate_lookup_table()))
+    .collect();
 
-  let source_view_tokens = last_map.get_source_view_tokens();
-
-  let sources_map = first_map
-    .get_sources()
-    .enumerate()
-    .map(|(i, source)| (source, i as u32))
-    .collect::<FxHashMap<_, _>>();
-
-  // Avoid hashing the source text for every token.
-  let mut sources_cache = FxHashMap::with_capacity(sources_map.len());
-
-  let tokens = source_view_tokens
+  let tokens: Box<[Token]> = last_map
+    .get_source_view_tokens()
     .filter_map(|token| {
-      let original_token = sourcemap_and_lookup_table.iter().rev().try_fold(
-        token,
-        |token, (sourcemap, lookup_table)| {
+      let original_token =
+        sourcemap_and_lookup_table.iter().try_fold(token, |token, (sourcemap, lookup_table)| {
           sourcemap.lookup_source_view_token(
             lookup_table,
             token.get_src_line(),
             token.get_src_col(),
           )
-        },
-      );
+        });
       original_token.map(|original_token| {
         Token::new(
           token.get_dst_line(),
           token.get_dst_col(),
           original_token.get_src_line(),
           original_token.get_src_col(),
-          original_token.get_source_id().and_then(|source_id| {
-            sources_cache
-              .entry(source_id)
-              .or_insert_with(|| {
-                first_map.get_source(source_id).and_then(|source| sources_map.get(source))
-              })
-              .copied()
-          }),
+          original_token.get_source_id(),
           original_token.get_name_id(),
         )
       })
     })
-    .collect::<Vec<_>>();
+    .collect();
 
   SourceMap::new(
     None,
-    first_map.get_names().map(Arc::clone).collect::<Vec<_>>(),
+    first_map.get_names().cloned().collect(),
     None,
-    first_map.get_sources().map(Arc::clone).collect::<Vec<_>>(),
-    first_map.get_source_contents().map(|x| x.map(Arc::clone)).collect::<Vec<_>>(),
-    tokens.into_boxed_slice(),
+    first_map.get_sources().cloned().collect(),
+    first_map.get_source_contents().map(|x| x.map(Arc::clone)).collect(),
+    tokens,
     None,
   )
 }

@@ -24,11 +24,13 @@ use crate::{
 #[derive(Debug, Default)]
 pub struct MagicStringOptions {
   pub filename: Option<String>,
+  pub ignore_list: bool,
 }
 
 #[derive(Debug, Clone)]
 pub struct MagicString<'s> {
   filename: Option<String>,
+  ignore_list: bool,
   intro: VecDeque<CowStr<'s>>,
   outro: VecDeque<CowStr<'s>>,
   source: Cow<'s, str>,
@@ -74,6 +76,7 @@ impl<'text> MagicString<'text> {
       chunk_by_start: Default::default(),
       chunk_by_end: Default::default(),
       filename: options.filename,
+      ignore_list: options.ignore_list,
       guessed_indentor: OnceLock::default(),
       last_searched_chunk_idx: initial_chunk_idx,
     };
@@ -92,12 +95,21 @@ impl<'text> MagicString<'text> {
     self.filename.as_deref()
   }
 
-  pub fn len(&self) -> usize {
-    self.fragments().map(|f| f.len()).sum()
+  pub fn ignore_list(&self) -> bool {
+    self.ignore_list
   }
 
+  /// Returns the length of the content within chunks (intro + content + outro per chunk),
+  /// excluding the global intro/outro from `prepend`/`append`.
+  /// This aligns with the reference `magic-string` behavior.
+  pub fn len(&self) -> usize {
+    self.iter_chunks().flat_map(|c| c.fragments(&self.source)).map(|f| f.len()).sum()
+  }
+
+  /// Returns `true` if all chunk content (intro + content + outro) is whitespace or empty.
+  /// This aligns with the reference `magic-string` behavior where `isEmpty()` uses `.trim()`.
   pub fn is_empty(&self) -> bool {
-    self.len() == 0
+    self.iter_chunks().flat_map(|c| c.fragments(&self.source)).all(|f| f.trim().is_empty())
   }
 
   /// Indicates if the string has been changed.
@@ -223,11 +235,11 @@ impl<'text> MagicString<'text> {
     self.outro.push_back(content.into());
   }
 
-  fn prepend_outro(&mut self, content: impl Into<CowStr<'text>>) {
+  pub fn prepend_outro(&mut self, content: impl Into<CowStr<'text>>) {
     self.outro.push_front(content.into());
   }
 
-  fn append_intro(&mut self, content: impl Into<CowStr<'text>>) {
+  pub fn append_intro(&mut self, content: impl Into<CowStr<'text>>) {
     self.intro.push_back(content.into());
   }
 
@@ -327,7 +339,7 @@ impl<'text> MagicString<'text> {
 #[expect(clippy::to_string_trait_impl)] // `impl Display` causes extra allocation
 impl ToString for MagicString<'_> {
   fn to_string(&self) -> String {
-    let size_hint = self.len();
+    let size_hint = self.fragments().map(|f| f.len()).sum();
     let mut ret = String::with_capacity(size_hint);
     self.fragments().for_each(|f| ret.push_str(f));
     ret
