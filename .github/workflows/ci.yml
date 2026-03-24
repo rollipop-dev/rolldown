@@ -82,7 +82,7 @@ jobs:
         with:
           tools: just
           cache-key: lint
-          save-cache: ${{ github.ref_name == 'main' }}
+          save-cache: ${{ github.ref_name == 'rollipop' }}
           components: clippy rustfmt
 
       - run: just lint-rust
@@ -91,7 +91,7 @@ jobs:
     needs: changes
     strategy:
       matrix:
-        target: ${{ github.ref_name == 'main' && fromJSON('["ubuntu-latest","macos-latest","windows-latest"]') || fromJSON('["ubuntu-latest"]') }}
+        target: ${{ github.ref_name == 'rollipop' && fromJSON('["ubuntu-latest","macos-latest","windows-latest"]') || fromJSON('["ubuntu-latest"]') }}
     uses: ./.github/workflows/reusable-cargo-test.yml
     with:
       os: ${{ matrix.target }}
@@ -101,7 +101,7 @@ jobs:
     needs: [changes, build-rolldown-windows]
     uses: ./.github/workflows/reusable-node-test.yml
     if: |
-      github.ref_name == 'main' &&
+      github.ref_name == 'rollipop' &&
       always() &&
       (needs.build-rolldown-windows.result == 'success' || needs.build-rolldown-windows.result == 'skipped')
     with:
@@ -113,7 +113,7 @@ jobs:
     needs: [changes, build-rolldown-macos]
     uses: ./.github/workflows/reusable-node-test.yml
     if: |
-      github.ref_name == 'main' &&
+      github.ref_name == 'rollipop' &&
       always() &&
       (needs.build-rolldown-macos.result == 'success' || needs.build-rolldown-macos.result == 'skipped')
     with:
@@ -144,7 +144,7 @@ jobs:
     needs: [changes, build-rolldown-windows]
     uses: ./.github/workflows/reusable-node-dev-server-test.yml
     if: |
-      github.ref_name == 'main' &&
+      github.ref_name == 'rollipop' &&
       always() &&
       (needs.build-rolldown-windows.result == 'success' || needs.build-rolldown-windows.result == 'skipped')
     with:
@@ -156,7 +156,7 @@ jobs:
     needs: [changes, build-rolldown-macos]
     uses: ./.github/workflows/reusable-node-dev-server-test.yml
     if: |
-      github.ref_name == 'main' &&
+      github.ref_name == 'rollipop' &&
       always() &&
       (needs.build-rolldown-macos.result == 'success' || needs.build-rolldown-macos.result == 'skipped')
     with:
@@ -185,7 +185,7 @@ jobs:
 
   build-rolldown-windows:
     needs: changes
-    if: github.ref_name == 'main'
+    if: github.ref_name == 'rollipop'
     uses: ./.github/workflows/reusable-native-build.yml
     with:
       changed: ${{ needs.changes.outputs.node-changes == 'true' }}
@@ -193,7 +193,7 @@ jobs:
 
   build-rolldown-macos:
     needs: changes
-    if: github.ref_name == 'main'
+    if: github.ref_name == 'rollipop'
     uses: ./.github/workflows/reusable-native-build.yml
     with:
       changed: ${{ needs.changes.outputs.node-changes == 'true' }}
@@ -289,7 +289,7 @@ jobs:
         uses: oxc-project/setup-rust@23f38cfb0c04af97a055f76acee94d5be71c7c82 # v1.0.16
         with:
           cache-key: repo-validation
-          save-cache: ${{ github.ref_name == 'main' }}
+          save-cache: ${{ github.ref_name == 'rollipop' }}
           components: rustfmt
 
       - uses: voidzero-dev/setup-vp@e1609b468742ba9232ce5e12b3a77bdf14495277 # v1.1.0
