@@ -10,6 +10,7 @@ description = "Rolldown plugin for React Native (Flow parsing + transforms + SWC
 
 [lib]
 doctest = false
+test = false
 
 [lints]
 workspace = true
@@ -21,7 +22,6 @@ serde_json = { workspace = true }
 rolldown_common = { workspace = true }
 rolldown_plugin = { workspace = true }
 rolldown_sourcemap = { workspace = true }
-swc_atoms = "9.0.0"
 swc_common = { version = "21.0.1", features = ["concurrent", "sourcemap"] }
 swc_ecma_ast = "23.0.0"
 swc_ecma_parser = { version = "39.0.1", features = ["flow"] }

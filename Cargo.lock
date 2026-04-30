@@ -4617,7 +4617,6 @@ dependencies = [
  "rolldown_plugin",
  "rolldown_sourcemap",
  "serde_json",
- "swc_atoms",
  "swc_common 21.0.1",
  "swc_ecma_ast 23.0.0",
  "swc_ecma_codegen 26.0.1",
