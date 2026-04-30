@@ -60,7 +60,7 @@ impl RollipopReactRefreshWrapperPlugin {
   fn add_refresh_wrapper(&self, code: &str, id: &str) -> Option<(String, SourceMap)> {
     let has_refresh = memchr::memmem::find(code.as_bytes(), b"$RefreshReg$(").is_some();
 
-    if !(has_refresh && REACT_COMP_RE.is_match(code)) {
+    if !(has_refresh || REACT_COMP_RE.is_match(code)) {
       return None;
     }
 
