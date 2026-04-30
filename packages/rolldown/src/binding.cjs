@@ -633,6 +633,7 @@ module.exports.BindingPluginOrder = nativeBinding.BindingPluginOrder
 module.exports.BindingPropertyReadSideEffects = nativeBinding.BindingPropertyReadSideEffects
 module.exports.BindingPropertyWriteSideEffects = nativeBinding.BindingPropertyWriteSideEffects
 module.exports.BindingRebuildStrategy = nativeBinding.BindingRebuildStrategy
+module.exports.BindingRollipopReactNativeRuntimeTarget = nativeBinding.BindingRollipopReactNativeRuntimeTarget
 module.exports.collapseSourcemaps = nativeBinding.collapseSourcemaps
 module.exports.enhancedTransform = nativeBinding.enhancedTransform
 module.exports.enhancedTransformSync = nativeBinding.enhancedTransformSync

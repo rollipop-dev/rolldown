@@ -147,6 +147,7 @@ string_wizard = { version = "0.0.27", path = "crates/string_wizard", features = 
 # Rolldown built-in plugins
 rolldown_plugin_rollipop_react_refresh_wrapper = { version = "0.1.0", path = "crates/rolldown_plugin_rollipop_react_refresh_wrapper" }
 rolldown_plugin_rollipop_worklets = { version = "0.1.0", path = "crates/rolldown_plugin_rollipop_worklets" }
+rolldown_plugin_rollipop_react_native = { version = "0.1.0", path = "crates/rolldown_plugin_rollipop_react_native" }
 
 #
 anyhow = "1.0.98"

@@ -60,6 +60,12 @@ export {
   rollipopWorkletsPlugin,
   type RollipopWorkletsPluginConfig,
 } from './builtin-plugin/rollipop-worklets-plugin';
+export {
+  rollipopReactNativePlugin,
+  type RollipopReactNativePluginConfig,
+  type RollipopReactNativeWorkletsConfig,
+  type RollipopReactNativeRuntimeTarget,
+} from './builtin-plugin/rollipop-react-native-plugin';
 
 // `__volume` and `__fs` only exist in `rolldown-binding.wasi-browser.js`, so we need to use namespace import to prevent static import error.
 import * as binding from './binding.cjs';

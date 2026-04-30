@@ -23,13 +23,15 @@ use rolldown_plugin_vite_wasm_fallback::ViteWasmFallbackPlugin;
 use rolldown_plugin_vite_web_worker_post::ViteWebWorkerPostPlugin;
 
 // Rollipop built-in plugins
+use rolldown_plugin_rollipop_react_native::{RollipopReactNativePlugin, RuntimeTarget};
 use rolldown_plugin_rollipop_react_refresh_wrapper::RollipopReactRefreshWrapperPlugin;
 use rolldown_plugin_rollipop_worklets::RollipopWorkletsPlugin;
 
 use crate::options::plugin::config::{
   BindingBundleAnalyzerPluginConfig, BindingEsmExternalRequirePluginConfig,
-  BindingRollipopReactRefreshWrapperPluginConfig, BindingRollipopWorkletsPluginConfig,
-  BindingViteModulePreloadPolyfillPluginConfig, BindingViteReactRefreshWrapperPluginConfig,
+  BindingRollipopReactNativePluginConfig, BindingRollipopReactRefreshWrapperPluginConfig,
+  BindingRollipopWorkletsPluginConfig, BindingViteModulePreloadPolyfillPluginConfig,
+  BindingViteReactRefreshWrapperPluginConfig,
 };
 
 use super::{
@@ -224,6 +226,17 @@ impl TryFrom<BindingBuiltinPlugin<'_>> for Arc<dyn Pluginable> {
             napi::Status::InvalidArg,
             "Missing options for RollipopWorkletsPlugin",
           ));
+        };
+        Arc::new(plugin)
+      }
+      BindingBuiltinPluginName::RollipopReactNative => {
+        let plugin: RollipopReactNativePlugin = if let Some(options) = plugin.options {
+          BindingRollipopReactNativePluginConfig::from_unknown(options)?.try_into().map_err(
+            |e: anyhow::Error| napi::Error::new(napi::Status::GenericFailure, e.to_string()),
+          )?
+        } else {
+          RollipopReactNativePlugin::new(Vec::new(), None, RuntimeTarget::default(), None)
+            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))?
         };
         Arc::new(plugin)
       }

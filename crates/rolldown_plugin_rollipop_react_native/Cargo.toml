@@ -1,0 +1,42 @@
+[package]
+name = "rolldown_plugin_rollipop_react_native"
+version = "0.1.0"
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+publish = false
+repository.workspace = true
+description = "Rolldown plugin for React Native (Flow parsing + transforms + SWC wasm plugins)"
+
+[lib]
+doctest = false
+test = false
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+memchr = { workspace = true }
+serde_json = { workspace = true }
+rolldown_common = { workspace = true }
+rolldown_plugin = { workspace = true }
+rolldown_sourcemap = { workspace = true }
+swc_common = { version = "21.0.1", features = ["concurrent", "sourcemap"] }
+swc_ecma_ast = "23.0.0"
+swc_ecma_parser = { version = "39.0.1", features = ["flow"] }
+swc_ecma_codegen = "26.0.1"
+swc_ecma_transforms_base = "42.0.0"
+swc_ecma_transforms_typescript = { version = "46.0.1", features = ["concurrent"] }
+swc_ecma_compat_es2015 = "46.0.0"
+swc_ecma_compat_es2017 = "43.0.0"
+swc_ecma_compat_es2022 = "45.0.0"
+swc_ecma_visit = "23.0.0"
+swc_plugin_runner = { version = "27.0.0", features = [
+  "ecma",
+  "encoding-impl",
+  "plugin_transform_schema_v1",
+] }
+swc_plugin_backend_wasmer = "10.0.0"
+swc_plugin_proxy = { version = "23.0.0", features = ["plugin-rt"] }
+swc_react_native = { version = "0.1.0", features = ["codegen", "worklets"] }

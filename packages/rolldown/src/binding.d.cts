@@ -1811,7 +1811,8 @@ export type BindingBuiltinPluginName =  'builtin:bundle-analyzer'|
 'builtin:vite-web-worker-post'|
 'builtin:oxc-runtime'|
 'builtin:rollipop-react-refresh-wrapper'|
-'builtin:rollipop-worklets';
+'builtin:rollipop-worklets'|
+'builtin:rollipop-react-native';
 
 export interface BindingBundleAnalyzerPluginConfig {
   /** Output filename for the bundle analysis data (default: "analyze-data.json") */
@@ -2576,6 +2577,71 @@ export interface BindingResolveOptions {
   modules?: Array<string>
   symlinks?: boolean
   yarnPnp?: boolean
+}
+
+export interface BindingRollipopReactNativePluginConfig {
+  plugins?: Array<BindingRollipopReactNativeSwcPlugin>
+  /**
+   * The name of the `env` to use when loading configs and plugins. Defaults
+   * to the value of `SWC_ENV`, or else `NODE_ENV`, or else `"development"`.
+   */
+  envName?: string
+  /**
+   * Selects the compat-pass preset. Defaults to `"HermesV1"` when omitted.
+   * `"Hermes"` adds `transform-classes` and `transform-async-to-generator`
+   * on top of the V1 baseline for older Hermes / JSC fallbacks.
+   */
+  runtimeTarget?: BindingRollipopReactNativeRuntimeTarget
+  /**
+   * `react-native-worklets` transform configuration. Visitor is skipped
+   * entirely when omitted.
+   */
+  worklets?: BindingRollipopReactNativeWorkletsConfig
+}
+
+export type BindingRollipopReactNativeRuntimeTarget =  'Hermes'|
+'HermesV1';
+
+export interface BindingRollipopReactNativeSwcPlugin {
+  path: string
+  /** JSON-serialized plugin config */
+  config: string
+}
+
+/**
+ * Mirrors `WorkletsOptions` from `swc_react_native::worklets::options`,
+ * minus the rolldown-managed fields (`filename`, `cwd`).
+ */
+export interface BindingRollipopReactNativeWorkletsConfig {
+  /** Identifiers treated as globals — never captured into worklet closures. */
+  globals?: Array<string>
+  /** When `true`, only the names listed in `globals` are considered safe. */
+  strictGlobal?: boolean
+  /**
+   * Omit native-only data (`init_data`) from the output. Useful for web
+   * builds.
+   */
+  omitNativeOnlyData?: boolean
+  /** Disable source map generation for worklets. */
+  disableSourceMaps?: boolean
+  /** Use paths relative to `cwd` for source locations. */
+  relativeSourceLocation?: boolean
+  /** Disable Worklet Classes support. */
+  disableWorkletClasses?: boolean
+  /** Suppress the inline-shared-values warning. */
+  disableInlineStylesWarning?: boolean
+  /** Enable Bundle Mode. */
+  bundleMode?: boolean
+  /**
+   * Release builds skip debug info such as stack details, version, and
+   * location.
+   */
+  isRelease?: boolean
+  /**
+   * Version string emitted as `__pluginVersion`. Callers should supply the
+   * installed `react-native-worklets` package version.
+   */
+  pluginVersion?: string
 }
 
 export interface BindingRollipopReactRefreshWrapperPluginConfig {
