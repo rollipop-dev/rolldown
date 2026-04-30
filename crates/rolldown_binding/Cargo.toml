@@ -97,4 +97,9 @@ mimalloc-safe = { workspace = true, features = [
 napi-build = { workspace = true }
 
 [features]
+default = ["wasm_plugins"]
 default_global_allocator = []
+# Propagates to `rolldown_plugin_rollipop_react_native`. Disable with
+# `--no-default-features` on targets where wasmer cannot compile (e.g.
+# `aarch64-pc-windows-msvc`).
+wasm_plugins = ["rolldown_plugin_rollipop_react_native/wasm_plugins"]

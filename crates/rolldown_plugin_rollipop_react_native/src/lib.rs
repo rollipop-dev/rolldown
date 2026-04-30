@@ -7,12 +7,10 @@ use std::sync::Arc;
 
 use rolldown_sourcemap::SourceMap;
 use swc_common::comments::SingleThreadedComments;
-use swc_common::plugin::metadata::TransformPluginMetadataContext;
-use swc_common::plugin::serialized::{PluginSerializedBytes, VersionedSerializable};
 use swc_common::source_map::SourceMapGenConfig;
 use swc_common::sync::Lrc;
 use swc_common::{FileName, GLOBALS, Globals, Mark};
-use swc_ecma_ast::{EsVersion, Module, Pass, Program};
+use swc_ecma_ast::{EsVersion, Pass, Program};
 use swc_ecma_codegen::text_writer::JsWriter;
 use swc_ecma_codegen::{Emitter, Node};
 use swc_ecma_compat_es2015::{block_scoping, classes};
@@ -27,9 +25,18 @@ use swc_ecma_transforms_base::helpers::{self, Helpers, inject_helpers};
 use swc_ecma_transforms_base::resolver;
 use swc_ecma_transforms_typescript::{Config as TsStripConfig, typescript};
 use swc_ecma_visit::VisitMutWith;
-use swc_plugin_runner::create_plugin_transform_executor;
-use swc_plugin_runner::plugin_module_bytes::{CompiledPluginModuleBytes, RawPluginModuleBytes};
 use swc_react_native::{CodegenOptions, CodegenVisitor, WorkletsOptions, WorkletsVisitor};
+
+#[cfg(feature = "wasm_plugins")]
+use swc_common::plugin::metadata::TransformPluginMetadataContext;
+#[cfg(feature = "wasm_plugins")]
+use swc_common::plugin::serialized::{PluginSerializedBytes, VersionedSerializable};
+#[cfg(feature = "wasm_plugins")]
+use swc_ecma_ast::Module;
+#[cfg(feature = "wasm_plugins")]
+use swc_plugin_runner::create_plugin_transform_executor;
+#[cfg(feature = "wasm_plugins")]
+use swc_plugin_runner::plugin_module_bytes::{CompiledPluginModuleBytes, RawPluginModuleBytes};
 
 use rolldown_common::ModuleType;
 use rolldown_plugin::{
@@ -40,6 +47,10 @@ use rolldown_plugin::{
 use crate::visitors::RemoveFlowTypeOnlyFields;
 
 /// SWC wasm plugin entry — path on disk plus the JSON config to pass to it.
+///
+/// Builds without the `wasm_plugins` feature still expose this type for API
+/// stability, but constructing a [`RollipopReactNativePlugin`] with a
+/// non-empty plugins vec will return an error.
 #[derive(Debug)]
 pub struct SwcWasmPlugin {
   pub path: String,
@@ -63,6 +74,7 @@ pub struct WorkletsConfig {
   pub options: WorkletsOptions,
 }
 
+#[cfg(feature = "wasm_plugins")]
 struct PreloadedSwcPlugin {
   compiled: CompiledPluginModuleBytes,
   config: Arc<serde_json::Value>,
@@ -70,9 +82,11 @@ struct PreloadedSwcPlugin {
 
 pub struct RollipopReactNativePlugin {
   runtime_target: RuntimeTarget,
-  runtime: Arc<dyn swc_plugin_runner::runtime::Runtime>,
   env_name: String,
   worklets: Option<WorkletsConfig>,
+  #[cfg(feature = "wasm_plugins")]
+  runtime: Arc<dyn swc_plugin_runner::runtime::Runtime>,
+  #[cfg(feature = "wasm_plugins")]
   plugins: Vec<PreloadedSwcPlugin>,
 }
 
@@ -91,27 +105,41 @@ impl RollipopReactNativePlugin {
     runtime_target: RuntimeTarget,
     worklets: Option<WorkletsConfig>,
   ) -> Result<Self, anyhow::Error> {
-    let runtime: Arc<dyn swc_plugin_runner::runtime::Runtime> =
-      Arc::new(swc_plugin_backend_wasmer::WasmerRuntime);
+    #[cfg(not(feature = "wasm_plugins"))]
+    {
+      if !plugins.is_empty() {
+        return Err(anyhow::anyhow!(
+          "SWC wasm plugins are not supported in this build (the `wasm_plugins` feature is disabled — typically the `aarch64-pc-windows-msvc` target)",
+        ));
+      }
+      drop(plugins);
+      Ok(Self { runtime_target, env_name: env_name.unwrap_or_else(default_env_name), worklets })
+    }
 
-    let preloaded = plugins
-      .into_iter()
-      .map(|p| {
-        let wasm_bytes = std::fs::read(&p.path)
-          .map_err(|e| anyhow::anyhow!("Failed to read wasm plugin '{}': {e}", p.path))?;
-        let raw = RawPluginModuleBytes::new(p.path, wasm_bytes);
-        let compiled = CompiledPluginModuleBytes::from_raw_module(&*runtime, raw);
-        Ok(PreloadedSwcPlugin { compiled, config: Arc::new(p.config) })
+    #[cfg(feature = "wasm_plugins")]
+    {
+      let runtime: Arc<dyn swc_plugin_runner::runtime::Runtime> =
+        Arc::new(swc_plugin_backend_wasmer::WasmerRuntime);
+
+      let preloaded = plugins
+        .into_iter()
+        .map(|p| {
+          let wasm_bytes = std::fs::read(&p.path)
+            .map_err(|e| anyhow::anyhow!("Failed to read wasm plugin '{}': {e}", p.path))?;
+          let raw = RawPluginModuleBytes::new(p.path, wasm_bytes);
+          let compiled = CompiledPluginModuleBytes::from_raw_module(&*runtime, raw);
+          Ok(PreloadedSwcPlugin { compiled, config: Arc::new(p.config) })
+        })
+        .collect::<Result<Vec<_>, anyhow::Error>>()?;
+
+      Ok(Self {
+        plugins: preloaded,
+        runtime,
+        env_name: env_name.unwrap_or_else(default_env_name),
+        runtime_target,
+        worklets,
       })
-      .collect::<Result<Vec<_>, anyhow::Error>>()?;
-
-    Ok(Self {
-      plugins: preloaded,
-      runtime,
-      env_name: env_name.unwrap_or_else(default_env_name),
-      runtime_target,
-      worklets,
-    })
+    }
   }
 
   fn has_flow_directive(code: &str) -> bool {
@@ -153,6 +181,7 @@ impl RollipopReactNativePlugin {
       .any(|line| line.trim_start().trim_start_matches('*').trim_start().starts_with("@flow"))
   }
 
+  #[cfg(feature = "wasm_plugins")]
   fn run_wasm_plugins(
     &self,
     cm: &Lrc<swc_common::SourceMap>,
@@ -201,10 +230,10 @@ impl RollipopReactNativePlugin {
 
 impl fmt::Debug for RollipopReactNativePlugin {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    f.debug_struct("RollipopReactNativePlugin")
-      .field("plugins_count", &self.plugins.len())
-      .field("env_name", &self.env_name)
-      .finish_non_exhaustive()
+    let mut s = f.debug_struct("RollipopReactNativePlugin");
+    #[cfg(feature = "wasm_plugins")]
+    s.field("plugins_count", &self.plugins.len());
+    s.field("env_name", &self.env_name).finish_non_exhaustive()
   }
 }
 
@@ -268,6 +297,7 @@ impl Plugin for RollipopReactNativePlugin {
       let unresolved_mark = Mark::new();
       let top_level_mark = Mark::new();
 
+      #[cfg(feature = "wasm_plugins")]
       self.run_wasm_plugins(&cm, unresolved_mark, &comments, args.id, &mut program)?;
 
       resolver(unresolved_mark, top_level_mark, false).process(&mut program);
