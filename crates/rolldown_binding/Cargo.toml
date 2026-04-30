@@ -78,6 +78,7 @@ url = { workspace = true }
 # MARK: - Rollipop
 rolldown_plugin_rollipop_react_refresh_wrapper = { workspace = true }
 rolldown_plugin_rollipop_worklets = { workspace = true }
+rolldown_plugin_rollipop_react_native = { workspace = true }
 
 [target.'cfg(all(not(target_os = "linux"), not(target_os = "freebsd"), not(target_family = "wasm")))'.dependencies]
 mimalloc-safe = { workspace = true, features = ["skip_collect_on_exit"] }
