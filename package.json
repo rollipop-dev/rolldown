@@ -7,7 +7,7 @@
   "scripts": {
     "prepare": "vp config",
     "lint-knip": "knip",
-    "lint-publint": "pnpm run -r --aggregate-output publint",
+    "lint-publint": "pnpm run -r --aggregate-output --filter '!@rolldown/browser' publint",
     "build": "echo \"Use just build\"",
     "build:release": "echo \"Use just build native release\"",
     "test": "echo \"Use just test-node\"",

@@ -246,11 +246,15 @@ jobs:
           name: rolldown-native-ubuntu-latest
           path: ./packages
 
-      - name: Add WASI target
-        run: rustup target add wasm32-wasip1-threads
-
-      - name: Build @rolldown/browser
-        run: just build-browser
+      # Rollipop: skip browser build. `rolldown_plugin_rollipop_react_native`
+      # depends on `swc_plugin_backend_wasmer`, whose `wasmer` dep does not
+      # compile for `target_family = "wasm"` (it is itself a native wasm
+      # runtime). Browser distribution is out of scope for the rollipop fork.
+      # - name: Add WASI target
+      #   run: rustup target add wasm32-wasip1-threads
+      #
+      # - name: Build @rolldown/browser
+      #   run: just build-browser
 
       - name: Build @rolldown/debug
         run: just build-rolldown-debug
