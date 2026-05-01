@@ -243,6 +243,10 @@ impl SourceMapGenConfig for SourceMapConfig {
   fn file_name_to_source(&self, f: &FileName) -> String {
     f.to_string()
   }
+
+  fn inline_sources_content(&self, _f: &FileName) -> bool {
+    true
+  }
 }
 
 impl Plugin for RollipopReactNativePlugin {
