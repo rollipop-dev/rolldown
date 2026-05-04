@@ -2579,6 +2579,17 @@ export interface BindingResolveOptions {
   yarnPnp?: boolean
 }
 
+/** Mirrors `FlowConfig` from `rolldown_plugin_rollipop_react_native`. */
+export interface BindingRollipopReactNativeFlowConfig {
+  /**
+   * When `true`, only files containing `@flow` or `@noflow` directive
+   * comments are parsed as Flow (Babel `requireDirective: true`). When
+   * `false` (default), every JS module is parsed as Flow regardless of
+   * directive — matches Metro / Babel default behavior.
+   */
+  requireDirective?: boolean
+}
+
 export interface BindingRollipopReactNativePluginConfig {
   plugins?: Array<BindingRollipopReactNativeSwcPlugin>
   /**
@@ -2592,6 +2603,12 @@ export interface BindingRollipopReactNativePluginConfig {
    * on top of the V1 baseline for older Hermes / JSC fallbacks.
    */
   runtimeTarget?: BindingRollipopReactNativeRuntimeTarget
+  /**
+   * Flow handling configuration. Mirrors Babel's
+   * `@babel/plugin-transform-flow-strip-types` semantics. When omitted,
+   * every JS module is parsed as Flow (Metro / Babel default).
+   */
+  flow?: BindingRollipopReactNativeFlowConfig
   /**
    * `react-native-worklets` transform configuration. Visitor is skipped
    * entirely when omitted.

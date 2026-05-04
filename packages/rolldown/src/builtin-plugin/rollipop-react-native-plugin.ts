@@ -31,6 +31,18 @@ export interface RollipopReactNativeWorkletsConfig {
   pluginVersion?: string;
 }
 
+/**
+ * Flow handling configuration. Mirrors Babel's
+ * `@babel/plugin-transform-flow-strip-types` semantics.
+ */
+export interface RollipopReactNativeFlowConfig {
+  /**
+   * When `true`, only files containing `@flow` or `@noflow` directive comments are parsed as Flow (Babel `requireDirective: true`).
+   * When `false` (default), every JS module is parsed as Flow regardless of directive — matches Metro / Babel default behavior.
+   */
+  requireDirective?: boolean;
+}
+
 export interface RollipopReactNativePluginConfig {
   runtimeTarget?: RollipopReactNativeRuntimeTarget;
   /**
@@ -42,6 +54,8 @@ export interface RollipopReactNativePluginConfig {
   worklets?: RollipopReactNativeWorkletsConfig;
   /** SWC plugins to load. */
   plugins?: [string, Record<string, unknown>][];
+  /** Flow handling configuration. Defaults match Metro / Babel behavior. */
+  flow?: RollipopReactNativeFlowConfig;
 }
 
 export function rollipopReactNativePlugin(config?: RollipopReactNativePluginConfig): BuiltinPlugin {
@@ -52,6 +66,7 @@ export function rollipopReactNativePlugin(config?: RollipopReactNativePluginConf
   return new BuiltinPlugin('builtin:rollipop-react-native', {
     runtimeTarget: config?.runtimeTarget,
     envName: config?.envName,
+    flow: config?.flow,
     worklets: config?.worklets,
     plugins,
   });
