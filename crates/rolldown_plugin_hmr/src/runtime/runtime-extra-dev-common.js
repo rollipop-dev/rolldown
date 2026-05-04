@@ -94,7 +94,7 @@ export var DevRuntime = /*#__PURE__*/ function() {
       this.__reExport = __reExport;
       this.sendModuleRegisteredMessage = function() {
           var cache = /** @type {string[]} */ [];
-          var timeout = /** @type {NodeJS.Timeout | null} */ null;
+          var scheduled = /** @type {boolean} */ false;
           var timeoutSetLength = 0;
           var self = _this;
           /**
@@ -104,10 +104,11 @@ export var DevRuntime = /*#__PURE__*/ function() {
                   return;
               }
               cache.push(module);
-              if (!timeout) {
-                  timeout = setTimeout(/** @returns void */ function flushCache() {
+              if (!scheduled) {
+                timeoutSetLength = cache.length;
+                scheduled = __schedule(/** @returns void */ function flushCache() {
                       if (cache.length > timeoutSetLength) {
-                          timeout = setTimeout(flushCache);
+                        scheduled = __schedule(flushCache);
                           timeoutSetLength = cache.length;
                           return;
                       }
@@ -116,10 +117,9 @@ export var DevRuntime = /*#__PURE__*/ function() {
                           modules: cache
                       });
                       cache.length = 0;
-                      timeout = null;
+                      scheduled = false;
                       timeoutSetLength = 0;
                   });
-                  timeoutSetLength = cache.length;
               }
           };
       }();
@@ -172,3 +172,19 @@ export var DevRuntime = /*#__PURE__*/ function() {
   ]);
   return DevRuntime;
 }();
+/**
+* @param {() => void} callback
+*/ function __schedule(callback) {
+  var scheduled = true;
+  if (typeof setTimeout === 'function') {
+      setTimeout(callback, 0);
+  } else if (typeof queueMicrotask === 'function') {
+      queueMicrotask(callback);
+  } else if (typeof Promise !== 'undefined') {
+      Promise.resolve().then(callback);
+  } else {
+      callback();
+      scheduled = false;
+  }
+  return scheduled;
+}

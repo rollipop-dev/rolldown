@@ -120,7 +120,7 @@ export class DevRuntime {
 
   sendModuleRegisteredMessage = (() => {
     const cache = /** @type {string[]} */ ([]);
-    let timeout = /** @type {NodeJS.Timeout | null} */ (null);
+    let scheduled = /** @type {boolean} */ (false);
     let timeoutSetLength = 0;
     const self = this;
 
@@ -132,12 +132,13 @@ export class DevRuntime {
         return;
       }
       cache.push(module);
-      if (!timeout) {
-        timeout = setTimeout(
+      if (!scheduled) {
+        timeoutSetLength = cache.length;
+        scheduled = __schedule(
           /** @returns void */
           function flushCache() {
             if (cache.length > timeoutSetLength) {
-              timeout = setTimeout(flushCache);
+              scheduled = __schedule(flushCache);
               timeoutSetLength = cache.length;
               return;
             }
@@ -147,12 +148,29 @@ export class DevRuntime {
               modules: cache,
             });
             cache.length = 0;
-            timeout = null;
+            scheduled = false;
             timeoutSetLength = 0;
           },
         );
-        timeoutSetLength = cache.length;
       }
     };
   })();
+}
+
+/**
+ * @param {() => void} callback
+ */
+function __schedule(callback) {
+  let scheduled = true;
+  if (typeof setTimeout === 'function') {
+    setTimeout(callback, 0);
+  } else if (typeof queueMicrotask === 'function') {
+    queueMicrotask(callback);
+  } else if (typeof Promise !== 'undefined') {
+    Promise.resolve().then(callback);
+  } else {
+    callback();
+    scheduled = false;
+  }
+  return scheduled;
 }
