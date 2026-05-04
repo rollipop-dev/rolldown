@@ -138,8 +138,8 @@ export class DevRuntime {
           /** @returns void */
           function flushCache() {
             if (cache.length > timeoutSetLength) {
-              scheduled = __schedule(flushCache);
               timeoutSetLength = cache.length;
+              scheduled = __schedule(flushCache);
               return;
             }
 

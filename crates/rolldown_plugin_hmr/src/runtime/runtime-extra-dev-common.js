@@ -108,8 +108,8 @@ export var DevRuntime = /*#__PURE__*/ function() {
                 timeoutSetLength = cache.length;
                 scheduled = __schedule(/** @returns void */ function flushCache() {
                       if (cache.length > timeoutSetLength) {
-                        scheduled = __schedule(flushCache);
                           timeoutSetLength = cache.length;
+                          scheduled = __schedule(flushCache);
                           return;
                       }
                       self.messenger.send({
