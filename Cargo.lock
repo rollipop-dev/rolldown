@@ -4623,7 +4623,7 @@ dependencies = [
  "swc_ecma_compat_es2015 46.0.0",
  "swc_ecma_compat_es2017",
  "swc_ecma_compat_es2022 45.0.0",
- "swc_ecma_parser 39.0.1",
+ "swc_ecma_parser 39.0.2",
  "swc_ecma_transforms_base 42.0.0",
  "swc_ecma_transforms_typescript 46.0.1",
  "swc_ecma_visit 23.0.0",
@@ -6143,9 +6143,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_parser"
-version = "39.0.1"
+version = "39.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c94d9deb6d91ade011685df51fdbb345f33de17e0b70ea7b2028051a8b76da36"
+checksum = "8b13829b24cbdb2d7a08282bd968af8a258fd762c918df9a7b82291d44068bbc"
 dependencies = [
  "bitflags 2.11.0",
  "either",
@@ -6328,7 +6328,7 @@ dependencies = [
  "swc_atoms",
  "swc_common 21.0.1",
  "swc_ecma_ast 23.0.0",
- "swc_ecma_parser 39.0.1",
+ "swc_ecma_parser 39.0.2",
  "swc_ecma_utils 29.1.0",
  "swc_ecma_visit 23.0.0",
  "tracing",
@@ -6416,7 +6416,7 @@ dependencies = [
  "swc_config",
  "swc_ecma_ast 23.0.0",
  "swc_ecma_hooks 0.7.0",
- "swc_ecma_parser 39.0.1",
+ "swc_ecma_parser 39.0.2",
  "swc_ecma_transforms_base 42.0.0",
  "swc_ecma_utils 29.1.0",
  "swc_ecma_visit 23.0.0",
@@ -6602,9 +6602,9 @@ dependencies = [
 
 [[package]]
 name = "swc_react_native"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "517c5adfd3d9d0b14910502f17df19d3fdbf52c69d32cf059dfaf87616e2d49a"
+checksum = "630fe78b36741da229a34461a765ea71f60cfa03beacb770a701058a811eb50e"
 dependencies = [
  "swc_react_native_codegen",
  "swc_react_native_worklets",
@@ -6612,9 +6612,9 @@ dependencies = [
 
 [[package]]
 name = "swc_react_native_codegen"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "acda44acae4a97490124ab154976504ae415b78e1ee7858fedaf40d2a349f2d4"
+checksum = "0a4eaefcc5ee6bb743a179ddc351f474b7e3c0bd1eaca460a83882639d315bc1"
 dependencies = [
  "anyhow",
  "serde",
@@ -6623,15 +6623,15 @@ dependencies = [
  "swc_common 21.0.1",
  "swc_ecma_ast 23.0.0",
  "swc_ecma_codegen 26.0.1",
- "swc_ecma_parser 39.0.1",
+ "swc_ecma_parser 39.0.2",
  "swc_ecma_visit 23.0.0",
 ]
 
 [[package]]
 name = "swc_react_native_worklets"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c18edbbacef70d8a0797d6f6bbcb1e7274d7f13337952608c2417ef679885c58"
+checksum = "7aae87fe5dd2961df5d7533e8882825b491d3c2900ad0db9a6a6a44f214beb03"
 dependencies = [
  "indexmap",
  "once_cell",
@@ -6642,7 +6642,7 @@ dependencies = [
  "swc_common 21.0.1",
  "swc_ecma_ast 23.0.0",
  "swc_ecma_codegen 26.0.1",
- "swc_ecma_parser 39.0.1",
+ "swc_ecma_parser 39.0.2",
  "swc_ecma_utils 29.1.0",
  "swc_ecma_visit 23.0.0",
 ]

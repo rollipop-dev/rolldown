@@ -235,7 +235,7 @@ impl TryFrom<BindingBuiltinPlugin<'_>> for Arc<dyn Pluginable> {
             |e: anyhow::Error| napi::Error::new(napi::Status::GenericFailure, e.to_string()),
           )?
         } else {
-          RollipopReactNativePlugin::new(Vec::new(), None, RuntimeTarget::default(), None)
+          RollipopReactNativePlugin::new(Vec::new(), None, RuntimeTarget::default(), None, None)
             .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))?
         };
         Arc::new(plugin)

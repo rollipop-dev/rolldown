@@ -1,48 +1,37 @@
+mod flow;
 mod visitors;
+#[cfg(feature = "wasm_plugins")]
+mod wasm_plugins;
 
 use std::borrow::Cow;
 use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use rolldown_common::ModuleType;
+use rolldown_plugin::{
+  HookTransformArgs, HookTransformOutput, HookTransformReturn, HookUsage, Plugin,
+  SharedTransformPluginContext,
+};
 use rolldown_sourcemap::SourceMap;
 use swc_common::comments::SingleThreadedComments;
 use swc_common::source_map::SourceMapGenConfig;
 use swc_common::sync::Lrc;
 use swc_common::{FileName, GLOBALS, Globals, Mark};
-use swc_ecma_ast::{EsVersion, Pass, Program};
+use swc_ecma_ast::{EsVersion, Pass};
 use swc_ecma_codegen::text_writer::JsWriter;
 use swc_ecma_codegen::{Emitter, Node};
 use swc_ecma_compat_es2015::{block_scoping, classes};
 use swc_ecma_compat_es2017::async_to_generator;
 use swc_ecma_compat_es2022::class_properties::{self, class_properties};
 use swc_ecma_compat_es2022::private_in_object;
-use swc_ecma_parser::{
-  EsSyntax, FlowSyntax, Syntax, TsSyntax, parse_file_as_module, parse_file_as_program,
-};
+use swc_ecma_parser::{EsSyntax, FlowSyntax, Syntax, TsSyntax, parse_file_as_program};
 use swc_ecma_transforms_base::fixer::fixer;
 use swc_ecma_transforms_base::helpers::{self, Helpers, inject_helpers};
 use swc_ecma_transforms_base::resolver;
 use swc_ecma_transforms_typescript::{Config as TsStripConfig, typescript};
 use swc_ecma_visit::VisitMutWith;
 use swc_react_native::{CodegenOptions, CodegenVisitor, WorkletsOptions, WorkletsVisitor};
-
-#[cfg(feature = "wasm_plugins")]
-use swc_common::plugin::metadata::TransformPluginMetadataContext;
-#[cfg(feature = "wasm_plugins")]
-use swc_common::plugin::serialized::{PluginSerializedBytes, VersionedSerializable};
-#[cfg(feature = "wasm_plugins")]
-use swc_ecma_ast::Module;
-#[cfg(feature = "wasm_plugins")]
-use swc_plugin_runner::create_plugin_transform_executor;
-#[cfg(feature = "wasm_plugins")]
-use swc_plugin_runner::plugin_module_bytes::{CompiledPluginModuleBytes, RawPluginModuleBytes};
-
-use rolldown_common::ModuleType;
-use rolldown_plugin::{
-  HookTransformArgs, HookTransformOutput, HookTransformReturn, HookUsage, Plugin,
-  SharedTransformPluginContext,
-};
 
 use crate::visitors::RemoveFlowTypeOnlyFields;
 
@@ -74,28 +63,22 @@ pub struct WorkletsConfig {
   pub options: WorkletsOptions,
 }
 
-#[cfg(feature = "wasm_plugins")]
-struct PreloadedSwcPlugin {
-  compiled: CompiledPluginModuleBytes,
-  config: Arc<serde_json::Value>,
+/// Flow handling configuration. Mirrors Babel's `@babel/plugin-transform-flow-strip-types` semantics.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct FlowConfig {
+  /// When `true`, only files containing `@flow` or `@noflow` directive
+  /// comments are parsed as Flow (Babel `requireDirective: true`).
+  /// When `false` (default — matches Metro / Babel default), every JS
+  /// module is parsed as Flow regardless of directive.
+  pub require_directive: bool,
 }
 
 pub struct RollipopReactNativePlugin {
   runtime_target: RuntimeTarget,
-  env_name: String,
   worklets: Option<WorkletsConfig>,
+  flow: FlowConfig,
   #[cfg(feature = "wasm_plugins")]
-  runtime: Arc<dyn swc_plugin_runner::runtime::Runtime>,
-  #[cfg(feature = "wasm_plugins")]
-  plugins: Vec<PreloadedSwcPlugin>,
-}
-
-/// Resolve the active env name the same way `@swc/core` does:
-/// `SWC_ENV` → `NODE_ENV` → `"development"`.
-fn default_env_name() -> String {
-  std::env::var("SWC_ENV")
-    .or_else(|_| std::env::var("NODE_ENV"))
-    .unwrap_or_else(|_| "development".into())
+  wasm_plugins: wasm_plugins::WasmPlugins,
 }
 
 impl RollipopReactNativePlugin {
@@ -104,6 +87,7 @@ impl RollipopReactNativePlugin {
     env_name: Option<String>,
     runtime_target: RuntimeTarget,
     worklets: Option<WorkletsConfig>,
+    flow: Option<FlowConfig>,
   ) -> Result<Self, anyhow::Error> {
     #[cfg(not(feature = "wasm_plugins"))]
     {
@@ -113,127 +97,43 @@ impl RollipopReactNativePlugin {
         ));
       }
       drop(plugins);
-      Ok(Self { runtime_target, env_name: env_name.unwrap_or_else(default_env_name), worklets })
+      drop(env_name);
     }
 
-    #[cfg(feature = "wasm_plugins")]
-    {
-      let runtime: Arc<dyn swc_plugin_runner::runtime::Runtime> =
-        Arc::new(swc_plugin_backend_wasmer::WasmerRuntime);
+    Ok(Self {
+      runtime_target,
+      worklets,
+      flow: flow.unwrap_or_default(),
+      #[cfg(feature = "wasm_plugins")]
+      wasm_plugins: wasm_plugins::WasmPlugins::new(plugins, env_name)?,
+    })
+  }
 
-      let preloaded = plugins
-        .into_iter()
-        .map(|p| {
-          let wasm_bytes = std::fs::read(&p.path)
-            .map_err(|e| anyhow::anyhow!("Failed to read wasm plugin '{}': {e}", p.path))?;
-          let raw = RawPluginModuleBytes::new(p.path, wasm_bytes);
-          let compiled = CompiledPluginModuleBytes::from_raw_module(&*runtime, raw);
-          Ok(PreloadedSwcPlugin { compiled, config: Arc::new(p.config) })
-        })
-        .collect::<Result<Vec<_>, anyhow::Error>>()?;
-
-      Ok(Self {
-        plugins: preloaded,
-        runtime,
-        env_name: env_name.unwrap_or_else(default_env_name),
-        runtime_target,
-        worklets,
-      })
+  /// Whether to parse `args` as Flow. Only Js/Jsx inputs qualify; Ts/Tsx
+  /// and other types are never Flow. Within Js/Jsx, the directive policy
+  /// (`flow.require_directive`) decides whether a `@flow`/`@noflow` marker
+  /// is required.
+  fn is_flow_module(&self, args: &HookTransformArgs<'_>) -> bool {
+    match args.module_type {
+      ModuleType::Js | ModuleType::Jsx => {
+        !self.flow.require_directive || flow::has_directive(args.code)
+      }
+      _ => false,
     }
   }
+}
 
-  fn has_flow_directive(code: &str) -> bool {
-    memchr::memmem::find(code.as_bytes(), b"@flow").is_some()
-  }
-
-  fn should_parse_flow(args: &HookTransformArgs<'_>) -> bool {
-    matches!(args.module_type, ModuleType::Js | ModuleType::Jsx)
-      && Self::has_flow_directive(args.code)
-  }
-
-  fn needs_codegen_visit(code: &str) -> bool {
-    memchr::memmem::find(code.as_bytes(), b"codegenNativeComponent<").is_some()
-  }
-
-  fn is_codegen_required(args: &HookTransformArgs<'_>, is_flow: bool) -> bool {
-    let typed = is_flow || matches!(args.module_type, ModuleType::Ts | ModuleType::Tsx);
-    typed && Self::needs_codegen_visit(args.code)
-  }
-
-  fn is_script_like(args: &HookTransformArgs<'_>) -> bool {
-    args.id.ends_with(".cjs")
-  }
-
-  fn strip_flow_pragma_comments(comments: &SingleThreadedComments) {
-    let (mut leading, mut trailing) = comments.borrow_all_mut();
-    let retain = |c: &swc_common::comments::Comment| !Self::is_flow_pragma(&c.text);
-    for list in leading.values_mut() {
-      list.retain(retain);
-    }
-    for list in trailing.values_mut() {
-      list.retain(retain);
-    }
-  }
-
-  fn is_flow_pragma(text: &str) -> bool {
-    text
-      .lines()
-      .any(|line| line.trim_start().trim_start_matches('*').trim_start().starts_with("@flow"))
-  }
-
-  #[cfg(feature = "wasm_plugins")]
-  fn run_wasm_plugins(
-    &self,
-    cm: &Lrc<swc_common::SourceMap>,
-    unresolved_mark: Mark,
-    comments: &SingleThreadedComments,
-    filename: &str,
-    program: &mut Program,
-  ) -> Result<(), anyhow::Error> {
-    if self.plugins.is_empty() {
-      return Ok(());
-    }
-
-    let owned_program = std::mem::replace(program, Program::Module(Module::default()));
-    let initial = PluginSerializedBytes::try_serialize(&VersionedSerializable::new(owned_program))?;
-
-    let final_bytes = swc_plugin_proxy::COMMENTS.set(
-      &swc_plugin_proxy::HostCommentsStorage { inner: Some(comments.clone()) },
-      || -> Result<PluginSerializedBytes, anyhow::Error> {
-        let mut serialized = initial;
-        for plugin in &self.plugins {
-          let cloned = plugin.compiled.clone_module(&*self.runtime);
-          let metadata_context = Arc::new(TransformPluginMetadataContext::new(
-            Some(filename.to_string()),
-            self.env_name.clone(),
-            None,
-          ));
-          let mut executor = create_plugin_transform_executor(
-            cm,
-            &unresolved_mark,
-            &metadata_context,
-            None,
-            Box::new(cloned),
-            Some((*plugin.config).clone()),
-            Arc::clone(&self.runtime),
-          );
-          serialized = executor.transform(&serialized, Some(true))?;
-        }
-        Ok(serialized)
-      },
-    )?;
-
-    *program = final_bytes.deserialize()?.into_inner();
-    Ok(())
-  }
+fn is_codegen_required(args: &HookTransformArgs<'_>, is_flow: bool) -> bool {
+  let typed = is_flow || matches!(args.module_type, ModuleType::Ts | ModuleType::Tsx);
+  typed && memchr::memmem::find(args.code.as_bytes(), b"codegenNativeComponent<").is_some()
 }
 
 impl fmt::Debug for RollipopReactNativePlugin {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     let mut s = f.debug_struct("RollipopReactNativePlugin");
     #[cfg(feature = "wasm_plugins")]
-    s.field("plugins_count", &self.plugins.len());
-    s.field("env_name", &self.env_name).finish_non_exhaustive()
+    s.field("plugins_count", &self.wasm_plugins.len());
+    s.finish_non_exhaustive()
   }
 }
 
@@ -263,9 +163,9 @@ impl Plugin for RollipopReactNativePlugin {
     _ctx: SharedTransformPluginContext,
     args: &HookTransformArgs<'_>,
   ) -> HookTransformReturn {
-    let is_flow = Self::should_parse_flow(args);
-    let syntax = match args.module_type {
-      ModuleType::Js if is_flow => Syntax::Flow(FlowSyntax {
+    let is_flow = self.is_flow_module(args);
+    let syntax = if is_flow {
+      Syntax::Flow(FlowSyntax {
         jsx: true,
         enums: true,
         components: true,
@@ -273,12 +173,15 @@ impl Plugin for RollipopReactNativePlugin {
         pattern_matching: true,
         require_directive: false,
         all: true,
-      }),
-      ModuleType::Js => Syntax::Es(EsSyntax::default()),
-      ModuleType::Jsx => Syntax::Es(EsSyntax { jsx: true, ..Default::default() }),
-      ModuleType::Ts => Syntax::Typescript(TsSyntax::default()),
-      ModuleType::Tsx => Syntax::Typescript(TsSyntax { tsx: true, ..Default::default() }),
-      _ => return Ok(None),
+      })
+    } else {
+      match args.module_type {
+        ModuleType::Js => Syntax::Es(EsSyntax::default()),
+        ModuleType::Jsx => Syntax::Es(EsSyntax { jsx: true, ..Default::default() }),
+        ModuleType::Ts => Syntax::Typescript(TsSyntax::default()),
+        ModuleType::Tsx => Syntax::Typescript(TsSyntax { tsx: true, ..Default::default() }),
+        _ => return Ok(None),
+      }
     };
 
     let cm: Lrc<swc_common::SourceMap> = Arc::default();
@@ -289,25 +192,19 @@ impl Plugin for RollipopReactNativePlugin {
         cm.new_source_file(Lrc::new(FileName::Real(PathBuf::from(args.id))), args.code.clone());
 
       let mut errors = Vec::new();
-      let mut program = if Self::is_script_like(args) {
+      let mut program =
         parse_file_as_program(&fm, syntax, EsVersion::latest(), Some(&comments), &mut errors)
-          .map_err(|e| anyhow::anyhow!("Parse error in '{}': {:?}", args.id, e))?
-      } else {
-        let module =
-          parse_file_as_module(&fm, syntax, EsVersion::latest(), Some(&comments), &mut errors)
-            .map_err(|e| anyhow::anyhow!("Parse error in '{}': {:?}", args.id, e))?;
-        Program::Module(module)
-      };
+          .map_err(|e| anyhow::anyhow!("Parse error in '{}': {:?}", args.id, e))?;
       let unresolved_mark = Mark::new();
       let top_level_mark = Mark::new();
 
       #[cfg(feature = "wasm_plugins")]
-      self.run_wasm_plugins(&cm, unresolved_mark, &comments, args.id, &mut program)?;
+      self.wasm_plugins.run(&cm, unresolved_mark, &comments, args.id, &mut program)?;
 
       resolver(unresolved_mark, top_level_mark, false).process(&mut program);
 
       // Codegen must run before TS strip — it relies on the type annotations.
-      if Self::is_codegen_required(args, is_flow) {
+      if is_codegen_required(args, is_flow) {
         program.visit_mut_with(&mut CodegenVisitor::new(
           Arc::clone(&cm),
           CodegenOptions { filename: args.id.to_string() },
@@ -369,7 +266,7 @@ impl Plugin for RollipopReactNativePlugin {
       // Strip Flow pragmas after the SWC pipeline so they don't leak into
       // rolldown's downstream oxc parse — a stray `@flow` makes oxc reject the otherwise plain JS output.
       if is_flow {
-        Self::strip_flow_pragma_comments(&comments);
+        flow::strip_pragma_comments(&comments);
       }
 
       let mut buf = Vec::new();

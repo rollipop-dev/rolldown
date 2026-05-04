@@ -1,5 +1,5 @@
 use rolldown_plugin_rollipop_react_native::{
-  RollipopReactNativePlugin, RuntimeTarget, SwcWasmPlugin, WorkletsConfig,
+  FlowConfig, RollipopReactNativePlugin, RuntimeTarget, SwcWasmPlugin, WorkletsConfig,
 };
 
 #[napi_derive::napi(object, object_to_js = false)]
@@ -13,6 +13,10 @@ pub struct BindingRollipopReactNativePluginConfig {
   /// `"Hermes"` adds `transform-classes` and `transform-async-to-generator`
   /// on top of the V1 baseline for older Hermes / JSC fallbacks.
   pub runtime_target: Option<BindingRollipopReactNativeRuntimeTarget>,
+  /// Flow handling configuration. Mirrors Babel's
+  /// `@babel/plugin-transform-flow-strip-types` semantics. When omitted,
+  /// every JS module is parsed as Flow (Metro / Babel default).
+  pub flow: Option<BindingRollipopReactNativeFlowConfig>,
   /// `react-native-worklets` transform configuration. Visitor is skipped
   /// entirely when omitted.
   pub worklets: Option<BindingRollipopReactNativeWorkletsConfig>,
@@ -31,6 +35,17 @@ pub struct BindingRollipopReactNativeSwcPlugin {
 pub enum BindingRollipopReactNativeRuntimeTarget {
   Hermes,
   HermesV1,
+}
+
+/// Mirrors `FlowConfig` from `rolldown_plugin_rollipop_react_native`.
+#[napi_derive::napi(object, object_to_js = false)]
+#[derive(Debug)]
+pub struct BindingRollipopReactNativeFlowConfig {
+  /// When `true`, only files containing `@flow` or `@noflow` directive
+  /// comments are parsed as Flow (Babel `requireDirective: true`). When
+  /// `false` (default), every JS module is parsed as Flow regardless of
+  /// directive — matches Metro / Babel default behavior.
+  pub require_directive: Option<bool>,
 }
 
 /// Mirrors `WorkletsOptions` from `swc_react_native::worklets::options`,
@@ -69,6 +84,12 @@ impl From<BindingRollipopReactNativeRuntimeTarget> for RuntimeTarget {
       BindingRollipopReactNativeRuntimeTarget::Hermes => Self::Hermes,
       BindingRollipopReactNativeRuntimeTarget::HermesV1 => Self::HermesV1,
     }
+  }
+}
+
+impl From<BindingRollipopReactNativeFlowConfig> for FlowConfig {
+  fn from(value: BindingRollipopReactNativeFlowConfig) -> Self {
+    Self { require_directive: value.require_directive.unwrap_or(false) }
   }
 }
 
@@ -126,6 +147,7 @@ impl TryFrom<BindingRollipopReactNativePluginConfig> for RollipopReactNativePlug
       .collect::<Result<Vec<_>, _>>()?;
     let runtime_target = value.runtime_target.map(RuntimeTarget::from).unwrap_or_default();
     let worklets = value.worklets.map(WorkletsConfig::from);
-    RollipopReactNativePlugin::new(plugins, value.env_name, runtime_target, worklets)
+    let flow = value.flow.map(FlowConfig::from);
+    RollipopReactNativePlugin::new(plugins, value.env_name, runtime_target, worklets, flow)
   }
 }
