@@ -175,16 +175,9 @@ export var DevRuntime = /*#__PURE__*/ function() {
 /**
 * @param {() => void} callback
 */ function __schedule(callback) {
-  var scheduled = true;
   if (typeof setTimeout === 'function') {
       setTimeout(callback, 0);
-  } else if (typeof queueMicrotask === 'function') {
-      queueMicrotask(callback);
-  } else if (typeof Promise !== 'undefined') {
-      Promise.resolve().then(callback);
-  } else {
-      callback();
-      scheduled = false;
+      return true;
   }
-  return scheduled;
+  return false;
 }

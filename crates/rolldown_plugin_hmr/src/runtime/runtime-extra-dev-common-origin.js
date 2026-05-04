@@ -161,16 +161,9 @@ export class DevRuntime {
  * @param {() => void} callback
  */
 function __schedule(callback) {
-  let scheduled = true;
   if (typeof setTimeout === 'function') {
     setTimeout(callback, 0);
-  } else if (typeof queueMicrotask === 'function') {
-    queueMicrotask(callback);
-  } else if (typeof Promise !== 'undefined') {
-    Promise.resolve().then(callback);
-  } else {
-    callback();
-    scheduled = false;
+    return true;
   }
-  return scheduled;
+  return false;
 }
