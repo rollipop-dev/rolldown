@@ -338,7 +338,7 @@ jobs:
           cache: true
 
       - name: Build @rolldown/pluginutils
-        run: vp run --filter '@rolldown/pluginutils' build
+        run: vp run --filter '@rollipop/rolldown-pluginutils' build
 
       - name: Build Docs
         run: vp run docs:build
