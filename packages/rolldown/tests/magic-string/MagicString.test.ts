@@ -37,7 +37,7 @@ describe('MagicString', () => {
       assert.strictEqual(s.append('xyz'), s);
     });
 
-    it.skip('should throw when given non-string content', () => {
+    it('should throw when given non-string content', () => {
       const s = new MagicString('');
       assert.throws(() => s.append([]), TypeError);
     });
@@ -931,7 +931,7 @@ describe('MagicString', () => {
       assert.equal(s.toString(), 'abcdeFGHijkl');
     });
 
-    it.skip('should throw an error if overlapping replacements are attempted', () => {
+    it('should throw an error if overlapping replacements are attempted', () => {
       const s = new MagicString('abcdefghijkl');
 
       s.overwrite(7, 11, 'xx');
@@ -972,7 +972,7 @@ describe('MagicString', () => {
       assert.equal(s.toString(), 'DEFGHIjkl');
     });
 
-    it.skip('replaces zero-length inserts inside overwrite', () => {
+    it('replaces zero-length inserts inside overwrite', () => {
       const s = new MagicString('abcdefghijkl');
 
       s.appendLeft(6, 'XXX');
@@ -980,7 +980,7 @@ describe('MagicString', () => {
       assert.equal(s.toString(), 'abcDEFGHIjkl');
     });
 
-    it.skip('replaces non-zero-length inserts inside overwrite', () => {
+    it('replaces non-zero-length inserts inside overwrite', () => {
       const s = new MagicString('abcdefghijkl');
 
       s.overwrite(3, 4, 'XXX');
@@ -1005,12 +1005,12 @@ describe('MagicString', () => {
       );
     });
 
-    it.skip('should throw when given non-string content', () => {
+    it('should throw when given non-string content', () => {
       const s = new MagicString('');
       assert.throws(() => s.overwrite(0, 1, []), TypeError);
     });
 
-    it.skip('replaces interior inserts', () => {
+    it('replaces interior inserts', () => {
       const s = new MagicString('abcdefghijkl');
 
       s.appendLeft(1, '&');
@@ -1021,7 +1021,7 @@ describe('MagicString', () => {
       assert.equal(s.toString(), 'a&...?defghijkl');
     });
 
-    it.skip('preserves interior inserts with `contentOnly: true`', () => {
+    it('preserves interior inserts with `contentOnly: true`', () => {
       const s = new MagicString('abcdefghijkl');
 
       s.appendLeft(1, '&');
@@ -1032,21 +1032,21 @@ describe('MagicString', () => {
       assert.equal(s.toString(), 'a&^...!?defghijkl');
     });
 
-    it.skip('disallows overwriting partially overlapping moved content', () => {
+    it('disallows overwriting partially overlapping moved content', () => {
       const s = new MagicString('abcdefghijkl');
 
       s.move(6, 9, 3);
       assert.throws(() => s.overwrite(5, 7, 'XX'), /Cannot overwrite across a split point/);
     });
 
-    it.skip('disallows overwriting fully surrounding content moved away', () => {
+    it('disallows overwriting fully surrounding content moved away', () => {
       const s = new MagicString('abcdefghijkl');
 
       s.move(6, 9, 3);
       assert.throws(() => s.overwrite(4, 11, 'XX'), /Cannot overwrite across a split point/);
     });
 
-    it.skip('disallows overwriting fully surrounding content moved away even if there is another split', () => {
+    it('disallows overwriting fully surrounding content moved away even if there is another split', () => {
       const s = new MagicString('abcdefghijkl');
 
       s.move(6, 9, 3);
@@ -1054,7 +1054,7 @@ describe('MagicString', () => {
       assert.throws(() => s.overwrite(4, 11, 'XX'), /Cannot overwrite across a split point/);
     });
 
-    it.skip('allows later insertions at the end', () => {
+    it('allows later insertions at the end', () => {
       const s = new MagicString('abcdefg');
 
       s.appendLeft(4, '(');
@@ -1072,7 +1072,7 @@ describe('MagicString', () => {
       assert.equal(s.toString(), 'abcdeFGHijkl');
     });
 
-    it.skip('should throw an error if overlapping replacements are attempted', () => {
+    it('should throw an error if overlapping replacements are attempted', () => {
       const s = new MagicString('abcdefghijkl');
 
       s.update(7, 11, 'xx');
@@ -1113,7 +1113,7 @@ describe('MagicString', () => {
       assert.equal(s.toString(), 'DEFGHIjkl');
     });
 
-    it.skip('replaces zero-length inserts inside update with overwrite option', () => {
+    it('replaces zero-length inserts inside update with overwrite option', () => {
       const s = new MagicString('abcdefghijkl');
 
       s.appendLeft(6, 'XXX');
@@ -1121,7 +1121,7 @@ describe('MagicString', () => {
       assert.equal(s.toString(), 'abcDEFGHIjkl');
     });
 
-    it.skip('replaces non-zero-length inserts inside update', () => {
+    it('replaces non-zero-length inserts inside update', () => {
       const s = new MagicString('abcdefghijkl');
 
       s.update(3, 4, 'XXX');
@@ -1146,12 +1146,12 @@ describe('MagicString', () => {
       );
     });
 
-    it.skip('should throw when given non-string content', () => {
+    it('should throw when given non-string content', () => {
       const s = new MagicString('');
       assert.throws(() => s.update(0, 1, []), TypeError);
     });
 
-    it.skip('replaces interior inserts with overwrite option', () => {
+    it('replaces interior inserts with overwrite option', () => {
       const s = new MagicString('abcdefghijkl');
 
       s.appendLeft(1, '&');
@@ -1162,7 +1162,7 @@ describe('MagicString', () => {
       assert.equal(s.toString(), 'a&...?defghijkl');
     });
 
-    it.skip('preserves interior inserts with `contentOnly: true`', () => {
+    it('preserves interior inserts with `contentOnly: true`', () => {
       const s = new MagicString('abcdefghijkl');
 
       s.appendLeft(1, '&');
@@ -1173,21 +1173,21 @@ describe('MagicString', () => {
       assert.equal(s.toString(), 'a&^...!?defghijkl');
     });
 
-    it.skip('disallows overwriting partially overlapping moved content', () => {
+    it('disallows overwriting partially overlapping moved content', () => {
       const s = new MagicString('abcdefghijkl');
 
       s.move(6, 9, 3);
       assert.throws(() => s.update(5, 7, 'XX'), /Cannot overwrite across a split point/);
     });
 
-    it.skip('disallows overwriting fully surrounding content moved away', () => {
+    it('disallows overwriting fully surrounding content moved away', () => {
       const s = new MagicString('abcdefghijkl');
 
       s.move(6, 9, 3);
       assert.throws(() => s.update(4, 11, 'XX'), /Cannot overwrite across a split point/);
     });
 
-    it.skip('disallows overwriting fully surrounding content moved away even if there is another split', () => {
+    it('disallows overwriting fully surrounding content moved away even if there is another split', () => {
       const s = new MagicString('abcdefghijkl');
 
       s.move(6, 9, 3);
@@ -1195,7 +1195,7 @@ describe('MagicString', () => {
       assert.throws(() => s.update(4, 11, 'XX'), /Cannot overwrite across a split point/);
     });
 
-    it.skip('allows later insertions at the end with overwrite option', () => {
+    it('allows later insertions at the end with overwrite option', () => {
       const s = new MagicString('abcdefg');
 
       s.appendLeft(4, '(');

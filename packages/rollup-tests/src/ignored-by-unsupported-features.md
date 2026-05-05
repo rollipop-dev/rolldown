@@ -64,6 +64,11 @@
  - rollup@function@implicit-dependencies@dependant-not-part-of-graph: throws when a module that is loaded before an emitted chunk is not part of the module graph
  - rollup@function@implicit-dependencies@external-dependant: throws when a module that is loaded before an emitted chunk does not exist
  - rollup@function@implicit-dependencies@missing-dependant: throws when a module that is loaded before an emitted chunk is external
+ - rollup@function@implicit-dependencies@dependent-dynamic-import-no-effects: throws when a module that is loaded before an emitted chunk is fully tree-shaken
+ - rollup@function@implicit-dependencies@dependent-dynamic-import-not-included: throws when a module that is loaded before an emitted chunk is only linked to the module graph via a tree-shaken dynamic import
+ - rollup@function@implicit-dependencies@dependent-not-part-of-graph: throws when a module that is loaded before an emitted chunk is not part of the module graph
+ - rollup@function@implicit-dependencies@external-dependent: throws when a module that is loaded before an emitted chunk does not exist
+ - rollup@function@implicit-dependencies@missing-dependent: throws when a module that is loaded before an emitted chunk is external
  - rollup@function@emit-file@set-asset-source-chunk: throws when trying to set the asset source of a chunk
  - rollup@function@emit-file@modules-loaded: Throws when adding a chunk after the modules have finished loading
  - rollup@function@emit-file@invalid-chunk-id: throws for invalid chunk ids
@@ -297,6 +302,13 @@
  - rollup@function@deprecated@transform-attributes: does not allow returning attributes from the "transform" hook
  - rollup@function@extend-more-hooks-to-include-import-attributes: extend load, transform and renderDynamicImport to include import attributes
 
+### Source phase import is not supported
+ - rollup@form@source-phase-imports-external: preserves source phase import externals
+ - rollup@function@source-phase-dynamic-import-error-resolved: throws for non-external dynamic source phase imports with dynamic attributes
+ - rollup@function@source-phase-dynamic-import-error: throws for non-external dynamic source phase imports
+ - rollup@function@source-phase-format-unsupported: throws for source phase imports in non-ES output formats
+ - rollup@function@source-phase-import-error: throws for non-external source phase imports
+
 ### watch behavior is not compatible yet
  - rollup@hooks@allows to enforce plugin hook order in watch mode
 
@@ -414,3 +426,4 @@
  - rollup@function@ast-validations@redeclare-import-var: throws when redeclaring an import with a var (https://github.com/oxc-project/oxc/issues/15961)
  - rollup@function@warn-on-top-level-this: warns on top-level this (#770) (`THIS_IS_UNDEFINED` warning)
  - rollup@sourcemaps@warning-with-coarse-sourcemap: get correct mapping location with coarse sourcemap@generates es (`THIS_IS_UNDEFINED` warning)
+ - rollup@function@circular-namespace-reexport-cache: handles cyclic reexports through cached namespace reexports for multiple importers (`CYCLIC_CROSS_CHUNK_REEXPORT` warning)

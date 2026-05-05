@@ -55,14 +55,27 @@ generate_chunks()
               │
               ▼
          ChunkGraph                   Final module-to-chunk assignment
+
+Post-ChunkGraph processing (in generate()):
+
+ChunkGraph
+    │
+    ├─ compute_cross_chunk_links()                    Determine cross-chunk imports/exports
+    │
+    ├─ ensure_lazy_module_initialization_order()      Reorder wrapped module init calls
+    │
+    ├─ on_demand_wrapping()                           Strip unnecessary wrappers
+    │
+    └─ merge_cjs_namespace()                          Merge CJS namespace objects
 ```
 
 **Key files:**
 
-- `crates/rolldown/src/stages/generate_stage/code_splitting.rs` — pipeline orchestration
+- `crates/rolldown/src/stages/generate_stage/code_splitting.rs` — pipeline orchestration, `generate_chunks()`, `ensure_lazy_module_initialization_order()`
 - `crates/rolldown/src/stages/generate_stage/chunk_optimizer.rs` — merge/optimization
 - `crates/rolldown/src/chunk_graph.rs` — output data structure
 - `crates/rolldown_utils/src/bitset.rs` — compact reachability representation
+- `crates/rolldown/src/types/linking_metadata.rs` — `original_wrap_kind()` used for init order analysis
 
 ## Bit Positions and Entry Points
 
@@ -126,6 +139,176 @@ Dynamic/emitted entries can become empty facades when all their modules are pull
 
 - Merges the facade into its target chunk
 - Marks it as `Removed` in `post_chunk_optimization_operations`
+
+### Runtime Module Placement
+
+Facade elimination can introduce **new runtime-helper consumers** after the merge phase has already placed the runtime module. Eliminating a dynamic-import facade runs two independent `wrap_kind`-gated branches on the target chunk, and either branch adds the chunk to `runtime_dependent_chunks`:
+
+- `WrapKind::Esm | WrapKind::None` — `include_symbol(module.namespace_object_ref)` materializes the simulated namespace and explicitly inserts `RuntimeHelper::ExportAll` into the target chunk's `depended_runtime_helper` (emitted JS symbol: `__exportAll`).
+- `WrapKind::Cjs | WrapKind::Esm` — `include_symbol(wrapper_ref)` pulls in the `require_xxx` symbol, which transitively drags whatever helpers the wrapper depends on (`RuntimeHelper::ToEsm`, `RuntimeHelper::CommonJsMin`, etc., emitted as `__toESM`, `__commonJSMin`, …) via the existing inclusion-propagation machinery.
+
+`WrapKind::Esm` hits both branches, so ESM facades can add `ExportAll` _and_ wrapper-driven helpers to the same chunk.
+
+The danger is that the runtime module may already be **co-located** with other modules in some host chunk from the merge phase (the chunker placed it there because the host's bitset matched the runtime's bitset). If the new helper-import edge points from a facade-elim consumer back to that host, and the host has any forward path back to the consumer, the dependency graph closes a cycle. See [#8989](https://github.com/rolldown/rolldown/issues/8989) for the canonical reproduction:
+
+```
+chunk(node2) ──forward──> chunk(node3) ──forward──> chunk(node4)
+     ▲                                                   │
+     └──────── helper edge after facade elim ────────────┘
+```
+
+The placement logic lives in `rehome_runtime_module`, called from `optimize_facade_entry_chunks` whenever `runtime_dependent_chunks` is non-empty. It is a **two-step decision** driven by static-import reachability between chunks:
+
+**Step 1 — Peel decision (cycle risk only)**
+
+Peel the runtime out of its current host chunk only when the host has a **static forward path** to some facade-elim consumer that is not the host. That is the precondition for a back-edge cycle: without such a path, the new helper import cannot close a cycle no matter where we place the runtime, so the most compact layout is to leave it where the merge phase already put it. Reachability is computed by `chunk_reaches_via_static_import`, a BFS that follows only `ImportKind::Import` edges through still-live target chunks.
+
+When cycle risk is present and the host has other modules, the implementation removes `runtime_module_idx` from the host's `modules` vec via `swap_remove` (ordering doesn't matter — `sort_chunk_modules` re-establishes it later) and sets `module_to_chunk[runtime_module_idx] = None`. If runtime is alone in its host chunk, it stays there — that chunk is already a leaf and cannot participate in a cycle, and peeling would leave an empty chunk that downstream code expecting `chunk.modules[0]` would choke on.
+
+**Step 2 — Placement decision (dominator search)**
+
+When the runtime is unplaced (either because Step 1 peeled it, or because the merge phase never placed it), compute the full consumer set:
+
+```
+consumer_chunks = (non-removed chunks with non-empty depended_runtime_helper)
+                ∪ runtime_dependent_chunks
+                ∪ ({original_host} if original_host is not marked Removed)
+```
+
+The first term picks up chunks that already required helpers from the linking stage; the second term picks up chunks that facade elimination just announced; the third term re-adds the original host — the merge phase placed the runtime there because its bitset required it, making it an implicit consumer. The "not Removed" gate is defensive: `apply_common_chunk_merges` already retargets `module_to_chunk` when a host is merged into another chunk, so in practice `original_host` resolves to a still-live chunk. Deduplication is automatic via `FxHashSet`.
+
+Then find a **dominator** — a member C such that every other consumer statically reaches C via forward edges. `find_consumer_dominator` checks each candidate with `chunk_reaches_via_static_import`. A dominator, if any, is a downstream sink of the consumer set: placing the runtime there means every other consumer's helper import rides an existing forward edge, so no back-edge is added and no cycle can form.
+
+- **Dominator found** → runtime moves into that chunk. No extra chunk is created.
+- **No dominator** (consumers sit in parallel sub-graphs or form a more complex shape) → runtime is placed in a fresh `rolldown-runtime.js` chunk created with the runtime's bitset. Every consumer imports from it. This chunk is structurally a leaf — not because being freshly created prevents outgoing edges, but because the runtime module itself contains no `import` statements, so the only module assigned to the chunk has no dependencies for the cross-chunk linker to translate into outgoing imports. Cycles are therefore impossible.
+
+**Why this shape**
+
+Relying on `runtime_dependent_chunks.len()` alone undercounts — it ignores chunks that already required helpers from the linking stage and the original host. Relying on consumer count alone (splitting the "single consumer" case from the "many consumers" case) over-triggers and under-triggers both: a sole consumer can still sit in the middle of the graph and create a cycle via back-edges from other implicit consumers (fuzz-discovered case in [#8920](https://github.com/rolldown/rolldown/issues/8920)), and a set of multiple consumers may have a natural downstream sink that hosts the runtime at zero extra cost ([#8989](https://github.com/rolldown/rolldown/issues/8989)).
+
+The dominator search unifies both by asking the right question directly: "is there a chunk every consumer already reaches forward?". If yes, reuse it; if no, add a leaf.
+
+**Regression coverage**
+
+- `crates/rolldown/tests/rolldown/issues/8989/` — original cycle. Four entries with `node3` dynamically importing `node4` and `node1` namespace-importing `node2`. The merge phase drops the runtime into `entry2` (which already forward-reaches `node4` via `entry3`). Cycle risk → peel. Dominator search picks `node4` (leaf, all consumers reach it). Assertions cover the leaf invariant, the `entry2 → node4` direction, and that `node4` hosts the runtime.
+- `crates/rolldown/tests/rolldown/issues/8920_2/` — fuzz-discovered shape where the previous single-consumer rule silently produced a cycle. Two entries with only a dynamic edge between them; `node1` is the shared common chunk. The merge phase places the runtime in `entry-2`, but `entry-2` has no static outbound edges — no cycle risk. Runtime stays in `entry-2`, the dominator of `{entry-2, node1}` by virtue of `node1 → entry-2` already being a forward static edge. Three chunks, no `rolldown-runtime.js` emitted.
+
+Both fixtures assert structural invariants in `_test.mjs`, so any regression (e.g. reverting to the single-consumer-picks-itself rule, or over-peeling when no cycle risk exists) fails immediately rather than only showing up as a snapshot diff.
+
+## Lazy Module Initialization Order
+
+`ensure_lazy_module_initialization_order()` runs after chunk creation as a post-processing step on the `ChunkGraph`. It fixes a correctness issue with lazy evaluation of wrapped modules.
+
+### The Problem
+
+When `strict_execution_order` is **not** enabled, CJS modules are wrapped in `__commonJSMin()` and their body doesn't execute until the wrapper's init function (`require_xxx()`) is explicitly called. Some ESM modules may also be wrapped in `__esm()` (e.g., those with circular dependencies or TLA), but most ESM modules remain unwrapped — their top-level code executes eagerly in the order it appears in the bundle.
+
+During scope hoisting, each `require_xxx()` init call is placed at the point where the CJS module is first referenced. This default placement can produce incorrect initialization order when unwrapped ESM modules reference different wrapped CJS modules that have a dependency between them.
+
+The root cause is how modules are laid out in the bundle. The link stage's `sort_modules()` (in `sort_modules.rs`) computes a global execution order via DFS of the import graph — in that analysis, `require()` is treated as an implicit static import so that required modules are ordered before their requirers. Modules are then emitted in this order. For **wrapped** modules (CJS/ESM), only the wrapper definition is placed at that position; the actual init call (`require_xxx()`) is placed wherever the module is first referenced by an **unwrapped** module. When two wrapped modules are referenced by different unwrapped modules, the init calls can end up in the wrong relative order.
+
+Note: `sort_modules()` and `js_import_order()` (described below) are two different DFS analyses with different traversal rules. `sort_modules()` follows both `import` and `require()` edges to determine global execution order. `js_import_order()` only follows `import` edges because it specifically analyzes **eager** initialization — `require()` calls produce lazy wrappers that don't contribute to eager init order.
+
+Consider this example (based on [#5531](https://github.com/rolldown/rolldown/issues/5531)):
+
+```js
+// leaflet.js (CJS → wrapped)
+global.L = exports;
+exports.foo = 'foo';
+
+// leaflet-toolbar.js (CJS → wrapped, reads global.L)
+global.bar = global.L.foo;
+
+// lib.js (ESM → unwrapped, uses require internally)
+require('./leaflet-toolbar.js');
+
+// main.js (ESM → unwrapped)
+import './leaflet.js';
+import './lib.js';
+assert.equal(bar, 'foo');
+```
+
+`sort_modules()` DFS from `main.js` produces: `leaflet(1) < leaflet-toolbar(2) < lib(3) < main(4)`. The execution order correctly puts `leaflet` before `leaflet-toolbar`. But in the bundled output, since both are **wrapped**, their wrapper definitions are just inert function declarations — what matters is where the init calls land:
+
+- `lib.js` (exec_order 3, unwrapped) references `leaflet-toolbar` via `require()` → `require_leaflet_toolbar()` is placed here
+- `main.js` (exec_order 4, unwrapped) references `leaflet` via `import` → `require_leaflet()` is placed here
+
+Since `lib.js` appears before `main.js` in the bundle, `require_leaflet_toolbar()` runs first — but it needs `global.L` which `require_leaflet()` hasn't set yet:
+
+```js
+// ❌ Wrong output: require_leaflet_toolbar() runs before require_leaflet()
+//#region lib.js
+require_leaflet_toolbar(); // 💥 global.L is undefined here
+//#endregion
+//#region main.js
+var import_leaflet = require_leaflet(); // too late — toolbar already failed
+assert.equal(bar, 'foo');
+//#endregion
+```
+
+Note: if `main.js` imported `leaflet-toolbar.js` directly (without `lib.js` as intermediary), both init calls would land in the same module region and rolldown would order them correctly. The problem only arises when init calls are split across different unwrapped modules.
+
+**With** this pass, `require_leaflet()` is transferred from `main.js` to before `lib.js`'s region:
+
+```js
+// ✅ Correct output: require_leaflet() runs before require_leaflet_toolbar()
+//#region lib.js
+require_leaflet(); // ← transferred here by insert_map
+require_leaflet_toolbar();
+//#endregion
+//#region main.js
+assert.equal(bar, 'foo'); // require_leaflet() removed from here by remove_map
+//#endregion
+```
+
+The function builds `insert_map` and `remove_map` on each chunk to move init calls from their default position to the correct one. `remove_map` suppresses the init call at the original location; `insert_map` prepends it before the module that needs it.
+
+When `strict_execution_order` **is** enabled, all modules are already wrapped and execute in the correct order, so this pass is skipped entirely.
+
+### Algorithm
+
+The function iterates over every chunk in the `ChunkGraph` and performs six steps:
+
+**Step 1 — Find DFS roots.** Entry chunks use the entry module as root. Common chunks have no single entry module, so roots are computed as modules not imported (via `ImportKind::Import`) by any other module _within the same chunk_ — i.e., the "top" of the chunk-local import graph. These are the modules that would execute first when the chunk loads, making them the correct starting points for the DFS that determines eager initialization order. Roots are sorted by execution order to ensure deterministic traversal.
+
+**Step 2 — Build execution order map.** Collects execution order for all modules in the chunk, plus any wrapped modules from other chunks whose symbols are imported. This cross-chunk awareness is needed because a wrapped module in another chunk still requires its init call to run before dependents in this chunk.
+
+**Step 3 — Classify modules via DFS (`js_import_order`).** Runs iterative DFS from roots, following only `ImportKind::Import` edges (skipping `require()` and `import()` since those are inherently lazy). Each visited module is classified:
+
+- `WrapKind::Cjs` or `WrapKind::Esm` → pushed onto a `wrapped_modules` list
+- `WrapKind::None` → records how many wrapped modules appeared before it in DFS order (its "wrapped dependency count")
+
+Uses `original_wrap_kind()` from `LinkingMetadata`, which preserves the pre-`strictExecutionOrder` wrap kind.
+
+**Step 4 — Determine modules to check.** Collects all unwrapped modules that have wrapped dependencies, plus the wrapped modules they depend on (up to the maximum dependency count). If this set is empty, no reordering is needed and the function returns early.
+
+**Step 5 — Find first init position.** Walks chunk modules in order, scanning import records. For each module in the check set, records the first `(importer, import_record_idx)` that imports it. Stops early once all positions are found.
+
+**Step 6 — Build transfer maps.** Sorts init positions by execution order, then iterates:
+
+- **Wrapped module** → added to `pending_transfer`
+- **Unwrapped module** → pulls matching wrapped modules from `pending_transfer` and builds:
+  - `insert_map[module_idx]` → init calls to prepend before this module's output
+  - `remove_map[importer_idx]` → init calls to remove from their original location
+
+A guard prevents transferring init calls from a lower-exec-order module to a higher one, which would incorrectly reorder execution.
+
+### Helper: `js_import_order()`
+
+Iterative DFS from the chunk's roots. Only follows `ImportKind::Import` edges — `require()` and `import()` are inherently lazy so they don't contribute to eager initialization order. Returns modules in DFS visit order.
+
+### Output: `insert_map` and `remove_map`
+
+These maps are stored on each `Chunk` and consumed during module finalization:
+
+- **`remove_map`** — Read in `finalizer_context.rs`. The `ScopeHoistingFinalizer` checks whether any of the current module's import records should have their init calls suppressed (the init call is being moved elsewhere).
+- **`insert_map`** — Read in `finalize_modules.rs`. For each target module, the rendered init call strings from the original locations are prepended to the module's output via `PrependRenderedImport` mutations.
+
+```rust
+// On Chunk (in rolldown_common::chunk)
+pub insert_map: FxHashMap<ModuleIdx, Vec<(ModuleIdx, ImportRecordIdx)>>,
+pub remove_map: FxHashMap<ModuleIdx, Vec<ImportRecordIdx>>,
+```
 
 ## ChunkGraph
 

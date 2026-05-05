@@ -1,6 +1,6 @@
 use rolldown_common::{
   EcmaViewMeta, ExportsKind, ImportKind, IndexModules, Module, ModuleIdx, NormalModule,
-  NormalizedBundlerOptions, RuntimeModuleBrief, StmtInfo, StmtInfoMeta, SymbolRefDb,
+  NormalizedBundlerOptions, RuntimeModuleBrief, StmtInfo, StmtInfoMeta, StmtInfos, SymbolRefDb,
   TaggedSymbolRef, WrapKind,
 };
 use rolldown_utils::IndexBitSet;
@@ -20,10 +20,9 @@ struct Context<'a> {
 
 fn wrap_module_recursively(ctx: &mut Context, target: ModuleIdx) {
   // Only consider `NormalModule`
-  if ctx.visited_modules.has_bit(target) {
+  if !ctx.visited_modules.set_bit(target) {
     return;
   }
-  ctx.visited_modules.set_bit(target);
 
   let Module::Normal(module) = &ctx.modules[target] else {
     return;
@@ -66,10 +65,9 @@ fn has_dynamic_exports_due_to_export_star(
   linking_infos: &mut LinkingMetadataVec,
   visited_modules: &mut IndexBitSet<ModuleIdx>,
 ) -> bool {
-  if visited_modules.has_bit(target) {
+  if !visited_modules.set_bit(target) {
     return linking_infos[target].has_dynamic_exports;
   }
-  visited_modules.set_bit(target);
 
   let has_dynamic_exports = match &modules[target] {
     Module::Normal(module) => {
@@ -189,17 +187,26 @@ impl LinkStage<'_> {
       }
     }
 
-    self.module_table.modules.iter_mut().filter_map(|m| m.as_normal_mut()).for_each(
-      |ecma_module| {
-        let linking_info = &mut self.metas[ecma_module.idx];
-        create_wrapper(ecma_module, linking_info, &mut self.symbols, &self.runtime, self.options);
-      },
-    );
+    for m in &self.module_table.modules {
+      let Some(ecma_module) = m.as_normal() else { continue };
+      let idx = ecma_module.idx;
+      let linking_info = &mut self.metas[idx];
+      let stmt_infos = &mut self.stmt_infos[idx];
+      create_wrapper(
+        ecma_module,
+        stmt_infos,
+        linking_info,
+        &mut self.symbols,
+        &self.runtime,
+        self.options,
+      );
+    }
   }
 }
 
 pub fn create_wrapper(
-  module: &mut NormalModule,
+  module: &NormalModule,
+  stmt_infos: &mut StmtInfos,
   linking_info: &mut LinkingMetadata,
   symbols: &mut SymbolRefDb,
   runtime: &RuntimeModuleBrief,
@@ -233,7 +240,7 @@ pub fn create_wrapper(
         force_tree_shaking: true,
       };
 
-      linking_info.wrapper_stmt_info = Some(module.stmt_infos.add_stmt_info(stmt_info));
+      linking_info.wrapper_stmt_info = Some(stmt_infos.add_stmt_info(stmt_info));
       linking_info.wrapper_ref = Some(wrapper_ref);
     }
     // If this is a lazily-initialized ESM file, we're going to need to
@@ -263,7 +270,7 @@ pub fn create_wrapper(
         force_tree_shaking: true,
       };
 
-      linking_info.wrapper_stmt_info = Some(module.stmt_infos.add_stmt_info(stmt_info));
+      linking_info.wrapper_stmt_info = Some(stmt_infos.add_stmt_info(stmt_info));
       linking_info.wrapper_ref = Some(wrapper_ref);
     }
     WrapKind::None => {}

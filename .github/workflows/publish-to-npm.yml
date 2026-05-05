@@ -22,7 +22,7 @@ jobs:
       version_changed: ${{ steps.version.outputs.changed }}
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: taiki-e/checkout-action@83ed61bfbe2b8abbb3c66e8b65b1335484c70009 # v1.4.1
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
       - name: Check version changes
         uses: EndBug/version-check@095362f3cd50f690c8fa0e6afeea81834bd8d320 # v3.0.0
@@ -45,18 +45,33 @@ jobs:
     name: Build bindings and node packages
     uses: ./.github/workflows/reusable-release-build.yml
 
+  notify-before-publish:
+    needs: [check, build]
+    if: github.repository == 'rolldown/rolldown'
+    name: Notify Before Publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Discord
+        uses: tsickert/discord-webhook@b217a69502f52803de774ded2b1ab7c282e99645 # v7.0.0
+        with:
+          webhook-url: ${{ secrets.DISCORD_ROLLDOWN_CHANNEL }}
+          embed-title: Rolldown Release
+          embed-description: Requesting approval for Rolldown v${{ needs.check.outputs.version }}.
+          embed-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
   publish:
     needs: [check, build]
     if: github.repository == 'leegeunhyeok/rolldown'
     name: Publish npm Packages
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       id-token: write # for `npm publish --provenance`
       contents: write # for `git push`
     steps:
-      - uses: taiki-e/checkout-action@83ed61bfbe2b8abbb3c66e8b65b1335484c70009 # v1.4.1
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
-      - uses: voidzero-dev/setup-vp@e1609b468742ba9232ce5e12b3a77bdf14495277 # v1.1.0
+      - uses: voidzero-dev/setup-vp@4f5aa3e38c781f1b01e78fb9255527cee8a6efa6 # v1.8.0
         with:
           cache: true
 
@@ -77,6 +92,9 @@ jobs:
       - name: List Rolldown Bindings
         run: ls -R ./packages/rolldown/npm
         shell: bash
+
+      - name: Check wasm32-wasi binding deps match @rolldown/browser
+        run: node scripts/misc/check-wasi-binding-deps.mjs
 
       - name: Download Node Artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1

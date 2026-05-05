@@ -1,3 +1,4 @@
+use oxc::ast::ast::Str;
 use oxc::{
   allocator::{Allocator, Box as ArenaBox, IntoIn, TakeIn},
   ast::{
@@ -5,13 +6,13 @@ use oxc::{
     ast::{self, ExportDefaultDeclarationKind, Expression, ObjectPropertyKind, Statement},
   },
   semantic::{IsGlobalReference, Scoping, SymbolId},
-  span::{Atom, SPAN, Span},
+  span::{SPAN, Span},
 };
 
 use rolldown_common::{
-  ExternalModule, ImportRecordIdx, IndexModules, Module, ModuleIdx, NormalModule,
+  ExternalModule, ImportRecordIdx, ImportRecordMeta, IndexModules, Module, ModuleIdx, NormalModule,
 };
-use rolldown_ecmascript::CJS_REQUIRE_REF_ATOM;
+use rolldown_ecmascript::CJS_REQUIRE_REF_STR;
 use rolldown_ecmascript_utils::{AstSnippet, ExpressionExt};
 use rolldown_utils::{
   ecmascript::is_validate_identifier_name,
@@ -30,6 +31,19 @@ pub struct HmrAstFinalizer<'me, 'ast> {
   pub module: &'me NormalModule,
   pub affected_module_idx_to_init_fn_name: &'me FxHashMap<ModuleIdx, String>,
   pub use_pife_for_module_wrappers: bool,
+
+  /// Whether the runtime should short-circuit re-execution of the wrapped module body
+  /// when its stable id is already registered.
+  ///
+  /// `true` for lazy-compilation chunks: when a module appears in two lazy bundles served
+  /// concurrently, we want only the first one to actually execute the body.
+  ///
+  /// `false` for HMR patches: the patch's whole point is to re-execute the body and
+  /// replace the registered exports, so deduping would silently drop the update.
+  ///
+  /// Note: This works only as a **workaround**. In the future, HMR runtime should
+  /// provide a runtime API to trigger module disposal and re-execution. @hana
+  pub dedup_module_initializer: bool,
 
   // Each module has a unique index, which is used to generate something that needs to be unique.
   pub unique_index: usize,
@@ -59,7 +73,7 @@ pub struct HmrAstFinalizer<'me, 'ast> {
   pub generated_static_import_infos: FxHashMap<ModuleIdx, String>,
   // We need to store the static import statements for external separately, so we could put them outside of the `try` block.
   pub generated_static_import_stmts_from_external: FxIndexMap<ModuleIdx, ast::Statement<'ast>>,
-  pub named_exports: FxHashMap<Atom<'ast>, NamedExport>,
+  pub named_exports: FxHashMap<Str<'ast>, NamedExport>,
 }
 
 impl<'ast> HmrAstFinalizer<'_, 'ast> {
@@ -188,11 +202,11 @@ impl<'ast> HmrAstFinalizer<'_, 'ast> {
                 ast::Declaration::VariableDeclaration(var_decl) => {
                   // export var foo = 1
                   // export var { foo, bar } = { foo: 1, bar: 2 }
-                  self.exports.extend(var_decl.declarations.iter().filter_map(|decl| {
-                    decl.id.get_identifier_name().map(|ident| {
+                  self.exports.extend(var_decl.declarations.iter().flat_map(|decl| {
+                    decl.id.get_binding_identifiers().into_iter().map(|ident| {
                       self.snippet.object_property_kind_object_property(
-                        ident.as_str(),
-                        self.snippet.id_ref_expr(ident.as_str(), SPAN),
+                        ident.name.as_str(),
+                        self.snippet.id_ref_expr(ident.name.as_str(), SPAN),
                         false,
                       )
                     })
@@ -390,7 +404,7 @@ impl<'ast> HmrAstFinalizer<'_, 'ast> {
     // let arguments = self.snippet.builder.vec_from_array([
     //   ast::Argument::StringLiteral(self.snippet.builder.alloc_string_literal(
     //     SPAN,
-    //     self.snippet.builder.atom(&self.module.stable_id),
+    //     self.snippet.builder.str(&self.module.stable_id),
     //     None,
     //   )),
     //   module_exports,
@@ -432,7 +446,7 @@ impl<'ast> HmrAstFinalizer<'_, 'ast> {
           [self.module.hmr_info.module_request_to_import_record_idx[string_literal.value.as_str()]];
         let Some(module_idx) = import_record.resolved_module else { return };
         // Use stable module ID for consistent runtime lookup
-        string_literal.value = self.snippet.builder.atom(self.modules[module_idx].stable_id());
+        string_literal.value = self.snippet.builder.str(self.modules[module_idx].stable_id());
       }
       ast::Argument::ArrayExpression(array_expression) => {
         // `import.meta.hot.accept(['./dep1.js', './dep2.js'], ...)`
@@ -443,7 +457,7 @@ impl<'ast> HmrAstFinalizer<'_, 'ast> {
                 [string_literal.value.as_str()]];
             let Some(module_idx) = import_record.resolved_module else { return };
             // Use stable module ID for consistent runtime lookup
-            string_literal.value = self.snippet.builder.atom(self.modules[module_idx].stable_id());
+            string_literal.value = self.snippet.builder.str(self.modules[module_idx].stable_id());
           }
         });
       }
@@ -605,7 +619,7 @@ impl<'ast> HmrAstFinalizer<'_, 'ast> {
         NONE,
         self.builder.vec1(ast::Argument::StringLiteral(self.builder.alloc_string_literal(
           SPAN,
-          self.builder.atom(&importee.id),
+          self.builder.str(&importee.id),
           None,
         ))),
         false,
@@ -616,19 +630,19 @@ impl<'ast> HmrAstFinalizer<'_, 'ast> {
         let quasis = self.builder.vec_from_iter([
           self.builder.template_element(
             SPAN,
-            ast::TemplateElementValue { raw: self.builder.atom("/@vite/lazy?id="), cooked: None },
+            ast::TemplateElementValue { raw: self.builder.str("/@vite/lazy?id="), cooked: None },
             false,
             false,
           ),
           self.builder.template_element(
             SPAN,
-            ast::TemplateElementValue { raw: self.builder.atom("&clientId="), cooked: None },
+            ast::TemplateElementValue { raw: self.builder.str("&clientId="), cooked: None },
             false,
             false,
           ),
           self.builder.template_element(
             SPAN,
-            ast::TemplateElementValue { raw: self.builder.atom(""), cooked: None },
+            ast::TemplateElementValue { raw: self.builder.str(""), cooked: None },
             true,
             false,
           ),
@@ -657,7 +671,7 @@ impl<'ast> HmrAstFinalizer<'_, 'ast> {
         self.snippet.builder.vec1(ast::Argument::StringLiteral(
           self.snippet.builder.alloc_string_literal(
             SPAN,
-            self.snippet.builder.atom(&importee.stable_id),
+            self.snippet.builder.str(&importee.stable_id),
             None,
           ),
         )),
@@ -731,7 +745,7 @@ impl<'ast> HmrAstFinalizer<'_, 'ast> {
 
     // Rewrite standalone `require` to `__rolldown_runtime__.loadExports`
     if let Some(id_ref) = it.as_identifier()
-      && id_ref.name == CJS_REQUIRE_REF_ATOM
+      && id_ref.name == CJS_REQUIRE_REF_STR
       && id_ref.is_global_reference(scoping)
       && !ctx.parent().is_call_expression()
     {
@@ -747,7 +761,7 @@ impl<'ast> HmrAstFinalizer<'_, 'ast> {
     if !call_expr
       .callee
       .as_identifier()
-      .is_some_and(|id| id.name == CJS_REQUIRE_REF_ATOM && id.is_global_reference(scoping))
+      .is_some_and(|id| id.name == CJS_REQUIRE_REF_STR && id.is_global_reference(scoping))
     {
       return;
     }
@@ -756,7 +770,8 @@ impl<'ast> HmrAstFinalizer<'_, 'ast> {
       return;
     };
 
-    let Some(importee_idx) = self.module.import_records[*rec_idx].resolved_module else {
+    let rec = &self.module.import_records[*rec_idx];
+    let Some(importee_idx) = rec.resolved_module else {
       return;
     };
 
@@ -774,23 +789,62 @@ impl<'ast> HmrAstFinalizer<'_, 'ast> {
       false,
     );
 
+    let load_exports_expr = if importee.meta.has_lazy_export() || is_importee_cjs {
+      // Note that HMR finalizer is only able to see scanner-level exports_kind, this means that the result
+      // from `determine_module_exports_kind` is not available here. So we have to use some heuristics to determine
+      // whether the importee is CommonJS or has lazy export, and handle them in a special way.
+      //
+      // 1. For the case of `is_importee_cjs`,
+      // the runtime will always have `module.exports`. This is determined in `determine_module_exports_kind`.
+      //
+      // 2. For the case of `has_lazy_export`,
+      // here we're inside `try_rewrite_require`, which means the original code is `require(...)`.
+      //
+      // Modules that have lazy export is of these `ModuleType`: `Json`, `Text`, `Base64`, `Dataurl`.
+      // These data type does not have `export`, `module.exports` or any export keyword at runtime,
+      // so they're `ExportsKind::None` by default.
+      //
+      // For those lazy export modules, if `ImportKind` is `Require`, which is the case here,
+      // and the importee has `ExportsKind::None`, then the importee's `WrapKind` is set to `WrapKind::Cjs`.
+      // So here we know for sure that the importee is using `module.exports` at runtime.
+      // So `loadExports(id)` returns the value directly.
+      //
+      // This is a way to mimic the same mechanism of `determine_module_exports_kind`.
+      //
+      // TODO(hana): we should think about a more robust way to track the consolidated export type of a module in the future.
+      // Listing all the special cases like this is error-prone.
+      load_exports_call
+    } else if rec.meta.contains(ImportRecordMeta::JsonModule) {
+      // Vite-mode JSON: ESM-wrapped at runtime, unwrap to the JSON value.
+      let to_commonjs_call = self.snippet.call_expr_with_arg_expr(
+        self.snippet.literal_prop_access_member_expr_expr("__rolldown_runtime__", "__toCommonJS"),
+        load_exports_call,
+        false,
+      );
+      Expression::from(self.snippet.builder.member_expression_static(
+        SPAN,
+        to_commonjs_call,
+        self.snippet.id_name("default", SPAN),
+        false,
+      ))
+    } else {
+      self.snippet.call_expr_with_arg_expr(
+        self.snippet.literal_prop_access_member_expr_expr("__rolldown_runtime__", "__toCommonJS"),
+        load_exports_call,
+        false,
+      )
+    };
+
     if let Some(init_fn_name) = self.affected_module_idx_to_init_fn_name.get(&importee_idx) {
       // If the importee is in the current patch, call init before loading exports
       // Turn `require('./foo.js')` into `(init_foo(), __rolldown_runtime__.loadExports('./foo.js'))`
-      if is_importee_cjs {
-        *it = self
-          .snippet
-          .seq2_in_paren_expr(self.snippet.call_expr_expr(init_fn_name), load_exports_call);
-      } else {
-        // hyf0 TODO: handle esm importee
-        *it = self
-          .snippet
-          .seq2_in_paren_expr(self.snippet.call_expr_expr(init_fn_name), load_exports_call);
-      }
+      *it = self
+        .snippet
+        .seq2_in_paren_expr(self.snippet.call_expr_expr(init_fn_name), load_exports_expr);
     } else {
       // Importee is not in current patch (already executed by client), just load its exports
       // Turn `require('./foo.js')` into `__rolldown_runtime__.loadExports('./foo.js')`
-      *it = load_exports_call;
+      *it = load_exports_expr;
     }
   }
 }

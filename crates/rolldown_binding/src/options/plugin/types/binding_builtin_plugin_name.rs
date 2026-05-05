@@ -45,8 +45,6 @@ pub enum BindingBuiltinPluginName {
   // MARK: - Rollipop
   #[napi(value = "builtin:rollipop-react-refresh-wrapper")]
   RollipopReactRefreshWrapper,
-  #[napi(value = "builtin:rollipop-worklets")]
-  RollipopWorklets,
   #[napi(value = "builtin:rollipop-react-native")]
   RollipopReactNative,
 }

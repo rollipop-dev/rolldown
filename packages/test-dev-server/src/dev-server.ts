@@ -46,6 +46,8 @@ class DevServer {
   #devOptions?: NormalizedDevOptions;
   #devEngine?: DevEngine;
   #port = 3000;
+  #buildSeq = 0;
+  #moduleRegistrationSeq = 0;
 
   constructor() {}
 
@@ -88,28 +90,40 @@ class DevServer {
       onHmrUpdates: (errOrUpdates) => {
         if (errOrUpdates instanceof Error) {
           console.error('HMR update error:', errOrUpdates);
+          this.#buildSeq++;
         } else {
           this.handleHmrUpdates(errOrUpdates.updates);
+          // Only increment if no FullReload — a FullReload triggers a rebuild
+          // which will call onOutput, so we let onOutput do the increment to
+          // avoid double-counting a single build cycle.
+          const hasFullReload = errOrUpdates.updates.some((u) => u.update.type === 'FullReload');
+          if (!hasFullReload) {
+            this.#buildSeq++;
+          }
         }
       },
       onOutput: (errOrOutputs) => {
         if (errOrOutputs instanceof Error) {
           console.error('Build error:', errOrOutputs);
         }
+        this.#buildSeq++;
       },
       watch: getDevWatchOptionsForCi(),
     });
     this.#devEngine = devEngine;
-    process.stdin
-      .on('data', async (data) => {
-        if (data.toString() === 'r') {
-          const { hasStaleOutput } = await devEngine.getBundleState();
-          if (hasStaleOutput) {
-            await devEngine.ensureLatestBuildOutput();
-          }
+    process.stdin.on('data', async (data) => {
+      if (data.toString() === 'r') {
+        const { hasStaleOutput } = await devEngine.getBundleState();
+        if (hasStaleOutput) {
+          await devEngine.ensureLatestBuildOutput();
         }
-      })
-      .unref();
+      }
+    });
+    // Unref stdin to prevent it from keeping the process alive.
+    // Some Node.js versions (e.g., 24) may not have unref() on stdin.
+    if (typeof process.stdin.unref === 'function') {
+      process.stdin.unref();
+    }
     this.#prepareHttpServerAfterCreateDevEngine(devEngine);
     const initialBuildStart = Date.now();
     console.log('Starting initial build...');
@@ -169,6 +183,7 @@ class DevServer {
           case 'hmr:module-registered': {
             console.log('Registering modules:', clientMessage.modules);
             this.#devEngine?.registerModules(clientSession.id, clientMessage.modules);
+            this.#moduleRegistrationSeq++;
             break;
           }
           default: {
@@ -213,6 +228,23 @@ class DevServer {
           console.error('Error handling lazy compile request:', err);
           return;
         }
+      }
+      next();
+    });
+    this.connectServer.use(async (req, res, next) => {
+      if (req.url === '/_dev/status') {
+        const bundleState = await devEngine.getBundleState();
+        res.setHeader('Content-Type', 'application/json');
+        res.end(
+          JSON.stringify({
+            hasStaleOutput: bundleState.hasStaleOutput,
+            lastFullBuildFailed: bundleState.lastFullBuildFailed,
+            buildSeq: this.#buildSeq,
+            connectedClients: this.#clients.size,
+            moduleRegistrationSeq: this.#moduleRegistrationSeq,
+          }),
+        );
+        return;
       }
       next();
     });

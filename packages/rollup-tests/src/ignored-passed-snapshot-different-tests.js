@@ -27,6 +27,7 @@ module.exports = [
     "rollup@form@default-export-anonymous-class-extends: handles default exported classes extending a regular expression argument (#4783)",
     "rollup@form@default-export-class: puts the export after the declaration for default exported classes in SystemJS@generates es",
     "rollup@form@default-export-mode: allows specifying the export mode to be \"default\"@generates es",
+    "rollup@form@comment-start-inside-comment: properly remove comments above import statements@generates es",
     "rollup@form@effect-in-for-of-loop-in-functions: includes effects in for-of loop (#870)@generates es",
     "rollup@form@exponentiation-operator: folds exponentiation operator when considering dead code@generates es",
     "rollup@form@export-default-2: re-exporting a default export@generates es",
@@ -65,6 +66,7 @@ module.exports = [
     "rollup@form@namespace-import-reexport-2: properly associate or shadow variables in and around functions@generates es",
     "rollup@form@namespace-import-reexport: properly associate or shadow variables in and around functions@generates es",
     "rollup@form@namespace-object-import: properly encodes reserved names if namespace import is used@generates es",
+    "rollup@form@namespace-optimization: it does static lookup optimization of internal namespaces",
     "rollup@form@namespace-optimization-b: it does static lookup optimization of internal namespaces, coping with multiple namespaces in one function@generates es",
     "rollup@form@namespace-reexport-name: uses correct names when reexporting from namespace reexports (#4049)@generates es", // the rollup result is simply
     "rollup@form@namespace-self-import: namespace early import hoisting@generates es",

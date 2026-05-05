@@ -61,11 +61,8 @@ impl<Fs: FileSystem + Clone + 'static> RuntimeModuleTask<Fs> {
   #[tracing::instrument(name = "RuntimeNormalModuleTaskResult::run", level = "debug", skip_all)]
   pub async fn run(self) {
     if let Err(errs) = self.run_inner().await {
-      self
-        .ctx
-        .tx
-        .try_send(ModuleLoaderMsg::BuildErrors(errs.into_vec().into_boxed_slice()))
-        .expect("Send should not fail");
+      // If the main thread is dead, nothing we can do to handle these send failures.
+      let _ = self.ctx.tx.send(ModuleLoaderMsg::BuildErrors(errs.into_vec().into_boxed_slice()));
     }
   }
 
@@ -178,7 +175,6 @@ impl<Fs: FileSystem + Clone + 'static> RuntimeModuleTask<Fs> {
         side_effects: determined_side_effects,
         named_imports,
         named_exports,
-        stmt_infos,
         imports,
         default_export_ref,
         exports_kind: ExportsKind::Esm,
@@ -196,9 +192,10 @@ impl<Fs: FileSystem + Clone + 'static> RuntimeModuleTask<Fs> {
         directive_range: vec![],
         dummy_record_set,
         constant_export_map: FxHashMap::default(),
-        depended_runtime_helper: Box::default(),
+        enum_member_value_map: FxHashMap::default(),
         import_attribute_map: FxHashMap::default(),
         json_module_none_self_reference_included_symbol: None,
+        cjs_reexport_import_record_ids: Vec::new(),
       },
       // TODO(hyf0/hmr): We might need to find a better way to handle this.
       originative_resolved_id: resolved_id,
@@ -209,6 +206,7 @@ impl<Fs: FileSystem + Clone + 'static> RuntimeModuleTask<Fs> {
     let result = ModuleLoaderMsg::RuntimeNormalModuleDone(Box::new(RuntimeModuleTaskResult {
       ast,
       module,
+      stmt_infos,
       runtime,
       resolved_deps,
       raw_import_records,
@@ -216,7 +214,7 @@ impl<Fs: FileSystem + Clone + 'static> RuntimeModuleTask<Fs> {
     }));
 
     // If the main thread is dead, nothing we can do to handle these send failures.
-    let _ = self.ctx.tx.try_send(result);
+    let _ = self.ctx.tx.send(result);
 
     Ok(())
   }
@@ -236,19 +234,22 @@ impl<Fs: FileSystem + Clone + 'static> RuntimeModuleTask<Fs> {
     // Always respect annotations in the runtime module, regardless of user config.
     // The runtime is trusted internal code.
     let runtime_flat_options = self.flat_options - FlatOptions::IgnoreAnnotations;
-    let scanner = AstScanner::new(
-      self.module_idx,
-      scoping,
-      "rolldown_runtime",
-      ModuleDefFormat::EsmMjs,
-      source,
-      &facade_path,
-      ast.comments(),
-      &self.ctx.options,
-      ast.allocator(),
-      runtime_flat_options,
-    );
-    let scan_result = scanner.scan(ast.program())?;
+    let scan_result = ast.program.with_mut(|fields| {
+      let program = &*fields.program;
+      let scanner = AstScanner::new(
+        self.module_idx,
+        scoping,
+        "rolldown_runtime",
+        ModuleDefFormat::EsmMjs,
+        source,
+        &facade_path,
+        &program.comments,
+        &self.ctx.options,
+        fields.allocator,
+        runtime_flat_options,
+      );
+      scanner.scan(program)
+    })?;
 
     Ok((ast, scan_result))
   }

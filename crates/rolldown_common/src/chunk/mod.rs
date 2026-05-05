@@ -15,7 +15,7 @@ pub mod chunk_table;
 pub mod types;
 
 use arcstr::ArcStr;
-use oxc::span::CompactStr;
+use oxc_str::CompactStr;
 use rolldown_std_utils::PathExt;
 use rolldown_utils::{
   BitSet,
@@ -77,6 +77,9 @@ pub struct Chunk {
   pub preliminary_filename: Option<PreliminaryFilename>,
   pub absolute_preliminary_filename: Option<String>,
   pub canonical_names: FxHashMap<SymbolRef, CompactStr>,
+  /// For mixed-mode externals: maps external `namespace_ref` to the node-mode binding name.
+  /// Only populated when an external has both ESM and non-ESM importers needing interop.
+  pub node_mode_external_ns_names: FxHashMap<SymbolRef, CompactStr>,
   // Sorted by Module#stable_id of modules in the chunk
   pub cross_chunk_imports: Vec<ChunkIdx>,
   pub cross_chunk_dynamic_imports: Vec<ChunkIdx>,

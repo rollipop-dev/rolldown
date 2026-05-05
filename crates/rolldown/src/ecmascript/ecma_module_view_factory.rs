@@ -1,3 +1,4 @@
+use oxc::span::Span;
 use oxc_index::IndexVec;
 use rolldown_common::{
   EcmaModuleAstUsage, EcmaRelated, EcmaView, EcmaViewMeta, FlatOptions, ImportRecordIdx,
@@ -19,6 +20,10 @@ pub struct CreateEcmaViewReturn {
   pub ecma_view: EcmaView,
   pub ecma_related: EcmaRelated,
   pub raw_import_records: IndexVec<ImportRecordIdx, RawImportRecord>,
+  /// The span of the first top-level `await` keyword, if any. Routed through
+  /// the task result into a centralized map on the link stage so it doesn't
+  /// need to live on every `EcmaView`.
+  pub tla_keyword_span: Option<Span>,
 }
 
 pub async fn create_ecma_view(
@@ -26,8 +31,14 @@ pub async fn create_ecma_view(
   args: CreateModuleViewArgs,
 ) -> BuildResult<CreateEcmaViewReturn> {
   let CreateModuleViewArgs { source, sourcemap_chain, hook_side_effects } = args;
-  let ParseToEcmaAstResult { ast, scoping, has_lazy_export, warnings, preserve_jsx } =
-    parse_to_ecma_ast(ctx, source).await?;
+  let ParseToEcmaAstResult {
+    mut ast,
+    scoping,
+    has_lazy_export,
+    warnings,
+    preserve_jsx,
+    enum_member_value_map,
+  } = parse_to_ecma_ast(ctx, source).await?;
   ctx.flat_options.set(FlatOptions::JsxPreserve, preserve_jsx);
   ctx.warnings.extend(warnings);
 
@@ -36,18 +47,22 @@ pub async fn create_ecma_view(
   let repr_name = module_id.as_path().representative_file_name();
   let repr_name = legitimize_identifier_name(&repr_name);
 
-  let scanner = AstScanner::new(
-    ctx.module_idx,
-    scoping,
-    &repr_name,
-    ctx.resolved_id.module_def_format,
-    ast.source(),
-    &module_id,
-    ast.comments(),
-    ctx.options,
-    ast.allocator(),
-    ctx.flat_options,
-  );
+  let scan_result = ast.program.with_mut(|fields| {
+    let program = &*fields.program;
+    let scanner = AstScanner::new(
+      ctx.module_idx,
+      scoping,
+      &repr_name,
+      ctx.resolved_id.module_def_format,
+      fields.source,
+      &module_id,
+      &program.comments,
+      ctx.options,
+      fields.allocator,
+      ctx.flat_options,
+    );
+    scanner.scan(program)
+  })?;
 
   let ScanResult {
     commonjs_exports,
@@ -62,6 +77,7 @@ pub async fn create_ecma_view(
     warnings: scan_warnings,
     errors,
     ast_usage,
+    tla_keyword_span,
     symbol_ref_db: symbols,
     self_referenced_class_decl_symbol_ids,
     hashbang_range,
@@ -75,7 +91,9 @@ pub async fn create_ecma_view(
     dummy_record_set,
     constant_export_map,
     import_attribute_map,
-  } = scanner.scan(ast.program())?;
+    cjs_reexport_require_spans: _,
+    cjs_reexport_import_record_ids,
+  } = scan_result;
   // If a export symbol in commonjs defined in multiple time, we just bailout treeshake it.
   for (k, v) in commonjs_exports {
     if v.len() == 1 {
@@ -98,7 +116,6 @@ pub async fn create_ecma_view(
     source: ast.source().clone(),
     named_imports,
     named_exports,
-    stmt_infos,
     imports,
     default_export_ref,
     exports_kind,
@@ -133,13 +150,15 @@ pub async fn create_ecma_view(
     directive_range,
     dummy_record_set,
     constant_export_map,
-    depended_runtime_helper: Box::default(),
+    enum_member_value_map,
     import_attribute_map,
     json_module_none_self_reference_included_symbol: None,
+    cjs_reexport_import_record_ids,
   };
 
-  let ecma_related = EcmaRelated { ast, symbols, dynamic_import_rec_exports_usage, preserve_jsx };
-  Ok(CreateEcmaViewReturn { ecma_view, ecma_related, raw_import_records })
+  let ecma_related =
+    EcmaRelated { ast, symbols, dynamic_import_rec_exports_usage, preserve_jsx, stmt_infos };
+  Ok(CreateEcmaViewReturn { ecma_view, ecma_related, raw_import_records, tla_keyword_span })
 }
 
 /// The side effects priority is:

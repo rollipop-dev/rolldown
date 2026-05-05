@@ -5,8 +5,9 @@ use itertools::Itertools;
 use oxc_index::{IndexVec, index_vec};
 use rolldown_common::{
   Chunk, ChunkDebugInfo, ChunkIdx, ChunkKind, ChunkMeta, ChunkReasonType,
-  FacadeChunkEliminationReason, Module, ModuleIdx, ModuleNamespaceIncludedReason, ModuleTable,
-  PostChunkOptimizationOperation, PreserveEntrySignatures, RuntimeHelper, StmtInfos, WrapKind,
+  FacadeChunkEliminationReason, ImportKind, Module, ModuleIdx, ModuleNamespaceIncludedReason,
+  ModuleTable, PostChunkOptimizationOperation, PreserveEntrySignatures, RuntimeHelper, StmtInfos,
+  WrapKind,
 };
 use rolldown_utils::{BitSet, IndexBitSet, indexmap::FxIndexMap};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -45,6 +46,8 @@ struct ChunkCandidate {
   /// Whether this chunk needs to be created in the final chunk graph.
   needs_creation: bool,
   dependencies: FxHashSet<ChunkIdx>,
+  /// Whether any module in this chunk has side effects.
+  has_side_effects: bool,
 }
 
 type TempIndexChunks = IndexVec<ChunkIdx, ChunkCandidate>;
@@ -68,6 +71,7 @@ impl ChunkOptimizationGraph {
     chunk_optimization: bool,
     chunk_graph: &ChunkGraph,
     bits_to_chunk_idx: &FxHashMap<BitSet, ChunkIdx>,
+    module_table: &ModuleTable,
   ) -> Self {
     if !chunk_optimization {
       return Self::default();
@@ -86,19 +90,24 @@ impl ChunkOptimizationGraph {
         }
         // Initial chunks have identical indices in both graphs
         chunk_idx_to_temp_chunk_idx.insert(chunk_idx, chunk_idx);
+        let has_side_effects = item
+          .modules
+          .iter()
+          .any(|&module_idx| module_table[module_idx].side_effects().has_side_effects());
         ChunkCandidate {
           modules: item.modules.clone(),
           needs_creation: false,
           dependencies: FxHashSet::default(),
+          has_side_effects,
         }
       })
       .collect();
-    Self {
-      chunks,
-      bits_to_chunk_idx: bits_to_chunk_idx.iter().map(|(k, v)| (k.clone(), *v)).collect(),
-      module_to_chunk,
-      chunk_idx_to_temp_chunk_idx,
-    }
+
+    let mut bits_to_chunk_idx: FxIndexMap<_, _> =
+      bits_to_chunk_idx.iter().map(|(k, v)| (k.clone(), *v)).collect();
+    bits_to_chunk_idx.sort_unstable_keys();
+
+    Self { chunks, bits_to_chunk_idx, module_to_chunk, chunk_idx_to_temp_chunk_idx }
   }
 
   /// Assigns a module to a temporary chunk based on its reachability bits.
@@ -106,15 +115,23 @@ impl ChunkOptimizationGraph {
   /// If a chunk already exists for the given bit pattern, the module is added to it.
   /// Otherwise, a new temporary chunk is created and marked as `needs_created: true`,
   /// indicating it will need to be materialized in the final chunk graph.
-  pub fn init_module_assignment(&mut self, module_idx: ModuleIdx, bits: &BitSet) {
+  pub fn init_module_assignment(
+    &mut self,
+    module_idx: ModuleIdx,
+    bits: &BitSet,
+    module_table: &ModuleTable,
+  ) {
+    let module_has_side_effects = module_table[module_idx].side_effects().has_side_effects();
     if let Some(&chunk_idx) = self.bits_to_chunk_idx.get(bits) {
       self.chunks[chunk_idx].modules.push(module_idx);
+      self.chunks[chunk_idx].has_side_effects |= module_has_side_effects;
       self.module_to_chunk[module_idx] = Some(chunk_idx);
     } else {
       let temp_chunk = ChunkCandidate {
         modules: vec![module_idx],
         needs_creation: true,
         dependencies: FxHashSet::default(),
+        has_side_effects: module_has_side_effects,
       };
       let chunk_idx = self.chunks.push(temp_chunk);
       self.bits_to_chunk_idx.insert(bits.clone(), chunk_idx);
@@ -122,8 +139,15 @@ impl ChunkOptimizationGraph {
     }
   }
 
-  pub fn add_module_to_chunk(&mut self, module_idx: ModuleIdx, chunk_idx: ChunkIdx) {
+  pub fn add_module_to_chunk(
+    &mut self,
+    module_idx: ModuleIdx,
+    chunk_idx: ChunkIdx,
+    module_table: &ModuleTable,
+  ) {
     self.chunks[chunk_idx].modules.push(module_idx);
+    self.chunks[chunk_idx].has_side_effects |=
+      module_table[module_idx].side_effects().has_side_effects();
     self.module_to_chunk[module_idx] = Some(chunk_idx);
   }
 
@@ -217,6 +241,24 @@ impl ChunkOptimizationGraph {
     false
   }
 
+  /// Returns true if `from` can transitively reach `to` through the dependency graph.
+  pub fn is_reachable(&self, from: ChunkIdx, to: ChunkIdx) -> bool {
+    let mut queue: VecDeque<ChunkIdx> = self.chunks[from].dependencies.iter().copied().collect();
+    let mut visited = FxHashSet::default();
+    while let Some(chunk_idx) = queue.pop_front() {
+      if chunk_idx == to {
+        return true;
+      }
+      if !visited.insert(chunk_idx) {
+        continue;
+      }
+      queue.extend(
+        self.chunks[chunk_idx].dependencies.iter().copied().filter(|dep| !visited.contains(dep)),
+      );
+    }
+    false
+  }
+
   /// Merges the dependencies of source chunk into target chunk.
   ///
   /// When modules from one chunk are merged into another chunk, the dependencies
@@ -227,6 +269,8 @@ impl ChunkOptimizationGraph {
     target_chunk_idx: ChunkIdx,
     source_chunk_idx: ChunkIdx,
   ) {
+    let source = &self.chunks[source_chunk_idx];
+    let source_has_side_effects = source.has_side_effects;
     let source_dependencies = std::mem::take(&mut self.chunks[source_chunk_idx].dependencies);
     for dep_chunk_idx in source_dependencies {
       // Don't add self-reference
@@ -236,6 +280,7 @@ impl ChunkOptimizationGraph {
     }
     // Remove self-reference if it exists (source might have depended on target)
     self.chunks[target_chunk_idx].dependencies.remove(&target_chunk_idx);
+    self.chunks[target_chunk_idx].has_side_effects |= source_has_side_effects;
   }
 }
 
@@ -359,6 +404,7 @@ impl GenerateStage<'_> {
           &self.link_output.module_table,
           &dynamic_entry_to_dynamic_importers,
           temp_chunk,
+          temp_chunk_graph,
         );
 
         Some((bits.clone(), *temp_chunk_idx, chunk_idxs, merge_target))
@@ -518,6 +564,7 @@ impl GenerateStage<'_> {
     module_table: &ModuleTable,
     dynamic_entry_to_dynamic_importers: &FxHashMap<ModuleIdx, FxHashSet<ModuleIdx>>,
     info: &ChunkCandidate,
+    temp_chunk_graph: &ChunkOptimizationGraph,
   ) -> Option<ChunkIdx> {
     let mut user_defined_entry = vec![];
     let mut dynamic_entry = vec![];
@@ -542,7 +589,18 @@ impl GenerateStage<'_> {
       Self::find_merge_target(&user_defined_entry, &user_defined_entry_modules, module_table);
     if user_defined_entry.is_empty() {
       let dynamic_chunk_entry_modules = Self::collect_entry_modules(&dynamic_entry, chunk_graph)?;
-      Self::find_merge_target(&dynamic_entry, &dynamic_chunk_entry_modules, module_table)
+      Self::find_merge_target(&dynamic_entry, &dynamic_chunk_entry_modules, module_table).or_else(
+        || {
+          Self::find_dynamic_dominator(
+            &dynamic_entry,
+            &dynamic_chunk_entry_modules,
+            module_table,
+            dynamic_entry_to_dynamic_importers,
+            entry_chunk_reference,
+            &info.modules,
+          )
+        },
+      )
     } else {
       let chunk_idx = merged_user_defined_chunk?;
       let chunk = &chunk_graph.chunk_table[chunk_idx];
@@ -554,6 +612,32 @@ impl GenerateStage<'_> {
         dynamic_entry.iter().all(|idx| reached_dynamic_chunk.is_some_and(|set| set.contains(idx)));
       if !all_dynamic_entries_reachable {
         return None;
+      }
+      // If any dynamic entry chunk depends on the pending common chunk,
+      // merging into the user-defined entry would make the dynamic entry
+      // import the entry chunk. This is only safe if the entry chunk
+      // has no side effects; otherwise loading the dynamic chunk would
+      // trigger the entry's side effects unexpectedly.
+      //
+      // However, the leak only happens if the dynamic entry can be reached
+      // via some *other* user-defined entry. If the dynamic entry is only
+      // reachable from `chunk_idx` (the merge target), then loading the
+      // dynamic entry always implies `chunk_idx` has already been loaded,
+      // so its side effects have already run — no leak.
+      // All dynamic entries in `dynamic_entry` already depend on `temp_chunk_idx`
+      // (that's how they ended up in `chunk_idxs`), so we check them all directly.
+      if temp_chunk_graph.chunks[chunk_idx].has_side_effects && !dynamic_entry.is_empty() {
+        // Check whether any *other* user-defined entry can reach these
+        // dynamic entries (directly or transitively via dynamic import).
+        // If yes, merging would leak `chunk_idx`'s side effects into that
+        // other entry's dynamic load.
+        let leak_possible = entry_chunk_reference.iter().any(|(other_entry_chunk_idx, reached)| {
+          *other_entry_chunk_idx != chunk_idx
+            && dynamic_entry.iter().any(|dyn_idx| reached.contains(dyn_idx))
+        });
+        if leak_possible {
+          return None;
+        }
       }
       let modules_set = chunk
         .modules
@@ -654,6 +738,115 @@ impl GenerateStage<'_> {
     })
   }
 
+  /// Fallback merge-target search for the case where every chunk in `chunk_idxs`
+  /// is a dynamic entry (`find_merge_target` only inspects static
+  /// `importers_idx`, so it always fails here).
+  ///
+  /// Picks `D` from `dynamic_entry` such that the module-graph reachability
+  /// from `D`'s entry (following all import kinds) covers every other dynamic
+  /// entry in the set together with that entry's static and dynamic importers.
+  /// That guarantees every load path to those other entries goes through `D`,
+  /// so when shared modules are merged into `D`'s chunk and the other chunks
+  /// gain `D`'s chunk as a static dependency, no load can reach them without
+  /// `D` already being loaded.
+  ///
+  /// Two extra guards:
+  /// - **Export-pollution guard:** rejects the merge when any pending module
+  ///   has named exports. Those exports would still be needed cross-chunk by
+  ///   the other dynamic entries, forcing `D`'s chunk file to expose them at
+  ///   the file level — which is what `import('./D.js')` resolves to at
+  ///   runtime, polluting the dynamic-entry namespace observed by callers.
+  /// - **Side-effect leak guard:** rejects `D` when any user-defined entry
+  ///   reaches one of the covered dynamic entries without also reaching `D` —
+  ///   after the merge that other path would pull `D`'s chunk in as a static
+  ///   dep and run `D`'s side effects on a load that previously did not
+  ///   touch `D`.
+  fn find_dynamic_dominator(
+    dynamic_entry: &[ChunkIdx],
+    dynamic_entry_modules: &[ModuleIdx],
+    module_table: &ModuleTable,
+    dynamic_entry_to_dynamic_importers: &FxHashMap<ModuleIdx, FxHashSet<ModuleIdx>>,
+    entry_chunk_reference: &FxHashMap<ChunkIdx, FxHashSet<ChunkIdx>>,
+    pending_modules: &[ModuleIdx],
+  ) -> Option<ChunkIdx> {
+    if dynamic_entry.len() < 2 {
+      return None;
+    }
+    // Refuse the merge whenever any pending module exposes named exports. The
+    // other dynamic-entry chunks in `chunk_idxs` still need those exports
+    // cross-chunk, so after the merge the dominator's chunk would have to add
+    // them to its file-level export list — and that list is what
+    // `import('./dominator.js')` resolves to at runtime, polluting the
+    // dynamic-entry namespace observed by callers.
+    let exposes_exports = pending_modules
+      .iter()
+      .any(|m| module_table[*m].as_normal().is_some_and(|n| !n.named_exports.is_empty()));
+    if exposes_exports {
+      return None;
+    }
+    dynamic_entry.iter().zip(dynamic_entry_modules.iter()).find_map(
+      |(candidate_chunk_idx, candidate_module_idx)| {
+        let reach = Self::collect_module_graph_reach(*candidate_module_idx, module_table);
+
+        let dominates = dynamic_entry.iter().zip(dynamic_entry_modules.iter()).all(
+          |(other_chunk_idx, other_module_idx)| {
+            if other_chunk_idx == candidate_chunk_idx {
+              return true;
+            }
+            if !reach.contains(other_module_idx) {
+              return false;
+            }
+            let Some(other_module) = module_table[*other_module_idx].as_normal() else {
+              return false;
+            };
+            let static_importers_in_reach =
+              other_module.importers_idx.iter().all(|i| reach.contains(i));
+            let dynamic_importers_in_reach = dynamic_entry_to_dynamic_importers
+              .get(other_module_idx)
+              .is_none_or(|imps| imps.iter().all(|i| reach.contains(i)));
+            static_importers_in_reach && dynamic_importers_in_reach
+          },
+        );
+        if !dominates {
+          return None;
+        }
+
+        let leak = entry_chunk_reference.values().any(|reached_dynamic_chunks| {
+          if reached_dynamic_chunks.contains(candidate_chunk_idx) {
+            // The user-defined entry already loads the candidate before the
+            // other dynamic entries — no extra side effects can leak.
+            return false;
+          }
+          dynamic_entry
+            .iter()
+            .any(|other| other != candidate_chunk_idx && reached_dynamic_chunks.contains(other))
+        });
+        (!leak).then_some(*candidate_chunk_idx)
+      },
+    )
+  }
+
+  /// BFS the module graph from `start`, following every resolved import-record
+  /// edge regardless of import kind. Returns the set of modules transitively
+  /// reachable from `start`, including `start` itself.
+  fn collect_module_graph_reach(
+    start: ModuleIdx,
+    module_table: &ModuleTable,
+  ) -> FxHashSet<ModuleIdx> {
+    let mut reached = FxHashSet::default();
+    let mut queue = VecDeque::from([start]);
+    while let Some(cur) = queue.pop_front() {
+      if !reached.insert(cur) {
+        continue;
+      }
+      let Some(module) = module_table[cur].as_normal() else {
+        continue;
+      };
+      queue.extend(module.import_records.iter().filter_map(|rec| rec.resolved_module));
+    }
+    reached
+  }
+
   /// Finds empty dynamic entry chunks that should be merged with their target common chunks.
   /// Returns a tuple of (facade_eliminations, common_chunk_merges, emitted_chunk_groups).
   fn find_facade_chunk_merge_ops(
@@ -736,10 +929,7 @@ impl GenerateStage<'_> {
         if temp_runtime_chunk_idx
           .and_then(|temp_runtime_idx| {
             let temp_target_idx = temp_chunk_opt_graph.to_temp_idx(target_chunk_idx)?;
-            Some(
-              temp_chunk_opt_graph
-                .would_create_circular_dependency(temp_runtime_idx, temp_target_idx),
-            )
+            Some(temp_chunk_opt_graph.is_reachable(temp_runtime_idx, temp_target_idx))
           })
           // If runtime is not included before, it will not create circular dependency, because
           // the runtime module will be either included in the target chunk or in a separate chunk loaded before.
@@ -859,24 +1049,24 @@ impl GenerateStage<'_> {
     for elimination in &facade_eliminations {
       let entry_module_idx = elimination.entry_module_idx;
       let wrap_kind = self.link_output.metas[entry_module_idx].wrap_kind();
-      let Some(module) = self.link_output.module_table[entry_module_idx].as_normal_mut() else {
+      if self.link_output.module_table[entry_module_idx].as_normal().is_none() {
         continue;
-      };
+      }
       // For CJS modules, we don't need to include `__exportAll` and the namespace symbols.
       // Instead, we should include the wrapper_ref (`require_xxx`), which will be handled
       // in the include_symbol call below.
       if !matches!(wrap_kind, WrapKind::Cjs) {
         // Filter in place to avoid cloning
-        module.stmt_infos[StmtInfos::NAMESPACE_STMT_IDX].referenced_symbols.retain(
-          |item| match item {
+        self.link_output.stmt_infos[entry_module_idx][StmtInfos::NAMESPACE_STMT_IDX]
+          .referenced_symbols
+          .retain(|item| match item {
             rolldown_common::SymbolOrMemberExprRef::Symbol(symbol_ref) => {
               // module namespace symbol requires `__exportAll` runtime helper
               self.link_output.used_symbol_refs.contains(symbol_ref)
                 || symbol_ref.owner == runtime_module_idx
             }
             rolldown_common::SymbolOrMemberExprRef::MemberExpr(_member_expr_ref) => true,
-          },
-        );
+          });
       }
     }
 
@@ -886,6 +1076,7 @@ impl GenerateStage<'_> {
     let runtime = &self.link_output.runtime;
     let context = &mut IncludeContext {
       modules: &self.link_output.module_table.modules,
+      stmt_infos: &self.link_output.stmt_infos,
       symbols: &self.link_output.symbol_db,
       is_included_vec: &mut stmt_info_included_vec,
       is_module_included_vec: &mut module_included_vec,
@@ -1002,33 +1193,15 @@ impl GenerateStage<'_> {
       include_runtime_symbol(context, runtime, RuntimeHelper::ExportAll);
     }
 
-    // Ensure runtime module is properly assigned to chunk graph
-    if chunk_graph.module_to_chunk[runtime_module_idx].is_none()
-      && !runtime_dependent_chunks.is_empty()
-    {
-      // If only one common chunk was appended with dynamic entry module, we just put runtime module into that chunk.
-      // Else create a new common chunk to store runtime module.
-      let runtime_chunk_idx = match runtime_dependent_chunks.len() {
-        1 => runtime_dependent_chunks.into_iter().next().unwrap(),
-        _ => {
-          let runtime_chunk = Chunk::new(
-            Some("rolldown-runtime".into()),
-            None,
-            index_splitting_info[runtime_module_idx].bits.clone(),
-            vec![],
-            ChunkKind::Common,
-            input_base.clone(),
-            None,
-          );
-          chunk_graph.add_chunk(runtime_chunk)
-        }
-      };
-      chunk_graph.add_module_to_chunk(
+    if !runtime_dependent_chunks.is_empty() {
+      self.rehome_runtime_module(
+        chunk_graph,
         runtime_module_idx,
-        runtime_chunk_idx,
-        self.link_output.metas[runtime_module_idx].depended_runtime_helper,
+        &runtime_dependent_chunks,
+        index_splitting_info,
+        input_base,
+        module_is_assigned,
       );
-      module_is_assigned.set_bit(runtime_module_idx);
     }
 
     // Restore the included info back to metas
@@ -1038,6 +1211,156 @@ impl GenerateStage<'_> {
       &module_included_vec,
       &module_namespace_reason_vec,
     );
+  }
+
+  /// Re-home the runtime module to avoid closing a static import cycle when
+  /// facade elimination introduces new helper consumers.
+  ///
+  /// If the runtime's current host has a static forward path to any new
+  /// consumer, that consumer's helper-import back-edge would close a cycle.
+  /// Peel the runtime out and re-home it in the *dominator* of the consumer
+  /// set — a chunk every other consumer already reaches via static forward
+  /// edges. With no dominator, fall back to a dedicated leaf
+  /// `rolldown-runtime.js` chunk. Absent any cycle risk, leave the runtime
+  /// where the merge phase placed it (most compact layout).
+  fn rehome_runtime_module(
+    &self,
+    chunk_graph: &mut ChunkGraph,
+    runtime_module_idx: ModuleIdx,
+    runtime_dependent_chunks: &FxHashSet<ChunkIdx>,
+    index_splitting_info: &IndexSplittingInfo,
+    input_base: &ArcStr,
+    module_is_assigned: &mut IndexBitSet<ModuleIdx>,
+  ) {
+    let original_host = chunk_graph.module_to_chunk[runtime_module_idx];
+    let module_table = &self.link_output.module_table;
+
+    let cycle_risk = original_host.is_some_and(|host| {
+      runtime_dependent_chunks.iter().any(|&c| {
+        c != host && Self::chunk_reaches_via_static_import(host, c, chunk_graph, module_table)
+      })
+    });
+
+    if cycle_risk && let Some(host_idx) = original_host {
+      let host_chunk = &chunk_graph.chunk_table[host_idx];
+      if host_chunk.modules.len() > 1
+        && let Some(pos) = host_chunk.modules.iter().position(|m| *m == runtime_module_idx)
+      {
+        let host_chunk = &mut chunk_graph.chunk_table[host_idx];
+        host_chunk.modules.swap_remove(pos);
+        chunk_graph.module_to_chunk[runtime_module_idx] = None;
+      }
+    }
+
+    if chunk_graph.module_to_chunk[runtime_module_idx].is_some() {
+      return;
+    }
+
+    let removed_chunks = &chunk_graph.post_chunk_optimization_operations;
+    let mut consumer_chunks: FxHashSet<ChunkIdx> = chunk_graph
+      .chunk_table
+      .iter_enumerated()
+      .filter_map(|(idx, chunk)| {
+        (!removed_chunks.contains_key(&idx) && !chunk.depended_runtime_helper.is_empty())
+          .then_some(idx)
+      })
+      .collect();
+    consumer_chunks.extend(runtime_dependent_chunks.iter().copied());
+    // The original host was an implicit consumer: the merge phase put the
+    // runtime there because the chunk's bitset required it.
+    if let Some(host) = original_host
+      && !removed_chunks.contains_key(&host)
+    {
+      consumer_chunks.insert(host);
+    }
+
+    let dominator = Self::find_consumer_dominator(&consumer_chunks, chunk_graph, module_table);
+    let runtime_chunk_idx = dominator.unwrap_or_else(|| {
+      chunk_graph.add_chunk(Chunk::new(
+        Some("rolldown-runtime".into()),
+        None,
+        index_splitting_info[runtime_module_idx].bits.clone(),
+        vec![],
+        ChunkKind::Common,
+        input_base.clone(),
+        None,
+      ))
+    });
+    chunk_graph.add_module_to_chunk(
+      runtime_module_idx,
+      runtime_chunk_idx,
+      self.link_output.metas[runtime_module_idx].depended_runtime_helper,
+    );
+    module_is_assigned.set_bit(runtime_module_idx);
+  }
+
+  /// Return the unique `consumers` member that every other member reaches
+  /// through static forward chunk edges (an ES `import`, not dynamic). Such a
+  /// chunk is a "downstream sink" of the consumer set — placing the runtime
+  /// there adds no new back-edges, so no cycle can form. Returns `None` when
+  /// the set has no dominator (e.g. consumers sit in parallel sub-graphs).
+  fn find_consumer_dominator(
+    consumers: &FxHashSet<ChunkIdx>,
+    chunk_graph: &ChunkGraph,
+    module_table: &ModuleTable,
+  ) -> Option<ChunkIdx> {
+    if consumers.len() <= 1 {
+      return consumers.iter().copied().next();
+    }
+    consumers.iter().copied().find(|&candidate| {
+      consumers.iter().all(|&other| {
+        other == candidate
+          || Self::chunk_reaches_via_static_import(other, candidate, chunk_graph, module_table)
+      })
+    })
+  }
+
+  /// BFS from `from` across chunks, following only static ES `import` edges
+  /// through still-live target chunks. Returns whether `to` is reachable.
+  ///
+  /// Edge filtering rationale:
+  /// - Only `ImportKind::Import` is followed. Dynamic imports and `require`
+  ///   don't force load-time ordering between chunks, so they can't close the
+  ///   helper-import cycle this check is guarding against.
+  /// - Targets present in `post_chunk_optimization_operations` are skipped.
+  ///   Those chunks are already slated for removal/redirection by the
+  ///   surrounding facade-elimination pass, so their edges aren't part of the
+  ///   post-optimization graph.
+  /// - Self-edges (`target_chunk == current`) are skipped — an intra-chunk
+  ///   import can't form an inter-chunk cycle.
+  fn chunk_reaches_via_static_import(
+    from: ChunkIdx,
+    to: ChunkIdx,
+    chunk_graph: &ChunkGraph,
+    module_table: &ModuleTable,
+  ) -> bool {
+    let mut visited = FxHashSet::default();
+    let mut queue = VecDeque::from([from]);
+    while let Some(current) = queue.pop_front() {
+      if !visited.insert(current) {
+        continue;
+      }
+      if current == to {
+        return true;
+      }
+      for &module_idx in &chunk_graph.chunk_table[current].modules {
+        let Some(module) = module_table[module_idx].as_normal() else {
+          continue;
+        };
+        queue.extend(
+          module
+            .import_records
+            .iter()
+            .filter(|rec| matches!(rec.kind, ImportKind::Import))
+            .filter_map(|rec| chunk_graph.module_to_chunk[rec.resolved_module?])
+            .filter(|&target_chunk| {
+              target_chunk != current
+                && !chunk_graph.post_chunk_optimization_operations.contains_key(&target_chunk)
+            }),
+        );
+      }
+    }
+    false
   }
 
   /// Move modules from common chunks into facade entry chunks, then retarget

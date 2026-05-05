@@ -77,7 +77,6 @@ url = { workspace = true }
 
 # MARK: - Rollipop
 rolldown_plugin_rollipop_react_refresh_wrapper = { workspace = true }
-rolldown_plugin_rollipop_worklets = { workspace = true }
 rolldown_plugin_rollipop_react_native = { workspace = true }
 
 [target.'cfg(all(not(target_os = "linux"), not(target_os = "freebsd"), not(target_family = "wasm")))'.dependencies]
@@ -99,6 +98,7 @@ napi-build = { workspace = true }
 [features]
 default = ["wasm_plugins"]
 default_global_allocator = []
+disable_panic_hook = []
 # Propagates to `rolldown_plugin_rollipop_react_native`. Disable with
 # `--no-default-features` on targets where wasmer cannot compile (e.g.
 # `aarch64-pc-windows-msvc`).

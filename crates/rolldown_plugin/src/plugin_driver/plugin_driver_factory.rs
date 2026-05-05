@@ -47,7 +47,7 @@ impl PluginDriverFactory {
       meta.insert(Arc::new(TransformCache::new(cache_dir)));
     }
 
-    let tx = Arc::new(tokio::sync::Mutex::new(None));
+    let tx = Arc::new(std::sync::Mutex::new(None));
     let mut plugin_usage_vec = IndexVec::new();
 
     // Clone the Arc to share across contexts

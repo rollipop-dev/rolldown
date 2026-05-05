@@ -1,17 +1,15 @@
-use crate::{ConstExportMeta, DependedRuntimeHelperMap, ImportAttribute, SourcemapChainElement};
+use crate::{ConstExportMeta, ImportAttribute, SourcemapChainElement};
 use arcstr::ArcStr;
 use bitflags::bitflags;
-use oxc::{
-  semantic::SymbolId,
-  span::{CompactStr, Span},
-};
+use oxc::{semantic::SymbolId, span::Span};
 use oxc_index::IndexVec;
+use oxc_str::CompactStr;
 use rolldown_utils::indexmap::{FxIndexMap, FxIndexSet};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
   ExportsKind, HmrInfo, ImportRecordIdx, LocalExport, ModuleDefFormat, ModuleId, ModuleIdx,
-  NamedImport, ResolvedImportRecord, SourceMutation, StmtInfos, SymbolRef,
+  NamedImport, ResolvedImportRecord, SourceMutation, SymbolRef,
   side_effects::DeterminedSideEffects, types::source_mutation::ArcSourceMutation,
 };
 
@@ -70,8 +68,6 @@ pub struct EcmaView {
   pub namespace_object_ref: SymbolRef,
   pub named_imports: FxIndexMap<SymbolRef, NamedImport>,
   pub named_exports: FxHashMap<CompactStr, LocalExport>,
-  /// `stmt_infos[0]` represents the namespace binding statement
-  pub stmt_infos: StmtInfos,
   pub import_records: IndexVec<ImportRecordIdx, ResolvedImportRecord>,
   /// The key is the `Span` of `ImportDeclaration`, `ImportExpression`, `ExportNamedDeclaration`, `ExportAllDeclaration`
   /// and `CallExpression`(only when the callee is `require`).
@@ -99,14 +95,19 @@ pub struct EcmaView {
   /// `Span` of `new URL('path', import.meta.url)` -> `ImportRecordIdx`
   pub new_url_references: FxHashMap<Span, ImportRecordIdx>,
   pub this_expr_replace_map: FxHashMap<Span, ThisExprReplaceKind>,
-  pub depended_runtime_helper: Box<DependedRuntimeHelperMap>,
 
   pub hmr_hot_ref: Option<SymbolRef>,
   pub hmr_info: HmrInfo,
   pub constant_export_map: FxHashMap<SymbolId, ConstExportMeta>,
+  /// Enum member constant values, keyed by enum name → member name → value.
+  /// Used by the finalizer to inline `Direction.Up` style accesses across modules.
+  /// Contains both const and regular enums.
+  pub enum_member_value_map: FxHashMap<CompactStr, FxHashMap<CompactStr, ConstExportMeta>>,
   pub import_attribute_map: FxHashMap<ImportRecordIdx, ImportAttribute>,
   /// Use `Box` since it is rarely used also it could reduce the size of `EcmaView`, .
   pub json_module_none_self_reference_included_symbol: Option<Box<FxHashSet<SymbolRef>>>,
+  /// Import record indices for `module.exports = require(...)` patterns.
+  pub cjs_reexport_import_record_ids: Vec<ImportRecordIdx>,
 }
 
 bitflags! {
@@ -135,6 +136,6 @@ pub struct PrependRenderedImport {
 
 impl SourceMutation for PrependRenderedImport {
   fn apply(&self, magic_string: &mut string_wizard::MagicString<'_>) {
-    magic_string.prepend(self.intro.clone());
+    magic_string.append_intro(self.intro.clone());
   }
 }

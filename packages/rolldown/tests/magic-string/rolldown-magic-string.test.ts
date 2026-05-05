@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { RolldownMagicString as MagicString } from 'rolldown';
+import { RolldownMagicString as MagicString } from '@rollipop/rolldown';
 import { describe, it } from 'vitest';
 
 /**
@@ -110,6 +110,30 @@ describe('isRolldownMagicString', () => {
     assert.ok(!isNative({}));
     assert.ok(!isNative('string'));
     assert.ok(!isNative(null));
+  });
+});
+
+describe('overwrite test extension', () => {
+  it('clears interior intro/outro even with `contentOnly: true` (matches JS magic-string)', () => {
+    const s = new MagicString('abcdefg');
+
+    s.appendLeft(5, 'X');
+    s.prependRight(5, 'Y');
+    s.overwrite(1, 6, '...', { contentOnly: true });
+
+    // JS magic-string always clears interior chunks' intro/outro.
+    // Only the first chunk's intro/outro is preserved by contentOnly.
+    assert.strictEqual(s.toString(), 'a...Xg');
+  });
+
+  it('overwrite across a split point throws', () => {
+    const s = new MagicString('abcdefghijkl');
+
+    s.move(6, 9, 3);
+    s.appendLeft(5, 'foo');
+
+    assert.strictEqual(s.toString(), 'abcghidefoofjkl');
+    assert.throws(() => s.overwrite(4, 11, 'XX'), /Cannot overwrite across a split point/);
   });
 });
 

@@ -21,13 +21,13 @@
  *   - prependRight(index: number, content: string): this
  *   - appendLeft(index: number, content: string): this
  *   - appendRight(index: number, content: string): this
- *   - overwrite(start: number, end: number, content: string): this
+ *   - overwrite(start: number, end: number, content: string, options?: { contentOnly? }): this
  *   - toString(): string
  *   - hasChanged(): boolean
  *   - length(): number
  *   - isEmpty(): boolean
  *   - remove(start: number, end: number): this
- *   - update(start: number, end: number, content: string): this
+ *   - update(start: number, end: number, content: string, options?: { overwrite? }): this
  *   - relocate(start: number, end: number, to: number): this
  *   - move(start: number, end: number, index: number): this (alias for relocate)
  *   - indent(indentor?: string | undefined | null, options?: { exclude? }): this
@@ -45,6 +45,7 @@
  *   - constructor options: filename, offset, indentExclusionRanges, and ignoreList ARE supported
  *   - addSourcemapLocation (not in string_wizard)
  *   - storeName option in overwrite/update (not exposed in binding)
+ *   - Note: overwrite option in update and contentOnly option in overwrite ARE now supported
  *   - x_google_ignoreList / ignoreList in generateMap output is now supported
  *   - replace/replaceAll with regex or function replacer
  */
@@ -81,49 +82,39 @@ const SKIP_DESCRIBE_BLOCKS = [
 
 // Individual tests to skip (by partial match of test name)
 const SKIP_TESTS = [
-  'should throw when given non-string content', // error handling differs
-  'should throw', // error handling differs
+  // Note: 'should throw when given non-string content' now works via JS-side TypeError wrapper
+  // Note: 'should throw' broad pattern removed — overlapping replacement error tests now pass
+  // Remaining 'should throw' tests are covered by specific patterns (non-string content, negative indices)
   // options-specific skips
   // Note: 'stores ignore-list hint' is now supported (ignoreList option)
   // Note: 'indentExclusionRanges' is now supported (constructor option + getter + clone)
   'sourcemapLocations', // not supported
   'should return cloned content', // clone-related
   'should noop', // edge cases that may differ
-  'negative indices', // may not be supported
+  // Note: 'negative indices' now works in remove (normalize_index handles them correctly)
   'should split original chunk', // internal behavior
   // Note: 'out of upper bound' and 'out of bounds' are now supported (indices clamp to intro/outro)
   'replaces an empty string', // empty string edge case
   'empty string should be movable', // empty string edge case
   'split point', // split point errors cause panic
   'storeName', // storeName option not supported
-  'contentOnly', // contentOnly option not supported
-  'should remove overlapping ranges', // overlapping replacements cause panic
-  'error if overlapping replacements', // overlapping replacements cause panic
+  // Note: 'should remove overlapping ranges' now works (empty-edited chunks can be split)
   // Note: 'should allow contiguous but non-overlapping replacements' now works
   'already been edited', // Cannot split a chunk that has already been edited
-  'non-zero-length inserts inside', // causes split chunk panic
-  'should remove modified ranges', // causes split chunk panic
+  // Note: 'should remove modified ranges' now works (remove correctly overwrites edited chunks)
 
   'should replace then remove', // causes split chunk panic
   // Note: 'preserves intended order' now works (append/prepend ordering with slice)
   // Note: 'excluded characters' (indent exclude option) is now supported
-  // remove-specific skips
-  'should remove everything', // edge case
-  'should adjust other removals', // complex removal interaction
-  'should treat zero-length removals as a no-op', // remove(0,0) throws error in binding
-  // update/overwrite-specific skips
-  'inserts inside', // causes split chunk panic
-  'disallows overwriting partially', // causes panic
-  'disallows updating partially', // causes panic
-  'disallows overwriting fully', // causes panic
-  'disallows updating fully', // causes panic
-  'replaces interior inserts', // causes split chunk panic
-  'allows later insertions at the end', // causes split chunk panic
-  // remove-specific complex cases
-  // Note: "removes across moved content" appears in both remove and reset sections
-  // The reset version passes, so we handle this with a special transformation below
+  // Note: 'should treat zero-length removals as a no-op' now works (zero-length is no-op)
+  // Note: update/overwrite options (overwrite, contentOnly) are now supported
+  // Note: split-point detection is now implemented for update/overwrite across moved content
+  // Note: non-zero-length and zero-length inserts inside update/overwrite now work
+  // Note: interior inserts with overwrite/contentOnly now work
+  // Note: later insertions at the end now work
+  // Note: "removes across moved content" now works in both remove and reset sections
   // Note: 'should not remove content inserted after the end of removed range' now works
-  'should remove interior inserts', // causes panic
+  // Note: 'should remove interior inserts' now works (overwrite:true clears intro/outro correctly)
   // Note: 'should provide a useful error' now works — errors are properly thrown, not panicked
   // slice-specific skips
   // Note: 'should return the generated content between the specified original characters' now works
@@ -252,13 +243,6 @@ function transformTestFile(content, filename) {
   // using constructor options are inside describe blocks that are already skipped
   // (e.g., 'options', 'clone', etc.) or matched by SKIP_TESTS patterns
 
-  // Special case: skip "removes across moved content" only in the remove section, not in reset
-  // The remove version causes panic, but the reset version passes
-  transformed = transformed.replace(
-    /(\tdescribe\('remove',[\s\S]*?)\n(\t\t)it\('removes across moved content'/g,
-    "$1\n$2it.skip('removes across moved content'",
-  );
-
   // Note: "should reset modified ranges" now passes (overwrite+remove+reset works correctly)
 
   return transformed;
@@ -268,16 +252,20 @@ function escapeRegex(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function formatWithOxfmt(content, filepath) {
+function formatWithVpFmt(content, filepath) {
   try {
-    const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-    return execSync(`${npx} oxfmt --stdin-filepath ${filepath}`, {
+    const vp = process.platform === 'win32' ? 'vp.cmd' : 'vp';
+    const banner = 'VITE+ - The Unified Toolchain for the Web\n\n';
+    const output = execSync(`${vp} fmt --stdin-filepath ${filepath}`, {
       input: content,
       encoding: 'utf-8',
       maxBuffer: 10 * 1024 * 1024, // 10MB buffer for large files
     });
+    return output.startsWith(banner) ? output.slice(banner.length) : output;
   } catch (error) {
-    console.warn(`  Warning: oxfmt formatting failed, using unformatted content: ${error.message}`);
+    console.warn(
+      `  Warning: vp fmt formatting failed, using unformatted content: ${error.message}`,
+    );
     return content;
   }
 }
@@ -294,8 +282,8 @@ async function main() {
       const outputFilename = filename.replace('.test.js', '.test.ts');
       const outputPath = join(__dirname, outputFilename);
 
-      // Format with oxfmt before saving
-      const formatted = formatWithOxfmt(transformed, outputFilename);
+      // Format with vp fmt before saving
+      const formatted = formatWithVpFmt(transformed, outputFilename);
 
       writeFileSync(outputPath, formatted, 'utf-8');
       console.log(`  Saved: ${outputFilename}`);

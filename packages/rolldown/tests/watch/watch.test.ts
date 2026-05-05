@@ -1187,6 +1187,141 @@ test.concurrent(
   },
 );
 
+// https://github.com/rolldown/rolldown/issues/8892
+test.concurrent(
+  'watch should emit circular dependency warnings',
+  { retry: TEST_RETRY, timeout: TEST_TIMEOUT },
+  async ({ task, expect, onTestFinished }) => {
+    const retryCount = task.result?.retryCount ?? 0;
+    const { dir } = createTestWithMultiFiles('watch-circular-warning', retryCount, {
+      'main.js': `import { a } from './a.js'\nconsole.log(a)`,
+      'a.js': `import { b } from './b.js'\nexport const a = b`,
+      'b.js': `import { a } from './a.js'\nexport const b = a`,
+    });
+    onTestFinished(() => {
+      if (!process.env.CI) {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    const onLogFn = vi.fn();
+    const watcher = watch({
+      input: path.join(dir, 'main.js'),
+      output: { dir: path.join(dir, 'dist') },
+      checks: { circularDependency: true },
+      plugins: [
+        {
+          name: 'test-circular-warning',
+          onLog(_level, log) {
+            if (log.code === 'CIRCULAR_DEPENDENCY') {
+              onLogFn();
+            }
+          },
+        },
+      ],
+    });
+    onTestFinished(async () => await watcher.close());
+
+    // Initial build should emit the circular dependency warning
+    await waitBuildFinished(watcher);
+    expect(onLogFn).toBeCalled();
+
+    // Rebuild should also emit the warning
+    onLogFn.mockClear();
+    await editFile(path.join(dir, 'a.js'), `import { b } from './b.js'\nexport const a = b + 1`);
+    await waitBuildFinished(watcher);
+    expect(onLogFn).toBeCalled();
+  },
+);
+
+test.concurrent(
+  'watch should fail when onLog rejects a warning',
+  { retry: TEST_RETRY, timeout: TEST_TIMEOUT },
+  async ({ task, expect, onTestFinished }) => {
+    const retryCount = task.result?.retryCount ?? 0;
+    const { dir } = createTestWithMultiFiles('watch-circular-warning-error', retryCount, {
+      'main.js': `import { a } from './a.js'\nconsole.log(a)`,
+      'a.js': `import { b } from './b.js'\nexport const a = b`,
+      'b.js': `import { a } from './a.js'\nexport const b = a`,
+    });
+    onTestFinished(() => {
+      if (!process.env.CI) {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    const watcher = watch({
+      input: path.join(dir, 'main.js'),
+      output: { dir: path.join(dir, 'dist') },
+      checks: { circularDependency: true },
+      plugins: [
+        {
+          name: 'reject-circular-warning',
+          onLog(_level, log) {
+            if (log.code === 'CIRCULAR_DEPENDENCY') {
+              throw new Error('reject circular dependency');
+            }
+          },
+        },
+      ],
+    });
+    onTestFinished(async () => await watcher.close());
+
+    await expect(waitBuildFinished(watcher)).rejects.toThrow('reject circular dependency');
+  },
+);
+
+// https://github.com/rolldown/rolldown/issues/8912
+test.concurrent(
+  'watch should not emit false FILE_NAME_CONFLICT on rebuild',
+  { retry: TEST_RETRY, timeout: TEST_TIMEOUT },
+  async ({ task, expect, onTestFinished }) => {
+    const retryCount = task.result?.retryCount ?? 0;
+    const { dir } = createTestWithMultiFiles('watch-filename-conflict', retryCount, {
+      'main.js': `console.log('hello')`,
+    });
+    onTestFinished(() => {
+      if (!process.env.CI) {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    const filenameConflictFn = vi.fn();
+    const watcher = watch({
+      input: path.join(dir, 'main.js'),
+      output: { dir: path.join(dir, 'dist') },
+      onwarn(warning) {
+        if (warning.code === 'FILE_NAME_CONFLICT') {
+          filenameConflictFn();
+        }
+      },
+      plugins: [
+        {
+          name: 'emit-asset',
+          buildStart() {
+            this.emitFile({
+              type: 'asset',
+              source: 'hello',
+              fileName: 'extra.txt',
+            });
+          },
+        },
+      ],
+    });
+    onTestFinished(async () => await watcher.close());
+
+    // Initial build should NOT emit FILE_NAME_CONFLICT
+    await waitBuildFinished(watcher);
+    expect(filenameConflictFn).not.toBeCalled();
+
+    // Rebuild should also NOT emit FILE_NAME_CONFLICT
+    filenameConflictFn.mockClear();
+    await editFile(path.join(dir, 'main.js'), `console.log('updated')`);
+    await waitBuildFinished(watcher);
+    expect(filenameConflictFn).not.toBeCalled();
+  },
+);
+
 function createTestInputAndOutput(testLabel: string, retryCount: number, content?: string) {
   const uniqueId = crypto.randomUUID().slice(0, 8);
   const dirname = `${testLabel}-${uniqueId}-retry${retryCount}`;

@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use arcstr::ArcStr;
 use indexmap::IndexSet;
-use oxc::span::CompactStr;
+use oxc_str::CompactStr;
 // TODO: The current implementation for matching imports is enough so far but incomplete. It needs to be refactored
 // if we want more enhancements related to exports.
 use rolldown_common::{
@@ -12,6 +12,8 @@ use rolldown_common::{
   SymbolRefFlags,
 };
 use rolldown_error::{AmbiguousExternalNamespaceModule, BuildDiagnostic};
+#[cfg(not(target_family = "wasm"))]
+use rolldown_utils::rayon::IndexedParallelIterator;
 use rolldown_utils::{
   ecmascript::{is_validate_identifier_name, legitimize_identifier_name},
   index_vec_ext::{IndexVecExt, IndexVecRefExt},
@@ -62,6 +64,7 @@ impl PartialEq for MatchImportKindNormal {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+#[expect(clippy::box_collection)]
 pub enum MatchImportKind {
   /// The import is either external or not defined.
   _Ignore,
@@ -81,7 +84,7 @@ pub enum MatchImportKind {
   // The import resolved to multiple symbols via "export * from"
   Ambiguous {
     symbol_ref: SymbolRef,
-    potentially_ambiguous_symbol_refs: Vec<SymbolRef>,
+    potentially_ambiguous_symbol_refs: Box<Vec<SymbolRef>>,
   },
   NoMatch,
 }
@@ -145,12 +148,7 @@ impl LinkStage<'_> {
         .named_exports
         .iter()
         .map(|(name, local)| {
-          let resolved_export = ResolvedExport {
-            symbol_ref: local.referenced,
-            potentially_ambiguous_symbol_refs: None,
-            came_from_cjs: local.came_from_commonjs,
-          };
-          (name.clone(), resolved_export)
+          (name.clone(), ResolvedExport::new(local.referenced, local.came_from_commonjs))
         })
         .collect::<FxHashMap<_, _>>();
 
@@ -222,7 +220,7 @@ impl LinkStage<'_> {
         {
           let main_ref = self.symbols.canonical_ref_for(resolved_export.symbol_ref);
 
-          for ambiguous_ref in potentially_ambiguous_symbol_refs {
+          for ambiguous_ref in potentially_ambiguous_symbol_refs.iter() {
             let ambiguous_ref = self.symbols.canonical_ref_for(*ambiguous_ref);
             if main_ref != ambiguous_ref {
               continue 'next_export;
@@ -230,7 +228,7 @@ impl LinkStage<'_> {
           }
         }
         sorted_and_non_ambiguous_resolved_exports
-          .push((exported_name.clone(), resolved_export.came_from_cjs));
+          .push((exported_name.clone(), resolved_export.came_from_commonjs));
       }
       sorted_and_non_ambiguous_resolved_exports.sort_unstable();
       meta.sorted_and_non_ambiguous_resolved_exports =
@@ -319,12 +317,19 @@ impl LinkStage<'_> {
       return;
     };
 
-    let is_cjsreexports = module.ast_usage.contains(EcmaModuleAstUsage::IsCjsReexport);
+    let cjs_reexport_modules: Vec<ModuleIdx> =
+      if module.ast_usage.contains(EcmaModuleAstUsage::IsCjsReexport) {
+        module
+          .ecma_view
+          .cjs_reexport_import_record_ids
+          .iter()
+          .filter_map(|&rec_idx| module.import_records[rec_idx].resolved_module)
+          .collect()
+      } else {
+        vec![]
+      };
 
-    let cjs_reexport_module =
-      is_cjsreexports.then(|| module.import_records.first().unwrap().into_resolved_module());
-
-    for dep_id in module.star_export_module_ids().chain(cjs_reexport_module) {
+    for dep_id in module.star_export_module_ids().chain(cjs_reexport_modules) {
       let Module::Normal(dep_module) = &normal_modules[dep_id] else {
         continue;
       };
@@ -348,20 +353,27 @@ impl LinkStage<'_> {
         // We have filled `resolve_exports` with `named_exports`. If the export is already exists, it means that the importer
         // has a named export with the same name. So the export from dep module is shadowed.
         if let Some(resolved_export) = resolve_exports.get_mut(exported_name) {
-          if named_export.referenced != resolved_export.symbol_ref && !resolved_export.came_from_cjs
-          {
-            resolved_export
-              .potentially_ambiguous_symbol_refs
-              .get_or_insert(Vec::default())
-              .push(named_export.referenced);
+          if named_export.referenced != resolved_export.symbol_ref {
+            if resolved_export.came_from_commonjs || named_export.came_from_commonjs {
+              // CJS conflict: at least one side came from CJS (e.g., conditional re-exports
+              // mixing ESM and CJS targets). Track these separately — they're expected runtime
+              // branches, not static ambiguity errors.
+              resolved_export
+                .cjs_conflicting_symbol_refs
+                .get_or_insert(Box::default())
+                .push(named_export.referenced);
+            } else {
+              resolved_export
+                .potentially_ambiguous_symbol_refs
+                .get_or_insert(Box::default())
+                .push(named_export.referenced);
+            }
           }
         } else {
-          let resolved_export = ResolvedExport {
-            symbol_ref: named_export.referenced,
-            potentially_ambiguous_symbol_refs: None,
-            came_from_cjs: named_export.came_from_commonjs,
-          };
-          resolve_exports.insert(exported_name.clone(), resolved_export);
+          resolve_exports.insert(
+            exported_name.clone(),
+            ResolvedExport::new(named_export.referenced, named_export.came_from_commonjs),
+          );
         }
       }
 
@@ -393,12 +405,13 @@ impl LinkStage<'_> {
       .module_table
       .modules
       .par_iter()
-      .map(|module| match module {
+      .zip(self.stmt_infos.par_iter())
+      .map(|(module, stmt_infos)| match module {
         Module::Normal(module) => {
           let mut resolved_map = FxHashMap::default();
           let mut side_effects_dependency = vec![];
           let mut written_cjs_exports: Vec<SymbolRef> = vec![];
-          module.stmt_infos.iter().for_each(|stmt_info| {
+          stmt_infos.iter().for_each(|stmt_info| {
             stmt_info.referenced_symbols.iter().for_each(|symbol_ref| {
               // `depended_refs` is used to store necessary symbols that must be included once the resolved symbol gets included
               let mut depended_refs: Vec<SymbolRef> = vec![];
@@ -422,7 +435,7 @@ impl LinkStage<'_> {
                   let name = &prop.name;
                   let meta = &self.metas[canonical_ref_owner.idx];
                   let export_symbol = meta.resolved_exports.get(name).and_then(|resolved_export| {
-                    (!resolved_export.came_from_cjs).then_some(resolved_export)
+                    (!resolved_export.came_from_commonjs).then_some(resolved_export)
                   });
                   let Some(export_symbol) = export_symbol else {
                     // when we try to resolve `a.b.c`, and found that `b` is not exported by module
@@ -521,30 +534,92 @@ impl LinkStage<'_> {
                     };
                   // corresponding to cases in:
                   // https://github.com/rolldown/rolldown/blob/30a5a2fc8fa6785821153922e21dc0273cc00c7a/crates/rolldown/tests/rolldown/tree_shaking/commonjs/main.js?plain=1#L3-L10
-                  if continue_resolve
-                    && let Some(m) = self.metas[maybe_namespace.owner]
-                      .named_import_to_cjs_module
-                      .get(&maybe_namespace)
-                      .or_else(|| {
-                        self.metas[maybe_namespace.owner]
-                          .import_record_ns_to_cjs_module
-                          .get(&maybe_namespace)
-                      })
-                      .or_else(|| {
-                        (self.metas[maybe_namespace.owner].has_dynamic_exports)
-                          .then_some(&maybe_namespace.owner)
-                      })
-                      .and_then(|idx| {
-                        self.metas[*idx]
-                          .resolved_exports
-                          .get(&member_expr_ref.prop_and_span_list[cursor].name)
-                          .and_then(|resolved_export| {
-                            resolved_export.came_from_cjs.then_some(resolved_export)
-                          })
+                  let cjs_module_idx = continue_resolve
+                    .then(|| {
+                      self.metas[maybe_namespace.owner]
+                        .named_import_to_cjs_module
+                        .get(&maybe_namespace)
+                        .or_else(|| {
+                          self.metas[maybe_namespace.owner]
+                            .import_record_ns_to_cjs_module
+                            .get(&maybe_namespace)
+                        })
+                        .or_else(|| {
+                          (self.metas[maybe_namespace.owner].has_dynamic_exports)
+                            .then_some(&maybe_namespace.owner)
+                        })
+                        .copied()
+                    })
+                    .flatten();
+                  if let Some(cjs_idx) = cjs_module_idx
+                    && let Some(m) = self.metas[cjs_idx]
+                      .resolved_exports
+                      .get(&member_expr_ref.prop_and_span_list[cursor].name)
+                      .and_then(|resolved_export| {
+                        resolved_export.came_from_commonjs.then_some(resolved_export)
                       })
                   {
                     let is_default = member_expr_ref.prop_and_span_list[cursor].name == "default";
-                    target_commonjs_exported_symbol = Some((m.symbol_ref, is_default));
+                    // When the accessed property is `default`, check if `.default` represents
+                    // the whole `module.exports` (rather than `exports.default`). This is true when:
+                    // - Node ESM mode: __toESM always ignores __esModule flag
+                    // - Non-node mode without __esModule: __toESM sets .default = module.exports
+                    // In these cases, skip resolving `.default` to a specific CJS export.
+                    let default_is_module_exports = is_default && {
+                      let is_node_esm = module.should_consider_node_esm_spec_for_static_import();
+                      let importee_has_es_module_flag =
+                        self.module_table[cjs_idx].as_normal().is_some_and(|importee| {
+                          importee.ecma_view.ast_usage.contains(EcmaModuleAstUsage::EsModuleFlag)
+                        });
+                      is_node_esm || !importee_has_es_module_flag
+                    };
+
+                    // If the current property is `default` and it represents the whole `module.exports`,
+                    // try to resolve the next property as a CJS export.
+                    if default_is_module_exports
+                      && let Some(next_prop) = member_expr_ref.prop_and_span_list.get(cursor + 1)
+                    {
+                      if let Some(property) = self.metas[cjs_idx]
+                        .resolved_exports
+                        .get(&next_prop.name)
+                        .and_then(|resolved_export| {
+                          resolved_export.came_from_commonjs.then_some(resolved_export)
+                        })
+                      {
+                        let is_next_default = next_prop.name == "default";
+                        if is_next_default && maybe_namespace_symbol.namespace_alias.is_none() {
+                          // import * as ns; ns.default.default — can't optimize.
+                          //
+                          // __toESM sets import_ns.default = module.exports and __copyProps
+                          // skips "default" (already set), so exports.default is only
+                          // reachable via import_ns.default.default (two levels).
+                          // If we advance cursor, props becomes ["default"] and the finalizer
+                          // base is import_ns (#LOCAL_NAMESPACE has no namespace_alias to
+                          // append .default), so the result is import_ns.default which is
+                          // module.exports — not module.exports.default.
+                          //
+                          // Other non-"default" properties (e.g. ns.default.foo) work fine
+                          // because __copyProps copies them onto the __toESM target, so
+                          // import_ns.foo = module.exports.foo.
+                        } else {
+                          cursor += 1;
+                          target_commonjs_exported_symbol =
+                            Some((property.symbol_ref, is_next_default));
+                          depended_refs.push(property.symbol_ref);
+
+                          if member_expr_ref.is_write {
+                            written_cjs_exports.push(property.symbol_ref);
+                          }
+                        }
+                      }
+                    } else if default_is_module_exports {
+                      // `.default` represents the whole `module.exports` with no further
+                      // property access. Leave target_commonjs_exported_symbol as None so
+                      // that include_statements runs the CJS bailout check and keeps all
+                      // exports for this opaque usage.
+                    } else {
+                      target_commonjs_exported_symbol = Some((m.symbol_ref, is_default));
+                    }
                     depended_refs.push(m.symbol_ref);
                     // If this member expression is a write (e.g. `cjs.c = 'abcd'`), the
                     // CJS exported symbol should not be inlined as a constant since its
@@ -611,7 +686,7 @@ impl LinkStage<'_> {
             self.metas[*cjs_module_idx]
               .resolved_exports
               .values()
-              .filter(|e| e.came_from_cjs)
+              .filter(|e| e.came_from_commonjs)
               .map(|e| e.symbol_ref),
           );
         }
@@ -783,7 +858,7 @@ impl BindImportsAndExportsContext<'_> {
               importee.as_normal().map(|m| &m.module_type),
               Some(ModuleType::Ts | ModuleType::Tsx)
             ) && matches!(module.module_type, ModuleType::Ts | ModuleType::Tsx);
-          let mut diagnostic = BuildDiagnostic::missing_export(
+          let diagnostic = BuildDiagnostic::missing_export(
             module.id.to_string(),
             module.stable_id.to_string(),
             importee.id().to_string(),
@@ -793,12 +868,7 @@ impl BindImportsAndExportsContext<'_> {
             named_import.span_imported,
             is_ts_like_importing_ts_like.then(|| format!("If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import {{ type Foo }} from '{}'`).", rec.module_request))
           );
-          if is_ts_like_importing_ts_like {
-            diagnostic = diagnostic.with_severity_warning();
-            self.warnings.push(diagnostic);
-          } else {
-            self.errors.push(diagnostic);
-          }
+          self.errors.push(diagnostic);
         }
       }
     }
@@ -842,7 +912,7 @@ impl BindImportsAndExportsContext<'_> {
       Specifier::Literal(literal_imported) => {
         match self.metas[importee_id].resolved_exports.get(literal_imported) {
           Some(export) => {
-            if export.came_from_cjs {
+            if export.came_from_commonjs {
               ImportStatus::DynamicFallbackWithCommonjsReference {
                 namespace_ref: importee.namespace_object_ref,
                 commonjs_symbol: export.symbol_ref,
@@ -853,7 +923,8 @@ impl BindImportsAndExportsContext<'_> {
                 symbol: export.symbol_ref,
                 potentially_ambiguous_export_star_refs: export
                   .potentially_ambiguous_symbol_refs
-                  .clone()
+                  .as_deref()
+                  .cloned()
                   .unwrap_or_default(),
               }
             }
@@ -1023,15 +1094,19 @@ impl BindImportsAndExportsContext<'_> {
         if let MatchImportKind::Normal(MatchImportKindNormal { symbol, .. }) = ret {
           return MatchImportKind::Ambiguous {
             symbol_ref: symbol,
-            potentially_ambiguous_symbol_refs: ambiguous_results
-              .iter()
-              .filter_map(|kind| match *kind {
-                MatchImportKind::Normal(MatchImportKindNormal { symbol, .. }) => Some(symbol),
-                MatchImportKind::Namespace { namespace_ref }
-                | MatchImportKind::NormalAndNamespace { namespace_ref, .. } => Some(namespace_ref),
-                _ => None,
-              })
-              .collect(),
+            potentially_ambiguous_symbol_refs: Box::new(
+              ambiguous_results
+                .iter()
+                .filter_map(|kind| match *kind {
+                  MatchImportKind::Normal(MatchImportKindNormal { symbol, .. }) => Some(symbol),
+                  MatchImportKind::Namespace { namespace_ref }
+                  | MatchImportKind::NormalAndNamespace { namespace_ref, .. } => {
+                    Some(namespace_ref)
+                  }
+                  _ => None,
+                })
+                .collect(),
+            ),
           };
         }
 

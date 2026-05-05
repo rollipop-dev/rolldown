@@ -26,7 +26,7 @@ use rolldown_ecmascript_utils::{
 mod finalizer_context;
 mod impl_visit_mut;
 pub use finalizer_context::ScopeHoistingFinalizerContext;
-use oxc::span::{CompactStr, Ident};
+use oxc_str::{CompactStr, Ident};
 use rolldown_utils::ecmascript::is_validate_identifier_name;
 use rolldown_utils::indexmap::{FxIndexMap, FxIndexSet};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -122,6 +122,61 @@ impl<'me, 'ast> ScopeHoistingFinalizer<'me, 'ast> {
     let (expr, _) =
       self.finalized_expr_for_symbol_ref(self.ctx.runtime.resolve_symbol(name), false, false);
     expr
+  }
+
+  /// For excluded re-export statements in strict execution order, generate init
+  /// calls by traversing through non-included barrel modules to find included
+  /// importees whose wrappers are available in this chunk.
+  fn generate_transitive_esm_init(
+    &mut self,
+    module_idx: ModuleIdx,
+    body: &mut allocator::Vec<'ast, Statement<'ast>>,
+  ) {
+    let mut stack = vec![module_idx];
+    while let Some(module_idx) = stack.pop() {
+      let Module::Normal(importee) = &self.ctx.modules[module_idx] else { continue };
+      let importee_linking_info = &self.ctx.linking_infos[importee.idx];
+      if !matches!(importee_linking_info.wrap_kind(), WrapKind::Esm) {
+        continue;
+      }
+
+      // `generated_init_esm_importee_ids` serves double duty: it tracks both
+      // modules for which we already emitted an init call AND modules we have
+      // already visited during transitive traversal.
+      if !self.generated_init_esm_importee_ids.insert(importee.idx) {
+        continue;
+      }
+
+      // Only generate init calls for modules in the same chunk whose wrapper is
+      // declared (i.e. the module is included in the output).
+      if importee_linking_info.is_included
+        && self.ctx.chunk_graph.module_to_chunk[importee.idx] == Some(self.ctx.chunk_idx)
+      {
+        let (wrapper_ref_expr, _) = self.finalized_expr_for_symbol_ref(
+          importee_linking_info.wrapper_ref.unwrap(),
+          false,
+          false,
+        );
+        let init_call = self.snippet.builder.expression_call(
+          SPAN,
+          wrapper_ref_expr,
+          NONE,
+          self.snippet.builder.vec(),
+          false,
+        );
+        body.push(self.snippet.builder.statement_expression(SPAN, init_call));
+      } else {
+        // Importee is not included (barrel module) — traverse its import records
+        // to find included importees transitively.
+        // Preserve the old recursive DFS order when using an explicit LIFO stack:
+        // pushing children in reverse keeps source-order visitation left-to-right.
+        for rec in importee.import_records.iter().rev() {
+          if let Some(sub_importee_idx) = rec.resolved_module {
+            stack.push(sub_importee_idx);
+          }
+        }
+      }
+    }
   }
 
   /// If return true the import stmt should be removed,
@@ -300,7 +355,17 @@ impl<'me, 'ast> ScopeHoistingFinalizer<'me, 'ast> {
     }
     let mut hint = FinalizedExprProcessHint::empty();
     let mut expr = if self.ctx.modules[canonical_ref.owner].is_external() {
-      self.snippet.id_ref_expr(self.canonical_name_for(canonical_ref), SPAN)
+      // For mixed-mode externals, ESM importers use the node-mode binding name
+      if self.ctx.module.should_consider_node_esm_spec_for_static_import() {
+        if let Some(node_mode_name) = self.ctx.chunk.node_mode_external_ns_names.get(&canonical_ref)
+        {
+          self.snippet.id_ref_expr(node_mode_name.as_str(), SPAN)
+        } else {
+          self.snippet.id_ref_expr(self.canonical_name_for(canonical_ref), SPAN)
+        }
+      } else {
+        self.snippet.id_ref_expr(self.canonical_name_for(canonical_ref), SPAN)
+      }
     } else {
       match self.ctx.options.format {
         rolldown_common::OutputFormat::Cjs => {
@@ -446,6 +511,13 @@ impl<'me, 'ast> ScopeHoistingFinalizer<'me, 'ast> {
 
     let resolved_export =
       self.ctx.linking_infos[importee.idx].resolved_exports.get(&namespace_alias.property_name)?;
+
+    // Don't inline when there are conflicting CJS sources — the value could differ per branch
+    // TODO(hana): Optimize this with conditional inlining
+    if resolved_export.cjs_conflicting_symbol_refs.is_some() {
+      return None;
+    }
+
     let export_symbol = resolved_export.symbol_ref;
     let canonical_export_ref = self.ctx.symbol_db.canonical_ref_for(export_symbol);
 
@@ -462,6 +534,101 @@ impl<'me, 'ast> ScopeHoistingFinalizer<'me, 'ast> {
     ))
   }
 
+  /// Try to inline an enum member access from an expression. Handles:
+  /// - `Direction.Up` (static member with identifier object)
+  /// - `ns.Direction.Up` (chained static member via namespace import)
+  /// - `Direction["Up"]` (computed member with string literal key)
+  fn try_inline_enum_access(&self, expr: &ast::Expression<'_>) -> Option<ast::Expression<'ast>> {
+    match expr {
+      ast::Expression::StaticMemberExpression(member_expr) => {
+        if let ast::Expression::Identifier(ident) = &member_expr.object {
+          self.try_inline_enum_member(ident, &member_expr.property.name)
+        } else {
+          self.try_inline_chained_enum_member(member_expr)
+        }
+      }
+      ast::Expression::ComputedMemberExpression(member_expr) => {
+        let ast::Expression::Identifier(ident) = &member_expr.object else { return None };
+        let ast::Expression::StringLiteral(prop) = &member_expr.expression else { return None };
+        self.try_inline_enum_member(ident, prop.value.as_str())
+      }
+      _ => None,
+    }
+  }
+
+  /// Try to inline an enum member access like `Direction.Up` → `0`.
+  /// Resolves the identifier to its canonical symbol, then looks up the enum member
+  /// value in the owning module's `enum_member_value_map`.
+  fn try_inline_enum_member(
+    &self,
+    ident: &ast::IdentifierReference<'_>,
+    property_name: &str,
+  ) -> Option<ast::Expression<'ast>> {
+    let ref_id = ident.reference_id.get()?;
+    let symbol_id = self.scope.scoping().get_reference(ref_id).symbol_id()?;
+    let symbol_ref: SymbolRef = (self.ctx.idx, symbol_id).into();
+    self.try_inline_enum_member_by_ref(symbol_ref, property_name)
+  }
+
+  /// Try to inline a chained enum member access like `ns.c.x` → `"c"`.
+  /// `ns` is a namespace import (`import * as ns`), `c` is a named export (enum), `x` is the member.
+  ///
+  /// This is separate from `try_rewrite_member_expr` because `resolved_member_expr_refs` resolves
+  /// `ns.c` → identifier `c` with `.x` as a remaining prop. The post-rewrite enum check only
+  /// matches `Identifier.property` patterns, so by the time `member_expr_or_ident_ref` rebuilds
+  /// `c.x`, the inlining window has passed. This method resolves all three levels in one pass.
+  fn try_inline_chained_enum_member(
+    &self,
+    outer_expr: &ast::StaticMemberExpression<'_>,
+  ) -> Option<ast::Expression<'ast>> {
+    // The object must be a StaticMemberExpression (e.g., `ns.c`)
+    let ast::Expression::StaticMemberExpression(inner_expr) = &outer_expr.object else {
+      return None;
+    };
+    // The inner object must be an identifier (e.g., `ns`)
+    let ast::Expression::Identifier(ns_ident) = &inner_expr.object else {
+      return None;
+    };
+
+    // Resolve `ns` to its symbol
+    let ref_id = ns_ident.reference_id.get()?;
+    let symbol_id = self.scope.scoping().get_reference(ref_id).symbol_id()?;
+    let symbol_ref: SymbolRef = (self.ctx.idx, symbol_id).into();
+    let canonical_ref = self.ctx.symbol_db.canonical_ref_for(symbol_ref);
+
+    // Find which module this namespace belongs to.
+    // For `import * as ns from './enums'`, canonical_ref.owner is the importee module.
+    let importee = self.ctx.modules[canonical_ref.owner].as_normal()?;
+
+    // Find the exported symbol for the inner property name (e.g., `c`)
+    let resolved_export = self.ctx.linking_infos[importee.idx]
+      .resolved_exports
+      .get(inner_expr.property.name.as_str())?;
+
+    // Don't inline when there are conflicting CJS sources — the value could differ per branch
+    if resolved_export.cjs_conflicting_symbol_refs.is_some() {
+      return None;
+    }
+
+    let canonical_export = self.ctx.symbol_db.canonical_ref_for(resolved_export.symbol_ref);
+
+    // Now try to inline the outer property (e.g., `x`) as an enum member
+    self.try_inline_enum_member_by_ref(canonical_export, outer_expr.property.name.as_str())
+  }
+
+  fn try_inline_enum_member_by_ref(
+    &self,
+    symbol_ref: SymbolRef,
+    property_name: &str,
+  ) -> Option<ast::Expression<'ast>> {
+    let canonical_ref = self.ctx.symbol_db.canonical_ref_for(symbol_ref);
+    let module = self.ctx.modules[canonical_ref.owner].as_normal()?;
+    let symbol_name = canonical_ref.name(self.ctx.symbol_db);
+    let member_map = module.ecma_view.enum_member_value_map.get(symbol_name)?;
+    let meta = member_map.get(property_name)?;
+    Some(meta.value.to_expression(AstBuilder::new(self.alloc)))
+  }
+
   fn var_declaration_to_expr_seq_and_bindings(
     &self,
     decl: &mut ast::VariableDeclaration<'ast>,
@@ -474,7 +641,7 @@ impl<'me, 'ast> ScopeHoistingFinalizer<'me, 'ast> {
     }
     let mut ret = vec![];
     let exprs = decl.declarations.iter_mut().filter_map(|var_decl| {
-      ret.extend(var_decl.id.binding_identifiers().iter().map(|item| item.name));
+      ret.extend(var_decl.id.get_binding_identifiers().iter().map(|item| item.name));
       // Turn `var ... = ...` to `... = ...`
       if let Some(ref mut init_expr) = var_decl.init {
         let left = var_decl.id.take_in(self.alloc).into_assignment_target(self.alloc);
@@ -761,7 +928,7 @@ impl<'me, 'ast> ScopeHoistingFinalizer<'me, 'ast> {
             self.snippet.builder.vec_from_array([
               ast::Argument::StringLiteral(self.snippet.builder.alloc_string_literal(
                 SPAN,
-                self.snippet.builder.atom(relative_asset_path),
+                self.snippet.builder.str(relative_asset_path),
                 None,
               )),
               ast::Argument::StaticMemberExpression(
@@ -1223,7 +1390,7 @@ impl<'me, 'ast> ScopeHoistingFinalizer<'me, 'ast> {
                     self
                       .snippet
                       .builder
-                      .expression_identifier(SPAN, self.snippet.builder.atom(to_esm_fn_name)),
+                      .expression_identifier(SPAN, self.snippet.builder.str(to_esm_fn_name)),
                     self.snippet.call_expr_expr(importee_wrapper_ref_name),
                     self.ctx.module.should_consider_node_esm_spec_for_dynamic_import(),
                   ),
@@ -1256,16 +1423,31 @@ impl<'me, 'ast> ScopeHoistingFinalizer<'me, 'ast> {
     let old_body = program.body.take_in(self.alloc);
     // the first statement info is the namespace variable declaration
     // skip first statement info to make sure `program.body` has same index as `stmt_infos`
-    old_body
-      .into_iter()
-      .enumerate()
-      .zip(self.ctx.module.stmt_infos.iter_enumerated().skip(1))
-      .for_each(|((_top_stmt_idx, mut top_stmt), (stmt_info_idx, _stmt_info))| {
-        if !self.ctx.linking_info.stmt_info_included.has_bit(stmt_info_idx) {
+    old_body.into_iter().enumerate().zip(self.ctx.stmt_infos.iter_enumerated().skip(1)).for_each(
+      |((_top_stmt_idx, mut top_stmt), (stmt_info_idx, _stmt_info))| {
+        let is_stmt_included = self.ctx.linking_info.stmt_info_included.has_bit(stmt_info_idx);
+
+        if !is_stmt_included {
+          // For ESM-wrapped modules, excluded re-export statements still need
+          // init calls for correct initialization order.
+          if matches!(self.ctx.linking_info.wrap_kind(), WrapKind::Esm) {
+            let rec_idx = if let Some(export_all) = top_stmt.as_export_all_declaration() {
+              Some(self.ctx.module.imports[&export_all.span])
+            } else if let Some(named_decl) = top_stmt.as_export_named_declaration() {
+              named_decl.source.as_ref().map(|_| self.ctx.module.imports[&named_decl.span])
+            } else {
+              None
+            };
+            if let Some(importee_idx) =
+              rec_idx.and_then(|idx| self.ctx.module.import_records[idx].resolved_module)
+            {
+              self.generate_transitive_esm_init(importee_idx, &mut program.body);
+            }
+          }
           return;
         }
 
-        let is_module_decl = top_stmt.is_module_declaration_with_source();
+        let is_module_decl = is_stmt_included && top_stmt.is_module_declaration_with_source();
 
         if let Some(import_decl) = top_stmt.as_import_declaration() {
           let span = import_decl.span;
@@ -1304,7 +1486,13 @@ impl<'me, 'ast> ScopeHoistingFinalizer<'me, 'ast> {
                 {
                   let wrapper_ref_name =
                     self.canonical_name_for(importee_linking_info.wrapper_ref.unwrap());
-                  program.body.push(self.snippet.call_expr_stmt(wrapper_ref_name));
+                  let mut init_expr = self.snippet.call_expr_expr(wrapper_ref_name);
+                  if importee_linking_info.is_tla_or_contains_tla_dependency {
+                    init_expr = ast::Expression::AwaitExpression(
+                      self.snippet.builder.alloc_await_expression(SPAN, init_expr),
+                    );
+                  }
+                  program.body.push(self.snippet.builder.statement_expression(SPAN, init_expr));
                 }
 
                 match importee.exports_kind {
@@ -1563,7 +1751,8 @@ impl<'me, 'ast> ScopeHoistingFinalizer<'me, 'ast> {
         if is_module_decl {
           last_import_stmt_idx = Some(program.body.len());
         }
-      });
+      },
+    );
     last_import_stmt_idx.unwrap_or(0)
   }
 
@@ -1688,7 +1877,7 @@ impl<'me, 'ast> ScopeHoistingFinalizer<'me, 'ast> {
       let name_ref = self.canonical_ref_for_runtime("__name");
       let (finalized_callee, _) = self.finalized_expr_for_symbol_ref(name_ref, false, false);
       let target =
-        self.snippet.builder.expression_identifier(SPAN, self.snippet.builder.atom(new_name));
+        self.snippet.builder.expression_identifier(SPAN, self.snippet.builder.str(new_name));
       statements.insert(
         *stmt_index,
         self.snippet.builder.statement_expression(
@@ -2056,7 +2245,7 @@ impl<'me, 'ast> ScopeHoistingFinalizer<'me, 'ast> {
               self
                 .snippet
                 .builder
-                .binding_pattern_binding_identifier(SPAN, self.snippet.builder.atom("m")),
+                .binding_pattern_binding_identifier(SPAN, self.snippet.builder.str("m")),
               NONE,
               NONE,
               false,

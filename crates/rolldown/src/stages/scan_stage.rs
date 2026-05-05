@@ -2,12 +2,13 @@ use std::{sync::Arc, thread};
 
 use arcstr::ArcStr;
 use futures::future::join_all;
+use oxc::span::Span;
 use oxc_index::IndexVec;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use rolldown_common::SourceMapGenMsg;
 use rolldown_common::{
   EntryPoint, FlatOptions, HybridIndexVec, Module, ModuleIdx, ModuleTable, PreserveEntrySignatures,
-  ResolvedId, RuntimeModuleBrief, ScanMode, SourcemapChainElement, SymbolRefDb,
+  ResolvedId, RuntimeModuleBrief, ScanMode, SourcemapChainElement, StmtInfos, SymbolRefDb,
   dynamic_import_usage::DynamicImportExportsUsage,
 };
 use rolldown_ecmascript::EcmaAst;
@@ -19,7 +20,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::{
   SharedOptions, SharedResolver,
   module_loader::{ModuleLoader, module_loader::ModuleLoaderOutput},
-  type_alias::IndexEcmaAst,
+  type_alias::{IndexEcmaAst, IndexStmtInfos},
   types::scan_stage_cache::ScanStageCache,
   utils::load_entry_module::load_entry_module,
 };
@@ -40,6 +41,10 @@ pub struct ScanStage<Fs: FileSystem + Clone + 'static> {
 pub struct NormalizedScanStageOutput {
   pub module_table: ModuleTable,
   pub index_ecma_ast: IndexEcmaAst,
+  /// Per-module `StmtInfos` side table, parallel to `module_table.modules`.
+  /// External modules get an empty `StmtInfos::new()` placeholder. Routed
+  /// directly into `LinkStage.stmt_infos` instead of living on `EcmaView`.
+  pub stmt_infos: IndexStmtInfos,
   pub entry_points: Vec<EntryPoint>,
   pub symbol_ref_db: SymbolRefDb,
   pub runtime: RuntimeModuleBrief,
@@ -51,6 +56,7 @@ pub struct NormalizedScanStageOutput {
   pub flat_options: FlatOptions,
   pub user_defined_entry_modules: FxHashSet<ModuleIdx>,
   pub tla_module_count: usize,
+  pub tla_keyword_span_map: FxHashMap<ModuleIdx, Span>,
 }
 
 impl NormalizedScanStageOutput {
@@ -67,6 +73,7 @@ impl NormalizedScanStageOutput {
           .collect::<Vec<_>>();
         IndexVec::from_vec(index_ecma_ast)
       },
+      stmt_infos: self.stmt_infos.clone(),
       entry_points: self.entry_points.clone(),
       symbol_ref_db: self.symbol_ref_db.clone_without_scoping(),
       runtime: self.runtime.clone(),
@@ -77,6 +84,7 @@ impl NormalizedScanStageOutput {
       flat_options: self.flat_options,
       user_defined_entry_modules: self.user_defined_entry_modules.clone(),
       tla_module_count: self.tla_module_count,
+      tla_keyword_span_map: self.tla_keyword_span_map.clone(),
     }
   }
 }
@@ -95,9 +103,15 @@ impl TryFrom<ScanStageOutput> for NormalizedScanStageOutput {
       HybridIndexVec::Map(_) => return Err("index_ecma_ast must be normalized to IndexVec first"),
     };
 
+    let stmt_infos = match value.stmt_infos {
+      HybridIndexVec::IndexVec(stmt_infos) => stmt_infos,
+      HybridIndexVec::Map(_) => return Err("stmt_infos must be normalized to IndexVec first"),
+    };
+
     Ok(Self {
       module_table,
       index_ecma_ast,
+      stmt_infos,
       entry_points: value.entry_points,
       symbol_ref_db: value.symbol_ref_db,
       runtime: value.runtime,
@@ -108,6 +122,7 @@ impl TryFrom<ScanStageOutput> for NormalizedScanStageOutput {
       flat_options: value.flat_options,
       user_defined_entry_modules: value.user_defined_entry_modules,
       tla_module_count: value.tla_module_count,
+      tla_keyword_span_map: value.tla_keyword_span_map,
     })
   }
 }
@@ -116,6 +131,7 @@ impl TryFrom<ScanStageOutput> for NormalizedScanStageOutput {
 pub struct ScanStageOutput {
   pub module_table: HybridIndexVec<ModuleIdx, Module>,
   pub index_ecma_ast: HybridIndexVec<ModuleIdx, Option<EcmaAst>>,
+  pub stmt_infos: HybridIndexVec<ModuleIdx, StmtInfos>,
   pub entry_points: Vec<EntryPoint>,
   pub symbol_ref_db: SymbolRefDb,
   pub runtime: RuntimeModuleBrief,
@@ -126,6 +142,7 @@ pub struct ScanStageOutput {
   pub flat_options: FlatOptions,
   pub user_defined_entry_modules: FxHashSet<ModuleIdx>,
   pub tla_module_count: usize,
+  pub tla_keyword_span_map: FxHashMap<ModuleIdx, Span>,
 }
 
 impl<Fs: FileSystem + Clone + 'static> ScanStage<Fs> {
@@ -166,16 +183,14 @@ impl<Fs: FileSystem + Clone + 'static> ScanStage<Fs> {
     self
       .plugin_driver
       .file_emitter
-      .set_context_load_modules_tx(Some(module_loader.shared_context.tx.clone()))
-      .await;
+      .set_context_load_modules_tx(Some(module_loader.shared_context.tx.clone()))?;
 
     self.plugin_driver.build_start(&self.options).await?;
 
     // For `await pluginContext.load`, if support it at buildStart hook, it could be caused stuck.
     self
       .plugin_driver
-      .set_context_load_modules_tx(Some(module_loader.shared_context.tx.clone()))
-      .await;
+      .set_context_load_modules_tx(Some(module_loader.shared_context.tx.clone()))?;
 
     let mut module_loader_output = module_loader.fetch_modules(fetch_mode).await?;
 
@@ -183,9 +198,9 @@ impl<Fs: FileSystem + Clone + 'static> ScanStage<Fs> {
       self.process_sourcemap_handler(handler, &mut module_loader_output);
     }
 
-    self.plugin_driver.file_emitter.set_context_load_modules_tx(None).await;
+    self.plugin_driver.file_emitter.set_context_load_modules_tx(None)?;
 
-    self.plugin_driver.set_context_load_modules_tx(None).await;
+    self.plugin_driver.set_context_load_modules_tx(None)?;
 
     Ok(module_loader_output.into())
   }
@@ -320,6 +335,7 @@ impl From<ModuleLoaderOutput> for ScanStageOutput {
       runtime,
       warnings,
       index_ecma_ast,
+      stmt_infos,
       dynamic_import_exports_usage_map,
       new_added_modules_from_partial_scan: _,
       overrode_preserve_entry_signature_map,
@@ -327,10 +343,12 @@ impl From<ModuleLoaderOutput> for ScanStageOutput {
       flat_options,
       user_defined_entry_modules,
       tla_module_count,
+      tla_keyword_span_map,
     } = module_loader_output;
     ScanStageOutput {
       module_table,
       index_ecma_ast,
+      stmt_infos,
       entry_points,
       symbol_ref_db,
       runtime,
@@ -341,6 +359,7 @@ impl From<ModuleLoaderOutput> for ScanStageOutput {
       flat_options,
       user_defined_entry_modules,
       tla_module_count,
+      tla_keyword_span_map,
     }
   }
 }

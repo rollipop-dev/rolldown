@@ -57,10 +57,6 @@ export {
   type RollipopReactRefreshWrapperPluginConfig,
 } from './builtin-plugin/rollipop-react-refresh-wrapper-plugin';
 export {
-  rollipopWorkletsPlugin,
-  type RollipopWorkletsPluginConfig,
-} from './builtin-plugin/rollipop-worklets-plugin';
-export {
   rollipopReactNativePlugin,
   type RollipopReactNativePluginConfig,
   type RollipopReactNativeRuntimeTarget,

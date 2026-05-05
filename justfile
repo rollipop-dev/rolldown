@@ -3,6 +3,7 @@ set shell := ["bash", "-cu"]
 
 alias dt := t-run
 alias ued := update-esbuild-diff
+alias update-submodule := setup-submodule
 
 _default:
   just --list -u
@@ -40,10 +41,6 @@ setup-vite-plus:
         exit 0
     }
     irm https://viteplus.dev/install.ps1 | iex
-
-# Update the submodule to the latest commit
-update-submodule:
-  git submodule update --init
 
 # --- `roll` series commands will run all relevant commands in one go.
 
@@ -100,7 +97,7 @@ test-node-hmr *args: build build-test-dev-server
   just test-node-hmr-only {{ args }}
 
 test-node-hmr-only *args:
-  vp run --filter @rolldown/test-dev-server-tests test -- {{ args }}
+  vp run --filter @rolldown/test-dev-server-tests test {{ args }}
 
 # Run Vite's test suite to check Rolldown's behaviors.
 test-vite: # We don't use `test-node-vite` because it's not expected to run in `just test-node`.
@@ -113,12 +110,12 @@ t-node: t-node-rolldown t-node-rollup
 
 # Run Rolldown's tests without building Rolldown.
 t-node-rolldown *args="":
-  vp run --filter rolldown-tests test:main -- {{ args }}
-  vp run --filter rolldown-tests test:watcher -- {{ args }}
+  vp run --filter rolldown-tests test:main {{ args }}
+  vp run --filter rolldown-tests test:watcher {{ args }}
 
 # Run Rollup's test suite without building Rolldown.
 t-node-rollup *args="":
-  vp run --filter rollup-tests test -- {{ args }}
+  vp run --filter rollup-tests test {{ args }}
 
 # Run specific rust test without enabling extended tests.
 [unix]
@@ -164,7 +161,6 @@ clippy:
 
 lint-node:
   vp check
-  vp run type-check
   vp run lint-knip
   vp run lint-publint
 

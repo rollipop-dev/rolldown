@@ -178,6 +178,15 @@ export interface TreeShakeOptions {
    */
   propertyReadSideEffects?: boolean | 'always'
   /**
+   * Whether property write accesses (assignments to member expressions) have side effects.
+   *
+   * When false, assignments like `obj.prop = value` are considered side-effect-free
+   * (assuming the object and value expressions themselves are side-effect-free).
+   *
+   * @default true
+   */
+  propertyWriteSideEffects?: boolean
+  /**
    * Whether accessing a global variable has side effects.
    *
    * Accessing a non-existing global variable will throw an error.
@@ -1378,6 +1387,24 @@ export interface TypeScriptOptions {
    */
   removeClassFieldsWithoutInitializer?: boolean
   /**
+   * When true, optimize const enums by inlining their values at usage sites
+   * and removing the enum declaration.
+   *
+   * @default false
+   */
+  optimizeConstEnums?: boolean
+  /**
+   * When true, optimize regular (non-const) enums by inlining their member
+   * accesses at usage sites when the member value is statically known.
+   *
+   * Non-exported enum declarations are also removed when all members are
+   * evaluable and no references to the enum as a runtime value exist
+   * (e.g., `console.log(Foo)`, `typeof Foo`, or passing the enum as an argument).
+   *
+   * @default false
+   */
+  optimizeEnums?: boolean
+  /**
    * Also generate a `.d.ts` declaration file for TypeScript files.
    *
    * The source file must be compliant with all
@@ -1501,13 +1528,13 @@ export declare class BindingMagicString {
   prependRight(index: number, content: string): this
   appendLeft(index: number, content: string): this
   appendRight(index: number, content: string): this
-  overwrite(start: number, end: number, content: string): this
+  overwrite(start: number, end: number, content: string, options?: BindingOverwriteOptions | undefined | null): this
   toString(): string
   hasChanged(): boolean
   length(): number
   isEmpty(): boolean
   remove(start: number, end: number): this
-  update(start: number, end: number, content: string): this
+  update(start: number, end: number, content: string, options?: BindingUpdateOptions | undefined | null): this
   relocate(start: number, end: number, to: number): this
   /**
    * Alias for `relocate` to match the original magic-string API.
@@ -1811,7 +1838,6 @@ export type BindingBuiltinPluginName =  'builtin:bundle-analyzer'|
 'builtin:vite-web-worker-post'|
 'builtin:oxc-runtime'|
 'builtin:rollipop-react-refresh-wrapper'|
-'builtin:rollipop-worklets'|
 'builtin:rollipop-react-native';
 
 export interface BindingBundleAnalyzerPluginConfig {
@@ -2345,6 +2371,7 @@ export interface BindingMatchGroup {
   maxSize?: number
   entriesAware?: boolean
   entriesAwareMergeThreshold?: number
+  tags?: Array<string>
 }
 
 export interface BindingModulePreloadOptions {
@@ -2420,6 +2447,10 @@ export interface BindingOutputOptions {
 export interface BindingOutputs {
   chunks: Array<BindingOutputChunk>
   assets: Array<BindingOutputAsset>
+}
+
+export interface BindingOverwriteOptions {
+  contentOnly?: boolean
 }
 
 export interface BindingPluginContextResolvedId {
@@ -2668,12 +2699,6 @@ export interface BindingRollipopReactRefreshWrapperPluginConfig {
   jsxImportSource?: string
 }
 
-export interface BindingRollipopWorkletsPluginConfig {
-  root: string
-  pluginVersion: string
-  isRelease: boolean
-}
-
 export interface BindingSourcemap {
   inner: string | BindingJsonSourcemap
 }
@@ -2758,6 +2783,10 @@ export interface BindingTsconfigRawOptions {
 export interface BindingTsconfigResult {
   tsconfig: BindingTsconfig
   tsconfigFilePaths: Array<string>
+}
+
+export interface BindingUpdateOptions {
+  overwrite?: boolean
 }
 
 export interface BindingViteAliasPluginAlias {
