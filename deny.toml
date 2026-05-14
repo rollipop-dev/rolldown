@@ -1,0 +1,44 @@
+# Local cargo-deny config used by the Security Analysis workflow.
+# Overrides the oxc-project/security-action bundled config so we can
+# exempt advisories and licenses that come in via the wasmer chain in
+# rolldown_plugin_rollipop_react_native.
+
+[advisories]
+db-urls = ["https://github.com/rustsec/advisory-db"]
+yanked = "warn"
+ignore = [
+  # paste 1.0.15 — author archived the repo; pulled in via wasmer ⇒ swc_plugin_backend_wasmer
+  "RUSTSEC-2024-0436",
+  # bincode 1.x — unmaintained, v2 is not a drop-in; pulled in via wasmer chain
+  "RUSTSEC-2025-0141",
+]
+
+[licenses]
+allow = [
+  "0BSD",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "BSL-1.0",
+  "CC0-1.0",
+  "CDLA-Permissive-2.0",
+  "ISC",
+  "MIT",
+  "MIT-0",
+  "MPL-2.0",
+  "OpenSSL",
+  "Unicode-3.0",
+  "Unicode-DFS-2016",
+  "Zlib",
+]
+confidence-threshold = 0.8
+
+[bans]
+multiple-versions = "allow"
+wildcards = "allow"
+
+[sources]
+unknown-registry = "warn"
+unknown-git = "warn"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
