@@ -63,6 +63,11 @@ export {
   type RollipopReactNativeFlowConfig,
   type RollipopReactNativeWorkletsConfig,
 } from './builtin-plugin/rollipop-react-native-plugin';
+export {
+  RollipopReactNativeTransformer,
+  type RollipopReactNativeTransformerConfig,
+  type RollipopReactNativeTransformResult,
+} from './utils/rollipop-react-native-transformer';
 
 // `__volume` and `__fs` only exist in `rolldown-binding.wasi-browser.js`, so we need to use namespace import to prevent static import error.
 import * as binding from './binding.cjs';

@@ -5,6 +5,7 @@ mod binding_plugin_hook_meta;
 mod binding_plugin_options;
 mod binding_transform_context;
 mod config;
+pub use config::BindingRollipopReactNativePluginConfig;
 mod js_plugin;
 
 pub mod binding_plugin_context;

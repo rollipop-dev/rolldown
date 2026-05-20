@@ -4339,6 +4339,7 @@ dependencies = [
  "rolldown_tracing",
  "rolldown_utils",
  "rolldown_watcher",
+ "rollipop_react_native_transform",
  "rustc-hash 2.1.1",
  "serde",
  "serde_json",
@@ -4677,25 +4678,10 @@ name = "rolldown_plugin_rollipop_react_native"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "memchr",
  "rolldown_common",
  "rolldown_plugin",
  "rolldown_sourcemap",
- "serde_json",
- "swc_common",
- "swc_ecma_ast",
- "swc_ecma_codegen",
- "swc_ecma_compat_es2015",
- "swc_ecma_compat_es2017",
- "swc_ecma_compat_es2022",
- "swc_ecma_parser",
- "swc_ecma_transforms_base",
- "swc_ecma_transforms_typescript",
- "swc_ecma_visit",
- "swc_plugin_backend_wasmer",
- "swc_plugin_proxy",
- "swc_plugin_runner",
- "swc_react_native",
+ "rollipop_react_native_transform",
 ]
 
 [[package]]
@@ -5178,6 +5164,29 @@ dependencies = [
 [[package]]
 name = "rolldown_workspace"
 version = "0.1.0"
+
+[[package]]
+name = "rollipop_react_native_transform"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "memchr",
+ "serde_json",
+ "swc_common",
+ "swc_ecma_ast",
+ "swc_ecma_codegen",
+ "swc_ecma_compat_es2015",
+ "swc_ecma_compat_es2017",
+ "swc_ecma_compat_es2022",
+ "swc_ecma_parser",
+ "swc_ecma_transforms_base",
+ "swc_ecma_transforms_typescript",
+ "swc_ecma_visit",
+ "swc_plugin_backend_wasmer",
+ "swc_plugin_proxy",
+ "swc_plugin_runner",
+ "swc_react_native",
+]
 
 [[package]]
 name = "ropey"

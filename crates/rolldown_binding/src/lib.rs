@@ -37,6 +37,7 @@ pub mod classic_bundler;
 mod generated;
 pub mod options;
 pub mod parallel_js_plugin_registry;
+pub mod rollipop_react_native_transform;
 pub mod transform;
 pub mod transform_cache;
 pub mod types;
