@@ -1,6 +1,7 @@
 use rolldown_plugin_rollipop_react_native::{
   FlowConfig, RollipopReactNativePlugin, RuntimeTarget, SwcWasmPlugin, WorkletsConfig,
 };
+use rollipop_react_native_transform::TransformerOptions;
 
 #[napi_derive::napi(object, object_to_js = false)]
 #[derive(Debug)]
@@ -131,11 +132,14 @@ impl From<BindingRollipopReactNativeWorkletsConfig> for WorkletsConfig {
   }
 }
 
-impl TryFrom<BindingRollipopReactNativePluginConfig> for RollipopReactNativePlugin {
-  type Error = anyhow::Error;
-
-  fn try_from(value: BindingRollipopReactNativePluginConfig) -> Result<Self, Self::Error> {
-    let plugins = value
+impl BindingRollipopReactNativePluginConfig {
+  /// Lower the binding config into the parts needed to construct either the
+  /// rolldown plugin or the standalone transformer. Centralizing this here
+  /// keeps the two call sites in sync.
+  pub fn into_parts(
+    self,
+  ) -> Result<(Vec<SwcWasmPlugin>, Option<String>, TransformerOptions), anyhow::Error> {
+    let plugins = self
       .plugins
       .unwrap_or_default()
       .into_iter()
@@ -145,9 +149,24 @@ impl TryFrom<BindingRollipopReactNativePluginConfig> for RollipopReactNativePlug
         Ok(SwcWasmPlugin { path: p.path, config })
       })
       .collect::<Result<Vec<_>, _>>()?;
-    let runtime_target = value.runtime_target.map(RuntimeTarget::from).unwrap_or_default();
-    let worklets = value.worklets.map(WorkletsConfig::from);
-    let flow = value.flow.map(FlowConfig::from);
-    RollipopReactNativePlugin::new(plugins, value.env_name, runtime_target, worklets, flow)
+    let runtime_target = self.runtime_target.map(RuntimeTarget::from).unwrap_or_default();
+    let worklets = self.worklets.map(WorkletsConfig::from);
+    let flow = self.flow.map(FlowConfig::from).unwrap_or_default();
+    Ok((plugins, self.env_name, TransformerOptions { runtime_target, worklets, flow }))
+  }
+}
+
+impl TryFrom<BindingRollipopReactNativePluginConfig> for RollipopReactNativePlugin {
+  type Error = anyhow::Error;
+
+  fn try_from(value: BindingRollipopReactNativePluginConfig) -> Result<Self, Self::Error> {
+    let (plugins, env_name, options) = value.into_parts()?;
+    RollipopReactNativePlugin::new(
+      plugins,
+      env_name,
+      options.runtime_target,
+      options.worklets,
+      Some(options.flow),
+    )
   }
 }

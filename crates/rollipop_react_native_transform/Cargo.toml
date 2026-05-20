@@ -1,0 +1,47 @@
+[package]
+name = "rollipop_react_native_transform"
+version = "0.1.0"
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+publish = false
+repository.workspace = true
+description = "Standalone SWC transform pipeline for React Native (Flow strip, TS strip, codegenNativeComponent, worklets, Hermes compat, SWC wasm plugins). Used by the rolldown React Native plugin and exposed via NAPI."
+
+[lib]
+doctest = false
+test = false
+
+[lints]
+workspace = true
+
+[features]
+default = ["wasm_plugins"]
+# Enables loading user-supplied SWC `.wasm` plugins via wasmer. Disabled on
+# targets where wasmer cannot compile (typically `aarch64-pc-windows-msvc`).
+wasm_plugins = ["dep:swc_plugin_runner", "dep:swc_plugin_backend_wasmer", "dep:swc_plugin_proxy"]
+
+[dependencies]
+anyhow = { workspace = true }
+memchr = { workspace = true }
+serde_json = { workspace = true }
+swc_common = { version = "21.0.1", features = ["concurrent", "sourcemap"] }
+swc_ecma_ast = "23.0.0"
+swc_ecma_parser = { version = "39.0.2", features = ["flow"] }
+swc_ecma_codegen = "26.0.1"
+swc_ecma_transforms_base = "42.0.0"
+swc_ecma_transforms_typescript = { version = "46.0.1", features = ["concurrent"] }
+swc_ecma_compat_es2015 = "46.0.0"
+swc_ecma_compat_es2017 = "43.0.0"
+swc_ecma_compat_es2022 = "45.0.0"
+swc_ecma_visit = "23.0.0"
+swc_react_native = { version = "0.1.2", features = ["codegen", "worklets"] }
+
+# Optional — wasmer-based runtime for user-supplied SWC `.wasm` plugins.
+swc_plugin_runner = { version = "27.0.0", optional = true, features = [
+  "ecma",
+  "encoding-impl",
+  "plugin_transform_schema_v1",
+] }
+swc_plugin_backend_wasmer = { version = "10.0.0", optional = true }
+swc_plugin_proxy = { version = "23.0.0", optional = true, features = ["plugin-rt"] }

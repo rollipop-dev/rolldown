@@ -1,5 +1,5 @@
 //! Flow text-level utilities — directive detection and pragma stripping.
-//! Pure helpers that don't touch plugin state.
+//! Pure helpers that don't touch transformer state.
 
 use swc_common::comments::SingleThreadedComments;
 
@@ -14,8 +14,8 @@ pub fn has_directive(code: &str) -> bool {
 }
 
 /// Strip `@flow` pragma lines from leading/trailing comments. Run after
-/// the SWC pipeline so they don't leak into rolldown's downstream oxc
-/// parse — a stray `@flow` makes oxc reject the otherwise plain JS output.
+/// the SWC pipeline so they don't leak into the downstream parser — a
+/// stray `@flow` makes plain-JS parsers reject the otherwise valid output.
 pub fn strip_pragma_comments(comments: &SingleThreadedComments) {
   let (mut leading, mut trailing) = comments.borrow_all_mut();
   let retain = |c: &swc_common::comments::Comment| !is_pragma(&c.text);

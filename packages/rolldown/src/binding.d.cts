@@ -1709,6 +1709,25 @@ export declare class BindingRenderedModule {
   get renderedExports(): Array<string>
 }
 
+export declare class BindingRollipopReactNativeTransformer {
+  /**
+   * Construct a new transformer. SWC `.wasm` plugins listed in `config`
+   * are read from disk and compiled here exactly once — subsequent
+   * `transform` / `transformSync` calls reuse the compiled modules.
+   */
+  constructor(config: BindingRollipopReactNativePluginConfig)
+  /**
+   * Asynchronously transform `code`. The module kind is inferred from the
+   * `filename` extension (matches rolldown's default extension table).
+   */
+  transform(filename: string, code: string): Promise<BindingRollipopReactNativeTransformResult>
+  /**
+   * Synchronously transform `code`. The module kind is inferred from the
+   * `filename` extension (matches rolldown's default extension table).
+   */
+  transformSync(filename: string, code: string): BindingRollipopReactNativeTransformResult
+}
+
 /** A source map object with properties matching the SourceMap V3 specification. */
 export declare class BindingSourceMap {
   /** The source map version (always 3). */
@@ -2654,6 +2673,15 @@ export interface BindingRollipopReactNativeSwcPlugin {
   path: string
   /** JSON-serialized plugin config */
   config: string
+}
+
+export interface BindingRollipopReactNativeTransformResult {
+  code: string
+  /**
+   * JSON-encoded source map (sourcemap V3). Parse on the JS side if you
+   * need a structured representation.
+   */
+  map: string
 }
 
 /**
