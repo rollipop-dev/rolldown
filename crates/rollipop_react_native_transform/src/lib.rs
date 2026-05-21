@@ -33,6 +33,7 @@ use swc_ecma_parser::{EsSyntax, FlowSyntax, Syntax, TsSyntax, parse_file_as_prog
 use swc_ecma_transforms_base::fixer::fixer;
 use swc_ecma_transforms_base::helpers::{self, Helpers, inject_helpers};
 use swc_ecma_transforms_base::resolver;
+use swc_ecma_transforms_react::jsx::{Options as JsxOptions, Runtime as JsxRuntime, jsx};
 use swc_ecma_transforms_typescript::{Config as TsStripConfig, typescript};
 use swc_ecma_visit::VisitMutWith;
 use swc_react_native::{CodegenOptions, CodegenVisitor, WorkletsOptions, WorkletsVisitor};
@@ -46,10 +47,61 @@ pub use swc_react_native::WorkletsOptions as SwcWorkletsOptions;
 /// Builds without the `wasm_plugins` feature still expose this type for API
 /// stability, but constructing a [`Transformer`] with a non-empty plugins
 /// vec will return an error.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SwcWasmPlugin {
   pub path: String,
   pub config: serde_json::Value,
+}
+
+/// JSX runtime selection for the React transform pass.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum ReactRuntime {
+  /// Leave JSX untouched. Default — paired with a downstream bundler
+  /// that owns JSX handling (e.g. rolldown itself).
+  #[default]
+  Preserve,
+  /// Compile to `_jsx` / `_jsxs` / `Fragment` imports from
+  /// `react/jsx-runtime` (or `react/jsx-dev-runtime` in development).
+  Automatic,
+  /// Compile to `React.createElement` calls.
+  Classic,
+}
+
+/// React transform pass options. Modeled on Babel's
+/// `@babel/plugin-transform-react-jsx`, minus the dev-server-only
+/// fast-refresh knobs (a bundler concern, not a test/precompile concern).
+#[derive(Debug, Default, Clone)]
+pub struct ReactConfig {
+  pub runtime: ReactRuntime,
+  /// Import source for the automatic runtime. Defaults to `"react"`.
+  pub import_source: Option<String>,
+  /// `pragma` for the classic runtime. Defaults to `"React.createElement"`.
+  pub pragma: Option<String>,
+  /// `pragmaFrag` for the classic runtime. Defaults to `"React.Fragment"`.
+  pub pragma_frag: Option<String>,
+  /// Throw when an XML namespace prefix is encountered (e.g. `<svg:path>`).
+  pub throw_if_namespace: Option<bool>,
+  /// When `true`, emits the development runtime (`__source` / `__self`
+  /// debug props for automatic, `react/jsx-dev-runtime` import).
+  pub development: bool,
+}
+
+/// SWC-side configuration. Bundles knobs that affect the SWC pipeline itself
+/// (wasm plugins, helper emission, React transform) so they can be passed
+/// around as a unit.
+#[derive(Debug, Default, Clone)]
+pub struct SwcConfig {
+  /// User-supplied SWC `.wasm` plugins to run before the built-in passes.
+  pub plugins: Vec<SwcWasmPlugin>,
+  /// When `true`, runtime helpers are emitted as `import` / `require` calls
+  /// to `@swc/helpers` so a downstream bundler can deduplicate them. When
+  /// `false` (default), helpers are inlined into each transformed file —
+  /// safer for callers that hand the output straight to a runtime (e.g.
+  /// jest) without a bundle step in between.
+  pub external_helpers: bool,
+  /// React (JSX) transform configuration. Skipped entirely when
+  /// `react.runtime` is `Preserve`.
+  pub react: ReactConfig,
 }
 
 /// Compat-pass preset selecting which Hermes generation we target.
@@ -89,14 +141,16 @@ pub enum ModuleKind {
   Tsx,
 }
 
-/// Transformer-level configuration. The wasm plugin list and `env_name` are
-/// passed to [`Transformer::new`] separately because they require eager
-/// compilation/initialization that happens once at construction.
+/// Transformer-level configuration. SWC-specific knobs (wasm plugins,
+/// helper emission) live under [`SwcConfig`]; `env_name` is passed to
+/// [`Transformer::new`] separately because it influences the eager wasm
+/// plugin compilation step that happens once at construction.
 #[derive(Debug, Default, Clone)]
 pub struct TransformerOptions {
   pub runtime_target: RuntimeTarget,
   pub worklets: Option<WorkletsConfig>,
-  pub flow: FlowConfig,
+  pub flow: Option<FlowConfig>,
+  pub swc: Option<SwcConfig>,
 }
 
 /// Input to a single [`Transformer::transform`] call.
@@ -166,10 +220,11 @@ pub struct Transformer {
 
 impl Transformer {
   pub fn new(
-    plugins: Vec<SwcWasmPlugin>,
     env_name: Option<String>,
-    options: TransformerOptions,
+    mut options: TransformerOptions,
   ) -> Result<Self, anyhow::Error> {
+    let plugins = options.swc.as_mut().map(|s| std::mem::take(&mut s.plugins)).unwrap_or_default();
+
     #[cfg(not(feature = "wasm_plugins"))]
     {
       if !plugins.is_empty() {
@@ -177,7 +232,6 @@ impl Transformer {
           "SWC wasm plugins are not supported in this build (the `wasm_plugins` feature is disabled — typically the `aarch64-pc-windows-msvc` target)",
         ));
       }
-      drop(plugins);
       drop(env_name);
     }
 
@@ -192,10 +246,9 @@ impl Transformer {
   /// applies to `Js`/`Jsx`; for those, the `require_directive` config
   /// decides whether `@flow`/`@noflow` must be present in the source.
   fn is_flow_module(&self, module_kind: ModuleKind, code: &str) -> bool {
+    let require_directive = self.options.flow.is_some_and(|cfg| cfg.require_directive);
     match module_kind {
-      ModuleKind::Js | ModuleKind::Jsx => {
-        !self.options.flow.require_directive || flow::has_directive(code)
-      }
+      ModuleKind::Js | ModuleKind::Jsx => !require_directive || flow::has_directive(code),
       ModuleKind::Ts | ModuleKind::Tsx => false,
     }
   }
@@ -256,53 +309,70 @@ impl Transformer {
         program.visit_mut_with(&mut RemoveFlowTypeOnlyFields {});
       }
 
-      helpers::HELPERS.set(&Helpers::new(true), || {
-        // Strip TS/Flow types first so the worklets visitor sees plain JS,
-        // matching the babel pipeline order in react-native-reanimated.
-        typescript(
-          TsStripConfig { flow_syntax: is_flow, ..Default::default() },
-          unresolved_mark,
-          top_level_mark,
-        )
-        .process(&mut program);
-
-        if let Some(worklets) = &self.options.worklets {
-          let mut options = worklets.options.clone();
-          options.filename = Some(input.filename.to_string());
-          let mut visitor = WorkletsVisitor::new(options).with_source_map(Arc::clone(&cm));
-          program.visit_mut_with(&mut visitor);
-        }
-
-        let class_props = class_properties(
-          class_properties::Config {
-            set_public_fields: true,
-            private_as_properties: true,
-            ..Default::default()
-          },
-          unresolved_mark,
-        );
-
-        match self.options.runtime_target {
-          RuntimeTarget::HermesV1 => (
-            class_props,
-            private_in_object(),
-            block_scoping(unresolved_mark),
-            inject_helpers(unresolved_mark),
-            fixer(Some(&comments)),
+      helpers::HELPERS.set(
+        &Helpers::new(self.options.swc.as_ref().is_some_and(|cfg| cfg.external_helpers)),
+        || {
+          // Strip TS/Flow types first so the worklets visitor sees plain JS,
+          // matching the babel pipeline order in react-native-reanimated.
+          typescript(
+            TsStripConfig { flow_syntax: is_flow, ..Default::default() },
+            unresolved_mark,
+            top_level_mark,
           )
-            .process(&mut program),
-          RuntimeTarget::Hermes => (
-            class_props,
-            private_in_object(),
-            async_to_generator(async_to_generator::Config::default(), unresolved_mark),
-            classes(classes::Config::default()),
-            block_scoping(unresolved_mark),
-            inject_helpers(unresolved_mark),
-            fixer(Some(&comments)),
-          )
-            .process(&mut program),
-        }
-      });
+          .process(&mut program);
+
+          // Run the JSX pass before downstream class/worklet passes so they see the desugared call shape.
+          if let Some(react) = self.options.swc.as_ref().map(|s| &s.react)
+            && !matches!(react.runtime, ReactRuntime::Preserve)
+          {
+            jsx(
+              Arc::clone(&cm),
+              Some(&comments),
+              to_jsx_options(react),
+              top_level_mark,
+              unresolved_mark,
+            )
+            .process(&mut program);
+          }
+
+          if let Some(worklets) = &self.options.worklets {
+            let mut options = worklets.options.clone();
+            options.filename = Some(input.filename.to_string());
+            let mut visitor = WorkletsVisitor::new(options).with_source_map(Arc::clone(&cm));
+            program.visit_mut_with(&mut visitor);
+          }
+
+          let class_props = class_properties(
+            class_properties::Config {
+              set_public_fields: true,
+              private_as_properties: true,
+              ..Default::default()
+            },
+            unresolved_mark,
+          );
+
+          match self.options.runtime_target {
+            RuntimeTarget::HermesV1 => (
+              class_props,
+              private_in_object(),
+              block_scoping(unresolved_mark),
+              inject_helpers(unresolved_mark),
+              fixer(Some(&comments)),
+            )
+              .process(&mut program),
+            RuntimeTarget::Hermes => (
+              class_props,
+              private_in_object(),
+              async_to_generator(async_to_generator::Config::default(), unresolved_mark),
+              classes(classes::Config::default()),
+              block_scoping(unresolved_mark),
+              inject_helpers(unresolved_mark),
+              fixer(Some(&comments)),
+            )
+              .process(&mut program),
+          }
+        },
+      );
 
       // Strip Flow pragmas after the SWC pipeline so they don't leak into
       // the downstream parser — a stray `@flow` makes oxc reject the otherwise plain JS output.
@@ -341,6 +411,31 @@ impl Transformer {
       })
     })
   }
+}
+
+fn to_jsx_options(config: &ReactConfig) -> JsxOptions {
+  let mut options = JsxOptions {
+    runtime: Some(match config.runtime {
+      ReactRuntime::Automatic => JsxRuntime::Automatic,
+      ReactRuntime::Classic => JsxRuntime::Classic,
+      ReactRuntime::Preserve => JsxRuntime::Preserve,
+    }),
+    development: Some(config.development),
+    ..Default::default()
+  };
+  if let Some(s) = &config.import_source {
+    options.import_source = Some(s.clone().into());
+  }
+  if let Some(s) = &config.pragma {
+    options.pragma = Some(s.clone().into());
+  }
+  if let Some(s) = &config.pragma_frag {
+    options.pragma_frag = Some(s.clone().into());
+  }
+  if let Some(v) = config.throw_if_namespace {
+    options.throw_if_namespace = Some(v);
+  }
+  options
 }
 
 fn is_codegen_required(module_kind: ModuleKind, code: &str, is_flow: bool) -> bool {

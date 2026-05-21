@@ -43,6 +43,52 @@ export interface RollipopReactNativeFlowConfig {
   requireDirective?: boolean;
 }
 
+/**
+ * React (JSX) transform configuration. Mirrors Babel's
+ * `@babel/plugin-transform-react-jsx`, minus dev-server-only knobs
+ * (fast refresh) — those belong to a bundler, not a precompile/test path.
+ */
+export interface RollipopReactNativeReactConfig {
+  /**
+   * JSX runtime.
+   * - `"Preserve"` (default): leave JSX untouched — downstream bundler owns it.
+   * - `"Automatic"`: compile to `_jsx` / `_jsxs` / `Fragment` imports from
+   *   `react/jsx-runtime` (or `react/jsx-dev-runtime` when `development`).
+   * - `"Classic"`: compile to `React.createElement` calls.
+   */
+  runtime?: 'Preserve' | 'Automatic' | 'Classic';
+  /** Import source for the automatic runtime. Defaults to `"react"`. */
+  importSource?: string;
+  /** `pragma` for the classic runtime. Defaults to `"React.createElement"`. */
+  pragma?: string;
+  /** `pragmaFrag` for the classic runtime. Defaults to `"React.Fragment"`. */
+  pragmaFrag?: string;
+  /** Throw on XML namespace prefixes (e.g. `<svg:path>`). */
+  throwIfNamespace?: boolean;
+  /**
+   * When `true`, emits the development runtime (`__source` / `__self` debug
+   * props for automatic, `react/jsx-dev-runtime` import).
+   */
+  development?: boolean;
+}
+
+/**
+ * SWC pipeline configuration — wasm plugins, helper emission, React transform.
+ */
+export interface RollipopReactNativeSwcConfig {
+  /** SWC `.wasm` plugins to load. Each entry is `[pluginPath, pluginConfig]`. */
+  plugins?: [string, Record<string, unknown>][];
+  /**
+   * When `true`, runtime helpers are emitted as imports of `@swc/helpers` so
+   * a downstream bundler can deduplicate them. When `false` (default), helpers
+   * are inlined into each transformed file — preferred when feeding the
+   * output to a runtime (e.g. jest) without a bundle step in between.
+   */
+  externalHelpers?: boolean;
+  /** React (JSX) transform configuration. Skipped when `runtime` is `"Preserve"`. */
+  react?: RollipopReactNativeReactConfig;
+}
+
 export interface RollipopReactNativePluginConfig {
   runtimeTarget?: RollipopReactNativeRuntimeTarget;
   /**
@@ -52,22 +98,30 @@ export interface RollipopReactNativePluginConfig {
   envName?: string;
   /** `react-native-worklets` transform. Visitor is skipped when omitted. */
   worklets?: RollipopReactNativeWorkletsConfig;
-  /** SWC plugins to load. */
-  plugins?: [string, Record<string, unknown>][];
   /** Flow handling configuration. Defaults match Metro / Babel behavior. */
   flow?: RollipopReactNativeFlowConfig;
+  /** SWC pipeline configuration. */
+  swc?: RollipopReactNativeSwcConfig;
+}
+
+function lowerSwc(swc: RollipopReactNativeSwcConfig | undefined) {
+  if (swc == null) return undefined;
+  return {
+    plugins: swc.plugins?.map(([path, pluginConfig]) => ({
+      path,
+      config: JSON.stringify(pluginConfig ?? {}),
+    })),
+    externalHelpers: swc.externalHelpers,
+    react: swc.react,
+  };
 }
 
 export function rollipopReactNativePlugin(config?: RollipopReactNativePluginConfig): BuiltinPlugin {
-  const plugins = config?.plugins?.map(([path, pluginConfig]) => ({
-    path,
-    config: JSON.stringify(pluginConfig ?? {}),
-  }));
   return new BuiltinPlugin('builtin:rollipop-react-native', {
     runtimeTarget: config?.runtimeTarget,
     envName: config?.envName,
     flow: config?.flow,
     worklets: config?.worklets,
-    plugins,
+    swc: lowerSwc(config?.swc),
   });
 }
