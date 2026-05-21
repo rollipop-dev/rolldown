@@ -27,11 +27,13 @@ use swc_ecma_codegen::text_writer::JsWriter;
 use swc_ecma_codegen::{Emitter, Node};
 use swc_ecma_compat_es2015::{block_scoping, classes, destructuring, parameters};
 use swc_ecma_compat_es2017::async_to_generator;
+use swc_ecma_compat_es2018::object_rest_spread;
 use swc_ecma_compat_es2022::class_properties::{self, class_properties};
 use swc_ecma_compat_es2022::private_in_object;
 use swc_ecma_parser::{EsSyntax, FlowSyntax, Syntax, TsSyntax, parse_file_as_program};
 use swc_ecma_transforms_base::fixer::fixer;
 use swc_ecma_transforms_base::helpers::{self, Helpers, inject_helpers};
+use swc_ecma_transforms_base::hygiene::hygiene;
 use swc_ecma_transforms_base::resolver;
 use swc_ecma_transforms_react::jsx::{Options as JsxOptions, Runtime as JsxRuntime, jsx};
 use swc_ecma_transforms_typescript::{Config as TsStripConfig, typescript};
@@ -357,6 +359,7 @@ impl Transformer {
               private_in_object(),
               block_scoping(unresolved_mark),
               inject_helpers(unresolved_mark),
+              hygiene(),
               fixer(Some(&comments)),
             )
               .process(&mut program),
@@ -364,11 +367,13 @@ impl Transformer {
               class_props,
               private_in_object(),
               async_to_generator(async_to_generator::Config::default(), unresolved_mark),
+              object_rest_spread(Default::default()),
               parameters(parameters::Config::default(), unresolved_mark),
               destructuring(destructuring::Config::default()),
               classes(classes::Config::default()),
               block_scoping(unresolved_mark),
               inject_helpers(unresolved_mark),
+              hygiene(),
               fixer(Some(&comments)),
             )
               .process(&mut program),
