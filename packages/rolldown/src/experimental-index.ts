@@ -62,6 +62,8 @@ export {
   type RollipopReactNativeRuntimeTarget,
   type RollipopReactNativeFlowConfig,
   type RollipopReactNativeWorkletsConfig,
+  type RollipopReactNativeSwcConfig,
+  type RollipopReactNativeReactConfig,
 } from './builtin-plugin/rollipop-react-native-plugin';
 export {
   RollipopReactNativeTransformer,

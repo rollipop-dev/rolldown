@@ -15,12 +15,17 @@ export type RollipopReactNativeTransformResult = BindingRollipopReactNativeTrans
  * test harnesses, or precompile steps). SWC `.wasm` plugins listed in the
  * config are read from disk and compiled exactly once at construction
  * time — call `transform` / `transformSync` repeatedly without reloading.
+ *
+ * All options pass through unchanged — `swc.externalHelpers` defaults to
+ * `false` (helpers inlined) and `swc.react.runtime` to `"Preserve"`, both
+ * matching the underlying Rust defaults. Set them explicitly when needed.
  */
 export class RollipopReactNativeTransformer {
   private inner: BindingRollipopReactNativeTransformer;
 
   constructor(config?: RollipopReactNativeTransformerConfig) {
-    const plugins = config?.plugins?.map(([path, pluginConfig]) => ({
+    const swc = config?.swc;
+    const plugins = swc?.plugins?.map(([path, pluginConfig]) => ({
       path,
       config: JSON.stringify(pluginConfig ?? {}),
     }));
@@ -29,7 +34,7 @@ export class RollipopReactNativeTransformer {
       envName: config?.envName,
       flow: config?.flow,
       worklets: config?.worklets,
-      plugins,
+      swc: { plugins, externalHelpers: swc?.externalHelpers, react: swc?.react },
     });
   }
 

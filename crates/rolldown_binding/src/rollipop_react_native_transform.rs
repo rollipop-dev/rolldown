@@ -34,10 +34,10 @@ impl BindingRollipopReactNativeTransformer {
   /// `transform` / `transformSync` calls reuse the compiled modules.
   #[napi(constructor)]
   pub fn new(config: BindingRollipopReactNativePluginConfig) -> napi::Result<Self> {
-    let (plugins, env_name, options) =
+    let (env_name, options) =
       config.into_parts().map_err(|e| napi::Error::from_reason(e.to_string()))?;
-    let transformer = Transformer::new(plugins, env_name, options)
-      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let transformer =
+      Transformer::new(env_name, options).map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(Self { inner: Arc::new(transformer) })
   }
 

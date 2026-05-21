@@ -2641,7 +2641,6 @@ export interface BindingRollipopReactNativeFlowConfig {
 }
 
 export interface BindingRollipopReactNativePluginConfig {
-  plugins?: Array<BindingRollipopReactNativeSwcPlugin>
   /**
    * The name of the `env` to use when loading configs and plugins. Defaults
    * to the value of `SWC_ENV`, or else `NODE_ENV`, or else `"development"`.
@@ -2664,10 +2663,50 @@ export interface BindingRollipopReactNativePluginConfig {
    * entirely when omitted.
    */
   worklets?: BindingRollipopReactNativeWorkletsConfig
+  /** SWC pipeline configuration — wasm plugins and helper emission. */
+  swc?: BindingRollipopReactNativeSwcConfig
 }
+
+export interface BindingRollipopReactNativeReactConfig {
+  /** JSX runtime. Defaults to `"Preserve"` (no transform — bundler owns JSX). */
+  runtime?: BindingRollipopReactNativeReactRuntime
+  /** Import source for the automatic runtime. Defaults to `"react"`. */
+  importSource?: string
+  /** `pragma` for the classic runtime. Defaults to `"React.createElement"`. */
+  pragma?: string
+  /** `pragmaFrag` for the classic runtime. Defaults to `"React.Fragment"`. */
+  pragmaFrag?: string
+  /** Throw when an XML namespace prefix is encountered (e.g. `<svg:path>`). */
+  throwIfNamespace?: boolean
+  /**
+   * When `true`, emits the development runtime (`__source` / `__self` debug
+   * props for automatic, `react/jsx-dev-runtime` import).
+   */
+  development?: boolean
+}
+
+export type BindingRollipopReactNativeReactRuntime =  'Preserve'|
+'Automatic'|
+'Classic';
 
 export type BindingRollipopReactNativeRuntimeTarget =  'Hermes'|
 'HermesV1';
+
+export interface BindingRollipopReactNativeSwcConfig {
+  /** SWC `.wasm` plugins to load. */
+  plugins?: Array<BindingRollipopReactNativeSwcPlugin>
+  /**
+   * When `true`, runtime helpers are emitted as imports of `@swc/helpers`
+   * so a downstream bundler can deduplicate them. When `false` (default),
+   * helpers are inlined into each transformed file.
+   */
+  externalHelpers?: boolean
+  /**
+   * React (JSX) transform configuration. Skipped entirely when `runtime`
+   * is `"Preserve"` (the default).
+   */
+  react?: BindingRollipopReactNativeReactConfig
+}
 
 export interface BindingRollipopReactNativeSwcPlugin {
   path: string

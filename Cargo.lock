@@ -5180,6 +5180,7 @@ dependencies = [
  "swc_ecma_compat_es2022",
  "swc_ecma_parser",
  "swc_ecma_transforms_base",
+ "swc_ecma_transforms_react",
  "swc_ecma_transforms_typescript",
  "swc_ecma_visit",
  "swc_plugin_backend_wasmer",

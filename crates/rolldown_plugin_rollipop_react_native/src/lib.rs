@@ -18,7 +18,7 @@ use rollipop_react_native_transform::{
 };
 
 pub use rollipop_react_native_transform::{
-  FlowConfig, RuntimeTarget, SwcWasmPlugin, WorkletsConfig,
+  FlowConfig, ReactConfig, ReactRuntime, RuntimeTarget, SwcConfig, SwcWasmPlugin, WorkletsConfig,
 };
 
 pub struct RollipopReactNativePlugin {
@@ -27,14 +27,14 @@ pub struct RollipopReactNativePlugin {
 
 impl RollipopReactNativePlugin {
   pub fn new(
-    plugins: Vec<SwcWasmPlugin>,
     env_name: Option<String>,
     runtime_target: RuntimeTarget,
     worklets: Option<WorkletsConfig>,
     flow: Option<FlowConfig>,
+    swc: Option<SwcConfig>,
   ) -> Result<Self, anyhow::Error> {
-    let options = TransformerOptions { runtime_target, worklets, flow: flow.unwrap_or_default() };
-    Ok(Self { transformer: Transformer::new(plugins, env_name, options)? })
+    let options = TransformerOptions { runtime_target, worklets, flow, swc };
+    Ok(Self { transformer: Transformer::new(env_name, options)? })
   }
 }
 
