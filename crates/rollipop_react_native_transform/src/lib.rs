@@ -25,7 +25,7 @@ use swc_common::{FileName, GLOBALS, Globals, Mark};
 use swc_ecma_ast::{EsVersion, Pass};
 use swc_ecma_codegen::text_writer::JsWriter;
 use swc_ecma_codegen::{Emitter, Node};
-use swc_ecma_compat_es2015::{block_scoping, classes};
+use swc_ecma_compat_es2015::{block_scoping, classes, destructuring, parameters};
 use swc_ecma_compat_es2017::async_to_generator;
 use swc_ecma_compat_es2022::class_properties::{self, class_properties};
 use swc_ecma_compat_es2022::private_in_object;
@@ -364,6 +364,8 @@ impl Transformer {
               class_props,
               private_in_object(),
               async_to_generator(async_to_generator::Config::default(), unresolved_mark),
+              parameters(Default::default(), unresolved_mark),
+              destructuring(Default::default()),
               classes(classes::Config::default()),
               block_scoping(unresolved_mark),
               inject_helpers(unresolved_mark),
