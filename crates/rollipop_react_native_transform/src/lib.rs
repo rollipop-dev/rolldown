@@ -367,7 +367,7 @@ impl Transformer {
               class_props,
               private_in_object(),
               async_to_generator(async_to_generator::Config::default(), unresolved_mark),
-              object_rest_spread(Default::default()),
+              object_rest_spread(object_rest_spread::Config::default()),
               parameters(parameters::Config::default(), unresolved_mark),
               destructuring(destructuring::Config::default()),
               classes(classes::Config::default()),
