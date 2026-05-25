@@ -2640,6 +2640,17 @@ export interface BindingRollipopReactNativeFlowConfig {
   requireDirective?: boolean
 }
 
+export interface BindingRollipopReactNativeModuleConfig {
+  /**
+   * Module transform type. `"unambiguous"` preserves the input module shape;
+   * `"commonjs"` matches SWC's `module: { type: "commonjs" }` defaults.
+   */
+  type?: BindingRollipopReactNativeModuleType
+}
+
+export type BindingRollipopReactNativeModuleType =  'unambiguous'|
+'commonjs';
+
 export interface BindingRollipopReactNativePluginConfig {
   /**
    * The name of the `env` to use when loading configs and plugins. Defaults
@@ -2706,6 +2717,8 @@ export interface BindingRollipopReactNativeSwcConfig {
    * is `"Preserve"` (the default).
    */
   react?: BindingRollipopReactNativeReactConfig
+  /** Module transform configuration. Defaults to `type: "unambiguous"`. */
+  module?: BindingRollipopReactNativeModuleConfig
 }
 
 export interface BindingRollipopReactNativeSwcPlugin {

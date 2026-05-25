@@ -1,6 +1,6 @@
 use rolldown_plugin_rollipop_react_native::{
-  FlowConfig, ReactConfig, ReactRuntime, RollipopReactNativePlugin, RuntimeTarget, SwcConfig,
-  SwcWasmPlugin, WorkletsConfig,
+  FlowConfig, ModuleConfig, ReactConfig, ReactRuntime, RollipopReactNativePlugin, RuntimeTarget,
+  SwcConfig, SwcModuleType, SwcWasmPlugin, WorkletsConfig,
 };
 use rollipop_react_native_transform::TransformerOptions;
 
@@ -37,6 +37,8 @@ pub struct BindingRollipopReactNativeSwcConfig {
   /// React (JSX) transform configuration. Skipped entirely when `runtime`
   /// is `"Preserve"` (the default).
   pub react: Option<BindingRollipopReactNativeReactConfig>,
+  /// Module transform configuration. Defaults to `type: "unambiguous"`.
+  pub module: Option<BindingRollipopReactNativeModuleConfig>,
 }
 
 #[napi_derive::napi(object, object_to_js = false)]
@@ -53,6 +55,23 @@ pub enum BindingRollipopReactNativeReactRuntime {
   Preserve,
   Automatic,
   Classic,
+}
+
+#[napi_derive::napi(object, object_to_js = false)]
+#[derive(Debug)]
+pub struct BindingRollipopReactNativeModuleConfig {
+  /// Module transform type. `"unambiguous"` preserves the input module shape;
+  /// `"commonjs"` matches SWC's `module: { type: "commonjs" }` defaults.
+  pub r#type: Option<BindingRollipopReactNativeModuleType>,
+}
+
+#[napi_derive::napi(string_enum)]
+#[derive(Debug)]
+pub enum BindingRollipopReactNativeModuleType {
+  #[napi(value = "unambiguous")]
+  Unambiguous,
+  #[napi(value = "commonjs")]
+  CommonJs,
 }
 
 #[napi_derive::napi(object, object_to_js = false)]
@@ -184,6 +203,21 @@ impl From<BindingRollipopReactNativeReactRuntime> for ReactRuntime {
   }
 }
 
+impl From<BindingRollipopReactNativeModuleType> for SwcModuleType {
+  fn from(value: BindingRollipopReactNativeModuleType) -> Self {
+    match value {
+      BindingRollipopReactNativeModuleType::Unambiguous => Self::Unambiguous,
+      BindingRollipopReactNativeModuleType::CommonJs => Self::CommonJs,
+    }
+  }
+}
+
+impl From<BindingRollipopReactNativeModuleConfig> for ModuleConfig {
+  fn from(value: BindingRollipopReactNativeModuleConfig) -> Self {
+    ModuleConfig { r#type: value.r#type.map(SwcModuleType::from).unwrap_or_default() }
+  }
+}
+
 impl From<BindingRollipopReactNativeReactConfig> for ReactConfig {
   fn from(value: BindingRollipopReactNativeReactConfig) -> Self {
     ReactConfig {
@@ -215,6 +249,7 @@ impl TryFrom<BindingRollipopReactNativeSwcConfig> for SwcConfig {
       plugins,
       external_helpers: value.external_helpers.unwrap_or(false),
       react: value.react.map(ReactConfig::from).unwrap_or_default(),
+      module: value.module.map(ModuleConfig::from),
     })
   }
 }

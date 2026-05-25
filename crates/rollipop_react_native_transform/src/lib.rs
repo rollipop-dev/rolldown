@@ -22,7 +22,7 @@ use swc_common::comments::SingleThreadedComments;
 use swc_common::source_map::SourceMapGenConfig;
 use swc_common::sync::Lrc;
 use swc_common::{FileName, GLOBALS, Globals, Mark};
-use swc_ecma_ast::{EsVersion, Pass};
+use swc_ecma_ast::{EsVersion, Pass, Program};
 use swc_ecma_codegen::text_writer::JsWriter;
 use swc_ecma_codegen::{Emitter, Node};
 use swc_ecma_compat_es2015::{block_scoping, classes, destructuring, parameters};
@@ -35,8 +35,11 @@ use swc_ecma_transforms_base::fixer::fixer;
 use swc_ecma_transforms_base::helpers::{self, Helpers, inject_helpers};
 use swc_ecma_transforms_base::hygiene::hygiene;
 use swc_ecma_transforms_base::resolver;
+use swc_ecma_transforms_module::{common_js, import_analysis, path::Resolver};
 use swc_ecma_transforms_react::jsx::{Options as JsxOptions, Runtime as JsxRuntime, jsx};
-use swc_ecma_transforms_typescript::{Config as TsStripConfig, typescript};
+use swc_ecma_transforms_typescript::{
+  Config as TsStripConfig, TsImportExportAssignConfig, typescript,
+};
 use swc_ecma_visit::VisitMutWith;
 use swc_react_native::{CodegenOptions, CodegenVisitor, WorkletsOptions, WorkletsVisitor};
 
@@ -88,6 +91,25 @@ pub struct ReactConfig {
   pub development: bool,
 }
 
+/// Module transform mode for the SWC module stage.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum SwcModuleType {
+  /// Preserve the input module shape. ESM stays ESM, and CommonJS stays as
+  /// ordinary JS expressions.
+  #[default]
+  Unambiguous,
+  /// Transform ES module syntax to CommonJS, matching SWC's
+  /// `module: { type: "commonjs" }` defaults.
+  CommonJs,
+}
+
+/// SWC module transform configuration.
+#[derive(Debug, Default, Clone)]
+pub struct ModuleConfig {
+  /// Defaults to [`SwcModuleType::Unambiguous`].
+  pub r#type: SwcModuleType,
+}
+
 /// SWC-side configuration. Bundles knobs that affect the SWC pipeline itself
 /// (wasm plugins, helper emission, React transform) so they can be passed
 /// around as a unit.
@@ -104,6 +126,9 @@ pub struct SwcConfig {
   /// React (JSX) transform configuration. Skipped entirely when
   /// `react.runtime` is `Preserve`.
   pub react: ReactConfig,
+  /// Module transform configuration. When omitted, defaults to
+  /// `type: "unambiguous"`, preserving the input module shape.
+  pub module: Option<ModuleConfig>,
 }
 
 /// Compat-pass preset selecting which Hermes generation we target.
@@ -216,6 +241,7 @@ pub struct TransformOutput {
 /// rolldown plugin instance, or a long-lived NAPI handle).
 pub struct Transformer {
   options: TransformerOptions,
+  module_type: SwcModuleType,
   #[cfg(feature = "wasm_plugins")]
   wasm_plugins: wasm_plugins::WasmPlugins,
 }
@@ -225,6 +251,11 @@ impl Transformer {
     env_name: Option<String>,
     mut options: TransformerOptions,
   ) -> Result<Self, anyhow::Error> {
+    let module_type = options
+      .swc
+      .as_ref()
+      .and_then(|swc| swc.module.as_ref())
+      .map_or(SwcModuleType::Unambiguous, |module| module.r#type);
     let plugins = options.swc.as_mut().map(|s| std::mem::take(&mut s.plugins)).unwrap_or_default();
 
     #[cfg(not(feature = "wasm_plugins"))]
@@ -239,6 +270,7 @@ impl Transformer {
 
     Ok(Self {
       options,
+      module_type,
       #[cfg(feature = "wasm_plugins")]
       wasm_plugins: wasm_plugins::WasmPlugins::new(plugins, env_name)?,
     })
@@ -317,7 +349,14 @@ impl Transformer {
           // Strip TS/Flow types first so the worklets visitor sees plain JS,
           // matching the babel pipeline order in react-native-reanimated.
           typescript(
-            TsStripConfig { flow_syntax: is_flow, ..Default::default() },
+            TsStripConfig {
+              flow_syntax: is_flow,
+              import_export_assign_config: match self.module_type {
+                SwcModuleType::CommonJs => TsImportExportAssignConfig::Preserve,
+                SwcModuleType::Unambiguous => TsImportExportAssignConfig::default(),
+              },
+              ..Default::default()
+            },
             unresolved_mark,
             top_level_mark,
           )
@@ -354,15 +393,10 @@ impl Transformer {
           );
 
           match self.options.runtime_target {
-            RuntimeTarget::HermesV1 => (
-              class_props,
-              private_in_object(),
-              block_scoping(unresolved_mark),
-              inject_helpers(unresolved_mark),
-              hygiene(),
-              fixer(Some(&comments)),
-            )
-              .process(&mut program),
+            RuntimeTarget::HermesV1 => {
+              (class_props, private_in_object(), block_scoping(unresolved_mark))
+                .process(&mut program);
+            }
             RuntimeTarget::Hermes => (
               class_props,
               private_in_object(),
@@ -372,12 +406,11 @@ impl Transformer {
               destructuring(destructuring::Config::default()),
               classes(classes::Config::default()),
               block_scoping(unresolved_mark),
-              inject_helpers(unresolved_mark),
-              hygiene(),
-              fixer(Some(&comments)),
             )
               .process(&mut program),
           }
+
+          finalize_program(&mut program, self.module_type, unresolved_mark, &comments);
         },
       );
 
@@ -420,6 +453,20 @@ impl Transformer {
   }
 }
 
+fn finalize_program(
+  program: &mut Program,
+  module_type: SwcModuleType,
+  unresolved_mark: Mark,
+  comments: &SingleThreadedComments,
+) {
+  match module_type {
+    SwcModuleType::CommonJs => commonjs(unresolved_mark).process(program),
+    SwcModuleType::Unambiguous => unambiguous(unresolved_mark).process(program),
+  }
+
+  (hygiene(), fixer(Some(comments))).process(program);
+}
+
 fn to_jsx_options(config: &ReactConfig) -> JsxOptions {
   let mut options = JsxOptions {
     runtime: Some(match config.runtime {
@@ -443,6 +490,27 @@ fn to_jsx_options(config: &ReactConfig) -> JsxOptions {
     options.throw_if_namespace = Some(v);
   }
   options
+}
+
+fn commonjs(unresolved_mark: Mark) -> impl Pass {
+  let config = common_js::Config::default();
+  let import_interop = config.import_interop();
+  let ignore_dynamic = config.ignore_dynamic;
+
+  (
+    import_analysis::import_analyzer(import_interop, ignore_dynamic),
+    inject_helpers(unresolved_mark),
+    common_js::common_js(
+      Resolver::default(),
+      unresolved_mark,
+      config,
+      common_js::FeatureFlag { support_block_scoping: false, support_arrow: false },
+    ),
+  )
+}
+
+fn unambiguous(unresolved_mark: Mark) -> impl Pass {
+  inject_helpers(unresolved_mark)
 }
 
 fn is_codegen_required(module_kind: ModuleKind, code: &str, is_flow: bool) -> bool {

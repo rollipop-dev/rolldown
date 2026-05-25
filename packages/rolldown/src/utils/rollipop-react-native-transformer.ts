@@ -34,7 +34,12 @@ export class RollipopReactNativeTransformer {
       envName: config?.envName,
       flow: config?.flow,
       worklets: config?.worklets,
-      swc: { plugins, externalHelpers: swc?.externalHelpers, react: swc?.react },
+      swc: {
+        plugins,
+        externalHelpers: swc?.externalHelpers,
+        react: swc?.react,
+        module: swc?.module,
+      },
     });
   }
 

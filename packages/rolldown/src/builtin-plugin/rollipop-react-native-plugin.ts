@@ -1,6 +1,7 @@
 import { BuiltinPlugin } from './utils';
 
 export type RollipopReactNativeRuntimeTarget = 'Hermes' | 'HermesV1';
+export type RollipopReactNativeModuleType = 'unambiguous' | 'commonjs';
 
 /**
  * `react-native-worklets` transform configuration. Field semantics mirror
@@ -72,6 +73,15 @@ export interface RollipopReactNativeReactConfig {
   development?: boolean;
 }
 
+export interface RollipopReactNativeModuleConfig {
+  /**
+   * Module transform type.
+   * - `"unambiguous"` (default): preserve the input module shape.
+   * - `"commonjs"`: transform ESM syntax to CommonJS.
+   */
+  type?: RollipopReactNativeModuleType;
+}
+
 /**
  * SWC pipeline configuration — wasm plugins, helper emission, React transform.
  */
@@ -87,6 +97,8 @@ export interface RollipopReactNativeSwcConfig {
   externalHelpers?: boolean;
   /** React (JSX) transform configuration. Skipped when `runtime` is `"Preserve"`. */
   react?: RollipopReactNativeReactConfig;
+  /** Module transform configuration. Defaults to `type: "unambiguous"`. */
+  module?: RollipopReactNativeModuleConfig;
 }
 
 export interface RollipopReactNativePluginConfig {
@@ -113,6 +125,7 @@ function lowerSwc(swc: RollipopReactNativeSwcConfig | undefined) {
     })),
     externalHelpers: swc.externalHelpers,
     react: swc.react,
+    module: swc.module,
   };
 }
 

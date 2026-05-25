@@ -60,6 +60,8 @@ export {
   rollipopReactNativePlugin,
   type RollipopReactNativePluginConfig,
   type RollipopReactNativeRuntimeTarget,
+  type RollipopReactNativeModuleConfig,
+  type RollipopReactNativeModuleType,
   type RollipopReactNativeFlowConfig,
   type RollipopReactNativeWorkletsConfig,
   type RollipopReactNativeSwcConfig,

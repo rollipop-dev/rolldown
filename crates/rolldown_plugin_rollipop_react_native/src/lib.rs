@@ -18,7 +18,8 @@ use rollipop_react_native_transform::{
 };
 
 pub use rollipop_react_native_transform::{
-  FlowConfig, ReactConfig, ReactRuntime, RuntimeTarget, SwcConfig, SwcWasmPlugin, WorkletsConfig,
+  FlowConfig, ModuleConfig, ReactConfig, ReactRuntime, RuntimeTarget, SwcConfig, SwcModuleType,
+  SwcWasmPlugin, WorkletsConfig,
 };
 
 pub struct RollipopReactNativePlugin {

@@ -3,6 +3,16 @@
 version = 4
 
 [[package]]
+name = "Inflector"
+version = "0.11.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe438c63458706e03479442743baae6c88256498e6431708f6dfc520a26515d3"
+dependencies = [
+ "lazy_static",
+ "regex",
+]
+
+[[package]]
 name = "addr2line"
 version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1103,6 +1113,19 @@ dependencies = [
  "darling_core 0.21.3",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "dashmap"
+version = "5.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "978747c1d849a7d2ee5e8adc0159961c48fb7e5db2f06af6723b80123bb53856"
+dependencies = [
+ "cfg-if",
+ "hashbrown 0.14.5",
+ "lock_api",
+ "once_cell",
+ "parking_lot_core",
 ]
 
 [[package]]
@@ -4169,7 +4192,7 @@ dependencies = [
  "bitflags 2.11.0",
  "commondir",
  "cow-utils",
- "dashmap",
+ "dashmap 6.1.0",
  "futures",
  "indexmap",
  "insta",
@@ -4287,7 +4310,7 @@ dependencies = [
  "anyhow",
  "arcstr",
  "async-channel",
- "dashmap",
+ "dashmap 6.1.0",
  "derive_more 2.1.1",
  "futures",
  "indexmap",
@@ -4356,7 +4379,7 @@ dependencies = [
  "anyhow",
  "arcstr",
  "bitflags 2.11.0",
- "dashmap",
+ "dashmap 6.1.0",
  "derive_more 2.1.1",
  "fast-glob",
  "insta",
@@ -4507,7 +4530,7 @@ dependencies = [
  "arcstr",
  "async-trait",
  "bitflags 2.11.0",
- "dashmap",
+ "dashmap 6.1.0",
  "derive_more 2.1.1",
  "nodejs-built-in-modules",
  "oxc_index",
@@ -4707,7 +4730,7 @@ dependencies = [
  "anyhow",
  "arcstr",
  "cow-utils",
- "dashmap",
+ "dashmap 6.1.0",
  "derive_more 2.1.1",
  "itertools 0.14.0",
  "memchr",
@@ -4970,7 +4993,7 @@ dependencies = [
  "anyhow",
  "arcstr",
  "cow-utils",
- "dashmap",
+ "dashmap 6.1.0",
  "derive_more 2.1.1",
  "fast-glob",
  "nodejs-built-in-modules",
@@ -5030,7 +5053,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "arcstr",
- "dashmap",
+ "dashmap 6.1.0",
  "itertools 0.14.0",
  "oxc_resolver",
  "rolldown_common",
@@ -5114,7 +5137,7 @@ dependencies = [
  "base64-simd",
  "cow-utils",
  "criterion2",
- "dashmap",
+ "dashmap 6.1.0",
  "fast-glob",
  "form_urlencoded",
  "futures",
@@ -5181,6 +5204,7 @@ dependencies = [
  "swc_ecma_compat_es2022",
  "swc_ecma_parser",
  "swc_ecma_transforms_base",
+ "swc_ecma_transforms_module",
  "swc_ecma_transforms_react",
  "swc_ecma_transforms_typescript",
  "swc_ecma_visit",
@@ -5832,7 +5856,12 @@ checksum = "a737811bc412f055818d80ae999db259678e1e2dacd91639d28a61750a251373"
 dependencies = [
  "anyhow",
  "bytes-str",
+ "dashmap 5.5.3",
+ "globset",
  "indexmap",
+ "once_cell",
+ "regex",
+ "rustc-hash 2.1.1",
  "serde",
  "serde_json",
  "swc_config_macro",
@@ -6017,6 +6046,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "swc_ecma_loader"
+version = "21.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "88b18efc917461092d80e4480e1b4afe4a54be50a3818fec78c1469b264e64d9"
+dependencies = [
+ "anyhow",
+ "pathdiff",
+ "rustc-hash 2.1.1",
+ "serde",
+ "swc_atoms",
+ "swc_common",
+ "tracing",
+]
+
+[[package]]
 name = "swc_ecma_parser"
 version = "39.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6149,6 +6193,34 @@ dependencies = [
  "quote",
  "swc_macros_common",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "swc_ecma_transforms_module"
+version = "46.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8386f38a7474c642f5afa14e99b12b1b3ff2194122d7bf9c70fbda9dc4ebff6"
+dependencies = [
+ "Inflector",
+ "anyhow",
+ "bitflags 2.11.0",
+ "indexmap",
+ "is-macro",
+ "path-clean",
+ "pathdiff",
+ "regex",
+ "rustc-hash 2.1.1",
+ "serde",
+ "swc_atoms",
+ "swc_common",
+ "swc_config",
+ "swc_ecma_ast",
+ "swc_ecma_loader",
+ "swc_ecma_parser",
+ "swc_ecma_transforms_base",
+ "swc_ecma_utils",
+ "swc_ecma_visit",
+ "tracing",
 ]
 
 [[package]]
@@ -7086,7 +7158,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bytes",
- "dashmap",
+ "dashmap 6.1.0",
  "derive_more 2.1.1",
  "dunce",
  "filetime",
@@ -7543,7 +7615,7 @@ dependencies = [
  "cfg-if",
  "corosensei",
  "crossbeam-queue",
- "dashmap",
+ "dashmap 6.1.0",
  "enum-iterator",
  "fnv",
  "indexmap",
@@ -7577,7 +7649,7 @@ dependencies = [
  "cfg-if",
  "cooked-waker",
  "crossbeam-channel",
- "dashmap",
+ "dashmap 6.1.0",
  "derive_more 2.1.1",
  "futures",
  "getrandom 0.2.17",
