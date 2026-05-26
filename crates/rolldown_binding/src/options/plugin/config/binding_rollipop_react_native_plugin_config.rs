@@ -1,8 +1,11 @@
+use std::collections::HashMap;
+
 use rolldown_plugin_rollipop_react_native::{
   FlowConfig, ModuleConfig, ReactConfig, ReactRuntime, RollipopReactNativePlugin, RuntimeTarget,
   SwcConfig, SwcModuleType, SwcWasmPlugin, WorkletsConfig,
 };
 use rollipop_react_native_transform::TransformerOptions;
+use rustc_hash::FxBuildHasher;
 
 #[napi_derive::napi(object, object_to_js = false)]
 #[derive(Debug)]
@@ -39,6 +42,9 @@ pub struct BindingRollipopReactNativeSwcConfig {
   pub react: Option<BindingRollipopReactNativeReactConfig>,
   /// Module transform configuration. Defaults to `type: "unambiguous"`.
   pub module: Option<BindingRollipopReactNativeModuleConfig>,
+  /// Global expression replacements, matching SWC's
+  /// `jsc.transform.optimizer.globals.vars` behavior.
+  pub globals: Option<HashMap<String, String, FxBuildHasher>>,
 }
 
 #[napi_derive::napi(object, object_to_js = false)]
@@ -245,11 +251,13 @@ impl TryFrom<BindingRollipopReactNativeSwcConfig> for SwcConfig {
         Ok(SwcWasmPlugin { path: p.path, config })
       })
       .collect::<Result<Vec<_>, _>>()?;
+
     Ok(SwcConfig {
       plugins,
       external_helpers: value.external_helpers.unwrap_or(false),
       react: value.react.map(ReactConfig::from).unwrap_or_default(),
       module: value.module.map(ModuleConfig::from),
+      globals: value.globals.unwrap_or_default(),
     })
   }
 }

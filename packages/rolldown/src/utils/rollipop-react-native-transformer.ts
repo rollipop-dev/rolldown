@@ -39,6 +39,7 @@ export class RollipopReactNativeTransformer {
         externalHelpers: swc?.externalHelpers,
         react: swc?.react,
         module: swc?.module,
+        globals: swc?.globals,
       },
     });
   }

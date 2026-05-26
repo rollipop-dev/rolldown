@@ -18,11 +18,12 @@ use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use rustc_hash::FxHashMap;
 use swc_common::comments::SingleThreadedComments;
 use swc_common::source_map::SourceMapGenConfig;
 use swc_common::sync::Lrc;
 use swc_common::{FileName, GLOBALS, Globals, Mark};
-use swc_ecma_ast::{EsVersion, Pass, Program};
+use swc_ecma_ast::{EsVersion, Expr, Pass, Program};
 use swc_ecma_codegen::text_writer::JsWriter;
 use swc_ecma_codegen::{Emitter, Node};
 use swc_ecma_compat_es2015::{block_scoping, classes, destructuring, parameters};
@@ -30,16 +31,20 @@ use swc_ecma_compat_es2017::async_to_generator;
 use swc_ecma_compat_es2018::object_rest_spread;
 use swc_ecma_compat_es2022::class_properties::{self, class_properties};
 use swc_ecma_compat_es2022::private_in_object;
-use swc_ecma_parser::{EsSyntax, FlowSyntax, Syntax, TsSyntax, parse_file_as_program};
+use swc_ecma_parser::{
+  EsSyntax, FlowSyntax, Syntax, TsSyntax, parse_file_as_expr, parse_file_as_program,
+};
 use swc_ecma_transforms_base::fixer::fixer;
 use swc_ecma_transforms_base::helpers::{self, Helpers, inject_helpers};
 use swc_ecma_transforms_base::hygiene::hygiene;
 use swc_ecma_transforms_base::resolver;
 use swc_ecma_transforms_module::{common_js, import_analysis, path::Resolver};
+use swc_ecma_transforms_optimization::inline_globals;
 use swc_ecma_transforms_react::jsx::{Options as JsxOptions, Runtime as JsxRuntime, jsx};
 use swc_ecma_transforms_typescript::{
   Config as TsStripConfig, TsImportExportAssignConfig, typescript,
 };
+use swc_ecma_utils::NodeIgnoringSpan;
 use swc_ecma_visit::VisitMutWith;
 use swc_react_native::{CodegenOptions, CodegenVisitor, WorkletsOptions, WorkletsVisitor};
 
@@ -129,6 +134,9 @@ pub struct SwcConfig {
   /// Module transform configuration. When omitted, defaults to
   /// `type: "unambiguous"`, preserving the input module shape.
   pub module: Option<ModuleConfig>,
+  /// Global expression replacements such as `"import.meta.hot" => "undefined"`,
+  /// matching SWC's `jsc.transform.optimizer.globals.vars` behavior.
+  pub globals: FxHashMap<String, String>,
 }
 
 /// Compat-pass preset selecting which Hermes generation we target.
@@ -345,7 +353,7 @@ impl Transformer {
 
       helpers::HELPERS.set(
         &Helpers::new(self.options.swc.as_ref().is_some_and(|cfg| cfg.external_helpers)),
-        || {
+        || -> Result<(), anyhow::Error> {
           // Strip TS/Flow types first so the worklets visitor sees plain JS,
           // matching the babel pipeline order in react-native-reanimated.
           typescript(
@@ -383,6 +391,11 @@ impl Transformer {
             program.visit_mut_with(&mut visitor);
           }
 
+          // SWC applies optimizer globals after plugin transforms and before compat/module passes.
+          if let Some(swc) = self.options.swc.as_ref() {
+            transform_globals(&mut program, &swc.globals, &cm)?;
+          }
+
           let class_props = class_properties(
             class_properties::Config {
               set_public_fields: true,
@@ -411,8 +424,10 @@ impl Transformer {
           }
 
           finalize_program(&mut program, self.module_type, unresolved_mark, &comments);
+
+          Ok(())
         },
-      );
+      )?;
 
       // Strip Flow pragmas after the SWC pipeline so they don't leak into
       // the downstream parser — a stray `@flow` makes oxc reject the otherwise plain JS output.
@@ -465,6 +480,61 @@ fn finalize_program(
   }
 
   (hygiene(), fixer(Some(comments))).process(program);
+}
+
+fn transform_globals(
+  program: &mut Program,
+  vars: &FxHashMap<String, String>,
+  cm: &Lrc<swc_common::SourceMap>,
+) -> Result<(), anyhow::Error> {
+  if vars.is_empty() {
+    return Ok(());
+  }
+
+  let mut globals = FxHashMap::default();
+  let mut global_exprs = FxHashMap::default();
+
+  for (key, value) in vars {
+    let value = parse_globals_expr(cm, value)?;
+
+    if key.contains('.') {
+      global_exprs.insert(NodeIgnoringSpan::owned(parse_globals_expr(cm, key)?), value);
+    } else {
+      globals.insert(key.clone().into(), value);
+    }
+  }
+
+  inline_globals(
+    Lrc::new(FxHashMap::default()),
+    Lrc::new(globals),
+    Lrc::new(global_exprs),
+    Lrc::new(FxHashMap::default()),
+  )
+  .process(program);
+
+  Ok(())
+}
+
+fn parse_globals_expr(
+  cm: &Lrc<swc_common::SourceMap>,
+  source: &str,
+) -> Result<Expr, anyhow::Error> {
+  let fm = cm.new_source_file(Lrc::new(FileName::Anon), source.to_string());
+  let mut errors = Vec::new();
+  let expression = parse_file_as_expr(
+    &fm,
+    Syntax::Es(EsSyntax::default()),
+    EsVersion::default(),
+    None,
+    &mut errors,
+  )
+  .map_err(|error| anyhow::anyhow!("Invalid `swc.globals` expression `{source}`: {error:?}"))?;
+
+  if let Some(error) = errors.first() {
+    return Err(anyhow::anyhow!("Invalid `swc.globals` expression `{source}`: {error:?}"));
+  }
+
+  Ok(*expression)
 }
 
 fn to_jsx_options(config: &ReactConfig) -> JsxOptions {

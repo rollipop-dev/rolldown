@@ -5194,6 +5194,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "memchr",
+ "rustc-hash 2.1.1",
  "serde_json",
  "swc_common",
  "swc_ecma_ast",
@@ -5205,8 +5206,10 @@ dependencies = [
  "swc_ecma_parser",
  "swc_ecma_transforms_base",
  "swc_ecma_transforms_module",
+ "swc_ecma_transforms_optimization",
  "swc_ecma_transforms_react",
  "swc_ecma_transforms_typescript",
+ "swc_ecma_utils",
  "swc_ecma_visit",
  "swc_plugin_backend_wasmer",
  "swc_plugin_proxy",
@@ -6216,6 +6219,30 @@ dependencies = [
  "swc_config",
  "swc_ecma_ast",
  "swc_ecma_loader",
+ "swc_ecma_parser",
+ "swc_ecma_transforms_base",
+ "swc_ecma_utils",
+ "swc_ecma_visit",
+ "tracing",
+]
+
+[[package]]
+name = "swc_ecma_transforms_optimization"
+version = "44.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "939eb773b1a69df8be73b0bda3135b61dd5fa47eb495817fea392b0779351fb3"
+dependencies = [
+ "bytes-str",
+ "dashmap 5.5.3",
+ "indexmap",
+ "once_cell",
+ "par-core",
+ "petgraph 0.7.1",
+ "rustc-hash 2.1.1",
+ "serde_json",
+ "swc_atoms",
+ "swc_common",
+ "swc_ecma_ast",
  "swc_ecma_parser",
  "swc_ecma_transforms_base",
  "swc_ecma_utils",

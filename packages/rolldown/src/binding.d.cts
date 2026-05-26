@@ -2719,6 +2719,11 @@ export interface BindingRollipopReactNativeSwcConfig {
   react?: BindingRollipopReactNativeReactConfig
   /** Module transform configuration. Defaults to `type: "unambiguous"`. */
   module?: BindingRollipopReactNativeModuleConfig
+  /**
+   * Global expression replacements, matching SWC's
+   * `jsc.transform.optimizer.globals.vars` behavior.
+   */
+  globals?: Record<string, string>
 }
 
 export interface BindingRollipopReactNativeSwcPlugin {

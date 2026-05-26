@@ -99,6 +99,8 @@ export interface RollipopReactNativeSwcConfig {
   react?: RollipopReactNativeReactConfig;
   /** Module transform configuration. Defaults to `type: "unambiguous"`. */
   module?: RollipopReactNativeModuleConfig;
+  /** Global expression replacements matching SWC's `jsc.transform.optimizer.globals.vars`. */
+  globals?: Record<string, string>;
 }
 
 export interface RollipopReactNativePluginConfig {
@@ -126,6 +128,7 @@ function lowerSwc(swc: RollipopReactNativeSwcConfig | undefined) {
     externalHelpers: swc.externalHelpers,
     react: swc.react,
     module: swc.module,
+    globals: swc.globals,
   };
 }
 

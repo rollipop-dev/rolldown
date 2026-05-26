@@ -24,6 +24,7 @@ wasm_plugins = ["dep:swc_plugin_runner", "dep:swc_plugin_backend_wasmer", "dep:s
 [dependencies]
 anyhow = { workspace = true }
 memchr = { workspace = true }
+rustc-hash = { workspace = true }
 serde_json = { workspace = true }
 swc_common = { version = "21.0.1", features = ["concurrent", "sourcemap"] }
 swc_ecma_ast = "23.0.0"
@@ -31,8 +32,10 @@ swc_ecma_parser = { version = "39.0.2", features = ["flow"] }
 swc_ecma_codegen = "26.0.1"
 swc_ecma_transforms_base = { version = "42.0.0", features = ["inline-helpers"] }
 swc_ecma_transforms_module = "46.0.0"
+swc_ecma_transforms_optimization = "44.0.0"
 swc_ecma_transforms_react = "46.0.0"
 swc_ecma_transforms_typescript = { version = "46.0.1", features = ["concurrent"] }
+swc_ecma_utils = "29.1.0"
 swc_ecma_compat_es2015 = "46.0.0"
 swc_ecma_compat_es2017 = "43.0.0"
 swc_ecma_compat_es2018 = "44.0.1"
