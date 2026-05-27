@@ -26,6 +26,7 @@ use swc_common::{FileName, GLOBALS, Globals, Mark};
 use swc_ecma_ast::{EsVersion, Expr, Pass, Program};
 use swc_ecma_codegen::text_writer::JsWriter;
 use swc_ecma_codegen::{Emitter, Node};
+use swc_ecma_compat_common::regexp::{Config as RegExpConfig, regexp};
 use swc_ecma_compat_es2015::{block_scoping, classes, destructuring, parameters};
 use swc_ecma_compat_es2017::async_to_generator;
 use swc_ecma_compat_es2018::object_rest_spread;
@@ -53,7 +54,7 @@ use swc_react_native::{
   class_in_finally, super_in_object_accessor,
 };
 
-use crate::visitors::RemoveFlowTypeOnlyFields;
+use crate::visitors::{RemoveFlowTypeOnlyFields, template_literal_caching};
 
 pub use swc_react_native::WorkletsOptions as SwcWorkletsOptions;
 
@@ -231,6 +232,26 @@ pub fn infer_module_kind_from_filename(filename: &str) -> ModuleKind {
   ModuleKind::Js
 }
 
+fn hermes_regexp(runtime_target: RuntimeTarget) -> impl Pass {
+  regexp(match runtime_target {
+    RuntimeTarget::Hermes => RegExpConfig {
+      named_capturing_groups_regex: true,
+      unicode_property_regex: true,
+      unicode_regex: true,
+      ..Default::default()
+    },
+    RuntimeTarget::HermesV1 => RegExpConfig::default(),
+  })
+}
+
+fn hermes_class_properties_config() -> class_properties::Config {
+  class_properties::Config {
+    set_public_fields: true,
+    private_as_properties: false,
+    ..Default::default()
+  }
+}
+
 /// Output of [`Transformer::transform`].
 #[derive(Debug)]
 pub struct TransformOutput {
@@ -403,26 +424,19 @@ impl Transformer {
 
           match self.options.runtime_target {
             RuntimeTarget::HermesV1 => (
-              async_arrow_non_simple_params(),
-              super_in_object_accessor(),
-              class_in_finally(),
-              static_blocks(),
-              async_to_generator(async_to_generator::Config::default(), unresolved_mark),
-              block_scoping(unresolved_mark),
-            )
-              .process(&mut program),
-            RuntimeTarget::Hermes => {
-              let class_props = class_properties(
-                class_properties::Config {
-                  set_public_fields: true,
-                  private_as_properties: true,
-                  ..Default::default()
-                },
-                unresolved_mark,
-              );
-
               (
-                class_props,
+                hermes_regexp(RuntimeTarget::HermesV1),
+                template_literal_caching(),
+                async_arrow_non_simple_params(),
+                super_in_object_accessor(),
+                class_in_finally(),
+                static_blocks(),
+              ),
+              (
+                // Hermes V1 has native class support, but optimized bytecode can
+                // still miscompile class bindings. Lower classes until
+                // https://github.com/facebook/hermes/issues/2035 is fixed.
+                class_properties(hermes_class_properties_config(), unresolved_mark),
                 private_in_object(),
                 async_to_generator(async_to_generator::Config::default(), unresolved_mark),
                 object_rest_spread(object_rest_spread::Config::default()),
@@ -430,9 +444,23 @@ impl Transformer {
                 destructuring(destructuring::Config::default()),
                 classes(classes::Config::default()),
                 block_scoping(unresolved_mark),
-              )
-                .process(&mut program);
-            }
+              ),
+            )
+              .process(&mut program),
+            RuntimeTarget::Hermes => (
+              hermes_regexp(RuntimeTarget::Hermes),
+              template_literal_caching(),
+              static_blocks(),
+              class_properties(hermes_class_properties_config(), unresolved_mark),
+              private_in_object(),
+              async_to_generator(async_to_generator::Config::default(), unresolved_mark),
+              object_rest_spread(object_rest_spread::Config::default()),
+              parameters(parameters::Config::default(), unresolved_mark),
+              destructuring(destructuring::Config::default()),
+              classes(classes::Config::default()),
+              block_scoping(unresolved_mark),
+            )
+              .process(&mut program),
           }
 
           finalize_program(&mut program, self.module_type, unresolved_mark, &comments);
