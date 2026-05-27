@@ -36,6 +36,7 @@ swc_ecma_transforms_optimization = "44.0.0"
 swc_ecma_transforms_react = "46.0.0"
 swc_ecma_transforms_typescript = { version = "46.0.1", features = ["concurrent"] }
 swc_ecma_utils = "29.1.0"
+swc_ecma_compat_common = "38.0.0"
 swc_ecma_compat_es2015 = "46.0.0"
 swc_ecma_compat_es2017 = "43.0.0"
 swc_ecma_compat_es2018 = "44.0.1"
