@@ -406,10 +406,13 @@ impl Transformer {
           );
 
           match self.options.runtime_target {
-            RuntimeTarget::HermesV1 => {
-              (class_props, private_in_object(), block_scoping(unresolved_mark))
-                .process(&mut program);
-            }
+            RuntimeTarget::HermesV1 => (
+              class_props,
+              private_in_object(),
+              async_to_generator(async_to_generator::Config::default(), unresolved_mark),
+              block_scoping(unresolved_mark),
+            )
+              .process(&mut program),
             RuntimeTarget::Hermes => (
               class_props,
               private_in_object(),
