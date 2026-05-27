@@ -7,7 +7,7 @@
 
 use std::borrow::Cow;
 
-use rolldown_common::ModuleType;
+use rolldown_common::{ModuleType, RUNTIME_MODULE_KEY};
 use rolldown_plugin::{
   HookTransformArgs, HookTransformOutput, HookTransformReturn, HookUsage, Plugin,
   SharedTransformPluginContext,
@@ -78,6 +78,10 @@ impl Plugin for RollipopReactNativePlugin {
     _ctx: SharedTransformPluginContext,
     args: &HookTransformArgs<'_>,
   ) -> HookTransformReturn {
+    if args.id == RUNTIME_MODULE_KEY {
+      return Ok(None);
+    }
+
     let Some(module_kind) = module_type_to_kind(args.module_type) else {
       return Ok(None);
     };
