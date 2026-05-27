@@ -4,8 +4,8 @@
 //! plain `name: T;` — is a type annotation with no runtime field.
 //! babel's `@babel/preset-flow` drops them entirely.
 //!
-//! swc's Flow strip leaves them as ordinary `ClassProp`s,
-//! so the downstream `class_properties` pass emits `this.name = void 0;` in the constructor.
+//! swc's Flow strip leaves them as ordinary `ClassProp`s, which would become
+//! runtime fields either natively or after a compatibility lowering pass.
 
 use swc_ecma_ast::{Class, ClassMember};
 use swc_ecma_visit::{VisitMut, VisitMutWith};

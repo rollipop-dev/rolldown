@@ -29,8 +29,10 @@ use swc_ecma_codegen::{Emitter, Node};
 use swc_ecma_compat_es2015::{block_scoping, classes, destructuring, parameters};
 use swc_ecma_compat_es2017::async_to_generator;
 use swc_ecma_compat_es2018::object_rest_spread;
-use swc_ecma_compat_es2022::class_properties::{self, class_properties};
-use swc_ecma_compat_es2022::private_in_object;
+use swc_ecma_compat_es2022::{
+  class_properties::{self, class_properties},
+  private_in_object, static_blocks,
+};
 use swc_ecma_parser::{
   EsSyntax, FlowSyntax, Syntax, TsSyntax, parse_file_as_expr, parse_file_as_program,
 };
@@ -46,7 +48,10 @@ use swc_ecma_transforms_typescript::{
 };
 use swc_ecma_utils::NodeIgnoringSpan;
 use swc_ecma_visit::VisitMutWith;
-use swc_react_native::{CodegenOptions, CodegenVisitor, WorkletsOptions, WorkletsVisitor};
+use swc_react_native::{
+  CodegenOptions, CodegenVisitor, WorkletsOptions, WorkletsVisitor, async_arrow_non_simple_params,
+  class_in_finally, super_in_object_accessor,
+};
 
 use crate::visitors::RemoveFlowTypeOnlyFields;
 
@@ -396,34 +401,38 @@ impl Transformer {
             transform_globals(&mut program, &swc.globals, &cm)?;
           }
 
-          let class_props = class_properties(
-            class_properties::Config {
-              set_public_fields: true,
-              private_as_properties: true,
-              ..Default::default()
-            },
-            unresolved_mark,
-          );
-
           match self.options.runtime_target {
             RuntimeTarget::HermesV1 => (
-              class_props,
-              private_in_object(),
+              async_arrow_non_simple_params(),
+              super_in_object_accessor(),
+              class_in_finally(),
+              static_blocks(),
               async_to_generator(async_to_generator::Config::default(), unresolved_mark),
               block_scoping(unresolved_mark),
             )
               .process(&mut program),
-            RuntimeTarget::Hermes => (
-              class_props,
-              private_in_object(),
-              async_to_generator(async_to_generator::Config::default(), unresolved_mark),
-              object_rest_spread(object_rest_spread::Config::default()),
-              parameters(parameters::Config::default(), unresolved_mark),
-              destructuring(destructuring::Config::default()),
-              classes(classes::Config::default()),
-              block_scoping(unresolved_mark),
-            )
-              .process(&mut program),
+            RuntimeTarget::Hermes => {
+              let class_props = class_properties(
+                class_properties::Config {
+                  set_public_fields: true,
+                  private_as_properties: true,
+                  ..Default::default()
+                },
+                unresolved_mark,
+              );
+
+              (
+                class_props,
+                private_in_object(),
+                async_to_generator(async_to_generator::Config::default(), unresolved_mark),
+                object_rest_spread(object_rest_spread::Config::default()),
+                parameters(parameters::Config::default(), unresolved_mark),
+                destructuring(destructuring::Config::default()),
+                classes(classes::Config::default()),
+                block_scoping(unresolved_mark),
+              )
+                .process(&mut program);
+            }
           }
 
           finalize_program(&mut program, self.module_type, unresolved_mark, &comments);
