@@ -17,6 +17,7 @@
     "vitest": "catalog:"
   },
   "devDependencies": {
+    "@types/node": "catalog:",
     "playwright": "^1.60.0"
   }
 }

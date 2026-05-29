@@ -69,6 +69,11 @@ function startDevServer(cwd: string) {
   return subprocess;
 }
 
+async function startAndWaitDevServer(cwd: string, port: number) {
+  startDevServer(cwd);
+  await waitForDevServerReady(port);
+}
+
 beforeAll(async () => {
   // Kill any existing processes on our ports
   await Promise.all([
@@ -90,22 +95,15 @@ beforeAll(async () => {
   await resetTestFiles();
 
   // Start dev servers (ports configured in each playground's dev.config.mjs).
-  // lazy-shared-module is self-contained (not a pnpm workspace member), so it
-  // runs the CLI directly via `node <abs path>` instead of `pnpm serve`.
-  startDevServer(CONFIG.paths.tmpFullBundleModeDir);
-  startDevServer(CONFIG.paths.tmpLazyCompilationDir);
-  startDevServer(CONFIG.paths.tmpLazySharedModuleDir);
-  startDevServer(CONFIG.paths.tmpLazyNestedDynamicImportDir);
-  startDevServer(CONFIG.paths.tmpLazyAliasedImportDir);
-
-  // Wait for servers to be ready
-  await Promise.all([
-    waitForDevServerReady(CONFIG.ports.hmrFullBundleMode),
-    waitForDevServerReady(CONFIG.ports.lazyCompilation),
-    waitForDevServerReady(CONFIG.ports.lazySharedModule),
-    waitForDevServerReady(CONFIG.ports.lazyNestedDynamicImport),
-    waitForDevServerReady(CONFIG.ports.lazyAliasedImport),
-  ]);
+  // Windows runners can drop one of several simultaneous `pnpm serve` processes, so start each server and wait for readiness before moving on.
+  await startAndWaitDevServer(CONFIG.paths.tmpFullBundleModeDir, CONFIG.ports.hmrFullBundleMode);
+  await startAndWaitDevServer(CONFIG.paths.tmpLazyCompilationDir, CONFIG.ports.lazyCompilation);
+  await startAndWaitDevServer(CONFIG.paths.tmpLazySharedModuleDir, CONFIG.ports.lazySharedModule);
+  await startAndWaitDevServer(
+    CONFIG.paths.tmpLazyNestedDynamicImportDir,
+    CONFIG.ports.lazyNestedDynamicImport,
+  );
+  await startAndWaitDevServer(CONFIG.paths.tmpLazyAliasedImportDir, CONFIG.ports.lazyAliasedImport);
 
   // Launch browser and create pages
   browser = await chromium.launch({ headless: !process.env.DEBUG_BROWSER });
