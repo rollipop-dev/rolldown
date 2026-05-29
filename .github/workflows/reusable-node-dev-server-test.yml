@@ -47,7 +47,14 @@ jobs:
         run: vp run --filter '@rolldown/test-dev-server' build
 
       - name: Install Playwright
+        if: ${{ runner.os != 'Windows' }}
         run: vp exec playwright install chromium
 
+      # MARK - rollipop: Browser dev-server tests hang intermittently on windows-2025 while starting multiple long-lived servers, so keep Windows coverage to fixture tests and run browser coverage on Ubuntu/macOS.
+      - name: Dev Server Fixture Test
+        if: ${{ runner.os == 'Windows' }}
+        run: vp run --filter '@rolldown/test-dev-server-tests' test:fixtures
+
       - name: Dev Server Test
+        if: ${{ runner.os != 'Windows' }}
         run: vp run --filter '@rolldown/test-dev-server-tests' test
