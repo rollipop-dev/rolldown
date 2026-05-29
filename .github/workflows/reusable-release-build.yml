@@ -69,11 +69,6 @@ jobs:
             target: powerpc64le-unknown-linux-gnu
             build: vp run ci:build-release-binding --target powerpc64le-unknown-linux-gnu --use-napi-cross
 
-          - os: ubuntu-latest
-            target: wasm32-wasip1-threads
-            build: |
-              vp run --filter '@rollipop/rolldown' build-binding:wasi:release
-
     name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     steps:
@@ -173,7 +168,7 @@ jobs:
     strategy:
       fail-fast: false
     name: Build `@rollipop/rolldown-pluginutils` Package
-    runs-on: namespace-profile-linux-x64-default
+    runs-on: ubuntu-latest
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
@@ -197,7 +192,7 @@ jobs:
     strategy:
       fail-fast: false
     name: Build Node Package
-    runs-on: namespace-profile-linux-x64-default
+    runs-on: ubuntu-latest
     env:
       RELEASING: 'true'
     steps:
@@ -248,7 +243,7 @@ jobs:
     strategy:
       fail-fast: false
     name: Build `@rolldown/browser` Package
-    runs-on: namespace-profile-linux-x64-default
+    runs-on: ubuntu-latest
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
@@ -292,7 +287,7 @@ jobs:
     strategy:
       fail-fast: false
     name: Build `@rolldown/debug` Package
-    runs-on: namespace-profile-linux-x64-default
+    runs-on: ubuntu-latest
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
