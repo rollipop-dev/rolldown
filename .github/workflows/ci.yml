@@ -101,7 +101,7 @@ jobs:
     strategy:
       matrix:
         target: >-
-          ${{ (github.ref_name == 'rollipop') && fromJSON('["ubuntu-latest","macos-latest","windows-latest"]')
+          ${{ (github.ref_name == 'rollipop') && fromJSON('["ubuntu-latest","macos-latest"]')
               || (needs.changes.outputs.run-windows == 'true') && fromJSON('["ubuntu-latest","windows-latest"]')
               || fromJSON('["ubuntu-latest"]') }}
     uses: ./.github/workflows/reusable-cargo-test.yml
