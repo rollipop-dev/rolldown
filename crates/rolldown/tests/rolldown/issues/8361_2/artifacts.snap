@@ -6,25 +6,11 @@ source: crates/rolldown_testing/src/integration_test.rs
 ## INEFFECTIVE_DYNAMIC_IMPORT
 
 ```text
-[INEFFECTIVE_DYNAMIC_IMPORT] Warning: b.js is dynamically imported by b.js but also statically imported by a.js, dynamic import will not move module into another chunk.
+[INEFFECTIVE_DYNAMIC_IMPORT] b.js is dynamically imported by b.js but also statically imported by a.js, dynamic import will not move module into another chunk.
 
 ```
 
 # Assets
-
-## a.js
-
-```js
-import { n as __exportAll } from "./chunk.js";
-import { t as require_cjs } from "./cjs.js";
-import "./b.js";
-//#region a.js
-var a_exports = /* @__PURE__ */ __exportAll({});
-require_cjs();
-//#endregion
-export { a_exports as t };
-
-```
 
 ## b.js
 
@@ -33,12 +19,11 @@ import { n as __exportAll, r as __toESM } from "./chunk.js";
 //#region b.js
 var b_exports = /* @__PURE__ */ __exportAll({ foo2: () => foo2 });
 function foo2() {
-	import("./a.js").then((n) => n.t);
+	import("./main.js").then((n) => n.t);
 	Promise.resolve().then(() => b_exports);
 }
 import("./cjs.js").then((n) => /* @__PURE__ */ __toESM(n.t()));
 //#endregion
-export { b_exports as t };
 
 ```
 
@@ -66,6 +51,13 @@ export { require_cjs as t };
 ## main.js
 
 ```js
-import "./a.js";
+import { n as __exportAll } from "./chunk.js";
+import { t as require_cjs } from "./cjs.js";
+import "./b.js";
+//#region a.js
+var a_exports = /* @__PURE__ */ __exportAll({});
+require_cjs();
+//#endregion
+export { a_exports as t };
 
 ```

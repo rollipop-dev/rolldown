@@ -54,9 +54,9 @@
   },
   "scripts": {
     "build": "pnpm run build:debug",
-    "build:debug": "pnpm run --filter rolldown build-browser-pkg:debug",
-    "build:release": "pnpm run --filter rolldown build-browser-pkg:release",
-    "build-node": "TARGET='browser' pnpm run --filter rolldown build-node",
+    "build:debug": "pnpm run --filter '@rollipop/rolldown' build-browser-pkg:debug",
+    "build:release": "pnpm run --filter '@rollipop/rolldown' build-browser-pkg:release",
+    "build-node": "TARGET='browser' pnpm run --filter '@rollipop/rolldown' build-node",
     "preinstall": "npx only-allow pnpm",
     "publint": "publint ."
   },

@@ -11,6 +11,7 @@ import type { OutputOptions } from '../../options/output-options';
 import { PluginDriver } from '../../plugin/plugin-driver';
 import { createBundlerOptions } from '../../utils/create-bundler-option';
 import { normalizeBindingResult } from '../../utils/error';
+import { normalizedStringOrRegex } from '../../utils/normalize-string-or-regex';
 import { transformToRollupOutput } from '../../utils/transform-to-rollup-output';
 import type { DevOptions } from './dev-options';
 
@@ -72,6 +73,8 @@ export class DevEngine {
         debounceDuration: devOptions.watch.debounceDuration,
         compareContentsForPolling: devOptions.watch.compareContentsForPolling,
         debounceTickRate: devOptions.watch.debounceTickRate,
+        include: normalizedStringOrRegex(devOptions.watch.include),
+        exclude: normalizedStringOrRegex(devOptions.watch.exclude),
       },
     };
 
@@ -105,6 +108,10 @@ export class DevEngine {
 
   async ensureLatestBuildOutput(): Promise<void> {
     await this.#inner.ensureLatestBuildOutput();
+  }
+
+  triggerFullBuild(): void {
+    this.#inner.triggerFullBuild();
   }
 
   async invalidate(file: string, firstInvalidatedBy?: string): Promise<BindingClientHmrUpdate[]> {

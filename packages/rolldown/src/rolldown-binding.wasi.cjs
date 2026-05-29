@@ -39,9 +39,9 @@ if (__nodeFs.existsSync(__wasmDebugFilePath)) {
   __wasmFilePath = __wasmDebugFilePath
 } else if (!__nodeFs.existsSync(__wasmFilePath)) {
   try {
-    __wasmFilePath = require.resolve('@rolldown/binding-wasm32-wasi/rolldown-binding.wasm32-wasi.wasm')
+    __wasmFilePath = require.resolve('@rollipop/rolldown-binding-wasm32-wasi/rolldown-binding.wasm32-wasi.wasm')
   } catch {
-    throw new Error('Cannot find rolldown-binding.wasm32-wasi.wasm file, and @rolldown/binding-wasm32-wasi package is not installed.')
+    throw new Error('Cannot find rolldown-binding.wasm32-wasi.wasm file, and @rollipop/rolldown-binding-wasm32-wasi package is not installed.')
   }
 }
 
@@ -108,6 +108,7 @@ const { instance: __napiInstance, module: __wasiModule, napiModule: __napiModule
   },
 })
 module.exports = __napiModule.exports
+module.exports.LegalCommentsMode = __napiModule.exports.LegalCommentsMode
 module.exports.minify = __napiModule.exports.minify
 module.exports.minifySync = __napiModule.exports.minifySync
 module.exports.Severity = __napiModule.exports.Severity
@@ -147,6 +148,7 @@ module.exports.BindingPluginContext = __napiModule.exports.BindingPluginContext
 module.exports.BindingRenderedChunk = __napiModule.exports.BindingRenderedChunk
 module.exports.BindingRenderedChunkMeta = __napiModule.exports.BindingRenderedChunkMeta
 module.exports.BindingRenderedModule = __napiModule.exports.BindingRenderedModule
+module.exports.BindingRollipopReactNativeTransformer = __napiModule.exports.BindingRollipopReactNativeTransformer
 module.exports.BindingSourceMap = __napiModule.exports.BindingSourceMap
 module.exports.BindingTransformPluginContext = __napiModule.exports.BindingTransformPluginContext
 module.exports.BindingWatcher = __napiModule.exports.BindingWatcher
@@ -165,6 +167,9 @@ module.exports.BindingPluginOrder = __napiModule.exports.BindingPluginOrder
 module.exports.BindingPropertyReadSideEffects = __napiModule.exports.BindingPropertyReadSideEffects
 module.exports.BindingPropertyWriteSideEffects = __napiModule.exports.BindingPropertyWriteSideEffects
 module.exports.BindingRebuildStrategy = __napiModule.exports.BindingRebuildStrategy
+module.exports.BindingRollipopReactNativeModuleType = __napiModule.exports.BindingRollipopReactNativeModuleType
+module.exports.BindingRollipopReactNativeReactRuntime = __napiModule.exports.BindingRollipopReactNativeReactRuntime
+module.exports.BindingRollipopReactNativeRuntimeTarget = __napiModule.exports.BindingRollipopReactNativeRuntimeTarget
 module.exports.collapseSourcemaps = __napiModule.exports.collapseSourcemaps
 module.exports.enhancedTransform = __napiModule.exports.enhancedTransform
 module.exports.enhancedTransformSync = __napiModule.exports.enhancedTransformSync

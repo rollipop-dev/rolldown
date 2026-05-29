@@ -11,7 +11,7 @@ use notify::EventKind;
 use rolldown_common::WatcherChangeKind;
 use rolldown_error::BuildResult;
 use rolldown_fs_watcher::{DynFsWatcher, FsEventResult, RecursiveMode};
-use rolldown_utils::{dashmap::FxDashSet, indexmap::FxIndexMap};
+use rolldown_utils::{dashmap::FxDashSet, indexmap::FxIndexMap, pattern_filter};
 use sugar_path::SugarPath;
 use tokio::sync::Mutex;
 
@@ -104,6 +104,7 @@ impl BundleCoordinator {
         CoordinatorMsg::BundleCompleted { has_encountered_error, has_generated_bundle_output } => {
           self.handle_bundle_completed(has_encountered_error, has_generated_bundle_output).await;
         }
+        #[cfg(feature = "testing")]
         CoordinatorMsg::ScheduleBuildIfStale { reply } => {
           let result = self.schedule_build_if_stale().await;
           let _ = reply.send(result);
@@ -116,12 +117,23 @@ impl BundleCoordinator {
           let result = self.ensure_latest_bundle_output().await;
           let _ = reply.send(result);
         }
+        CoordinatorMsg::TriggerFullBuild => {
+          self.trigger_full_build().await;
+        }
+        #[cfg(feature = "testing")]
         CoordinatorMsg::GetWatchedFiles { reply } => {
           let result = self.watched_files.iter().map(|s| s.to_string()).collect();
           let _ = reply.send(result);
         }
         CoordinatorMsg::ModuleChanged { module_id } => {
           // Handle programmatic module change (e.g., lazy compilation executed)
+
+          // `plugin_driver.watch_files` added in `bundler.compile_lazy_entry`
+          // will be removed when task rebuild starts,
+          // so we need to update watch paths here to make sure
+          // the changed module is watched and trigger rebuild by file change if needed.
+          let _ = self.update_watch_paths().await;
+
           let mut changed_files = FxIndexMap::default();
           changed_files.insert(PathBuf::from(&module_id), WatcherChangeKind::Update);
 
@@ -181,7 +193,7 @@ impl BundleCoordinator {
         self.handle_file_changes(changed_files).await;
       }
       Err(e) => {
-        eprintln!("notify error: {e:?}");
+        tracing::error!("notify error: {e:?}");
       }
     }
   }
@@ -273,9 +285,8 @@ impl BundleCoordinator {
         // Clear current build
         self.current_bundling_future = None;
 
-        // Update watch paths so files pulled in by this rebuild,
-        // this can happen for lazy-compilation,
-        // because new files are pulled into `watch_files` only after browser hits the lazy proxy module.
+        // Register any new files this rebuild pulled into `watch_files`
+        // (e.g. an edit that introduced a new transitive import).
         let _ = self.update_watch_paths().await;
 
         if has_encountered_error {
@@ -414,16 +425,19 @@ impl BundleCoordinator {
         })
       }
       CoordinatorState::FullBuildFailed | CoordinatorState::Failed => {
-        // Clear all queued tasks and schedule a new full build
-        self.queued_tasks.clear();
-        self.queued_tasks.push_back(TaskInput::FullBuild);
-        let schedule_result = self.schedule_build_if_stale().await;
-        schedule_result.map(|ret| EnsureLatestBundleOutputReturn {
-          future: ret.future,
-          is_ensure_latest_bundle_output_future: true,
-        })
+        // Don't auto-retry — without file changes the same error would recur.
+        // Recovery is driven by file change events from the watcher (see handle_file_changes).
+        None
       }
     }
+  }
+
+  /// Unconditionally schedule a full build, regardless of current state.
+  /// Used for explicit manual retry (e.g., dev server `r` signal).
+  async fn trigger_full_build(&mut self) {
+    self.queued_tasks.clear();
+    self.queued_tasks.push_back(TaskInput::FullBuild);
+    self.schedule_build_if_stale().await;
   }
 
   /// Get current build status - atomic operation that doesn't block
@@ -444,12 +458,18 @@ impl BundleCoordinator {
   async fn update_watch_paths(&self) -> BuildResult<()> {
     let bundler = self.bundler.lock().await;
     let watch_files = bundler.watch_files();
+    let cwd = bundler.options().cwd.to_string_lossy().to_string();
+
+    let include = self.ctx.options.watch_include.as_deref();
+    let exclude = self.ctx.options.watch_exclude.as_deref();
 
     let mut watcher = self.watcher.lock().ok().context("Failed to acquire watcher lock")?;
     let mut paths_mut = watcher.paths_mut();
     for watch_file in watch_files.iter() {
       let watch_file = &**watch_file;
-      if !self.watched_files.contains(watch_file) {
+      if !self.watched_files.contains(watch_file)
+        && pattern_filter::filter(exclude, include, watch_file, &cwd).inner()
+      {
         self.watched_files.insert(watch_file.to_string().into());
         paths_mut.add(watch_file.as_path(), RecursiveMode::NonRecursive)?;
       }

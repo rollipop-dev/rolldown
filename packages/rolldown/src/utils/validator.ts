@@ -170,6 +170,7 @@ const HelperModeSchema = v.union([v.literal('Runtime'), v.literal('External')]);
 const DecoratorOptionSchema = v.object({
   legacy: v.optional(v.boolean()),
   emitDecoratorMetadata: v.optional(v.boolean()),
+  strictNullChecks: v.optional(v.boolean()),
 });
 isTypeTrue<
   IsSchemaSubType<typeof DecoratorOptionSchema, Exclude<TransformOptions['decorator'], undefined>>
@@ -332,6 +333,12 @@ const ChecksOptionsSchema = v.strictObject({
     v.optional(v.boolean()),
     v.description('Whether to emit warnings when the `output.name` option is missing when needed'),
   ),
+  invalidAnnotation: v.pipe(
+    v.optional(v.boolean()),
+    v.description(
+      'Whether to emit warnings when a `#__PURE__` / `@__PURE__` annotation has no effect due to its position',
+    ),
+  ),
   mixedExports: v.pipe(
     v.optional(v.boolean()),
     v.description('Whether to emit warnings when the way to export values is ambiguous'),
@@ -410,6 +417,12 @@ const ChecksOptionsSchema = v.strictObject({
       'Whether to emit warnings when a module is dynamically imported but also statically imported, making the dynamic import ineffective for code splitting',
     ),
   ),
+  largeBarrelModules: v.pipe(
+    v.optional(v.boolean()),
+    v.description(
+      'Whether to emit info logs when a barrel module has a very large number of re-exports (more than 5000)',
+    ),
+  ),
 });
 isTypeTrue<IsSchemaSubType<typeof ChecksOptionsSchema, ChecksOptions>>();
 
@@ -463,6 +476,15 @@ isTypeTrue<IsSchemaSubType<typeof MangleOptionsSchema, MangleOptions>>();
 
 const CodegenOptionsSchema = v.strictObject({
   removeWhitespace: v.optional(v.boolean()),
+  legalComments: v.optional(
+    v.union([
+      v.literal('none'),
+      v.literal('inline'),
+      v.literal('eof'),
+      v.literal('external'),
+      v.strictObject({ linked: v.string() }),
+    ]),
+  ),
 });
 isTypeTrue<IsSchemaSubType<typeof CodegenOptionsSchema, CodegenOptions>>();
 
@@ -630,7 +652,15 @@ const InputOptionsSchema = v.strictObject({
       onDemandWrapping: v.optional(v.boolean()),
       incrementalBuild: v.optional(v.boolean()),
       nativeMagicString: v.optional(v.boolean()),
-      chunkOptimization: v.optional(v.boolean()),
+      chunkOptimization: v.optional(
+        v.union([
+          v.boolean(),
+          v.strictObject({
+            mergeCommonChunks: v.optional(v.boolean()),
+            avoidRedundantChunkLoads: v.optional(v.boolean()),
+          }),
+        ]),
+      ),
       lazyBarrel: v.optional(v.boolean()),
     }),
   ),

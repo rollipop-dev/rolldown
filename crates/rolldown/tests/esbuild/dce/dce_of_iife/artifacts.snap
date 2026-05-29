@@ -8,12 +8,14 @@ source: crates/rolldown_testing/src/integration_test.rs
 ```js
 //#region keep-these.js
 undef = void 0;
-keepMe();
+(() => {
+	keepMe();
+})();
 ((x = keepMe()) => {})();
 var someVar;
 (([y]) => {})(someVar);
 (({ z }) => {})(someVar);
-stuff()();
+(/* @__PURE__ */ (() => stuff())())();
 ((_ = keepMe()) => {})();
 var isPure = ((x, y) => 123)();
 use(isPure);
@@ -35,10 +37,8 @@ use(isNotPure);
 
 ```js
 //#region remove-these.js
-(() => {})(keepThisButRemoveTheIIFE);
-var someVar;
-((x) => {})(someVar);
-stuff();
+keepThisButRemoveTheIIFE;
+(() => 123)();
 //#endregion
 
 ```

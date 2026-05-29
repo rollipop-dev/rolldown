@@ -1,0 +1,68 @@
+name: Benchmarks Rust
+
+permissions: {}
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'main'
+    paths:
+      - '**/*.rs'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+      - 'scripts/misc/setup-benchmark-input/**'
+      - '.github/workflows/benchmark-rust.yml'
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+    paths:
+      - '**/*.rs'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+      - 'scripts/misc/setup-benchmark-input/**'
+      - '.github/workflows/benchmark-rust.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.ref_name != 'rollipop' }}
+
+jobs:
+  codspeed-benchmark:
+    name: Codspeed Benchmark
+    if: >
+      github.event_name != 'pull_request' ||
+      (github.event.pull_request.draft != true &&
+      !contains(github.event.pull_request.labels.*.name, 'graphite: merge-when-ready'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - uses: voidzero-dev/setup-vp@ca1c46663915d6c1042ae23bd39ab85718bfb0fa # v1.10.0
+        with:
+          cache: true
+
+      - name: Setup Rust
+        uses: oxc-project/setup-rust@23f38cfb0c04af97a055f76acee94d5be71c7c82 # v1.0.16
+        with:
+          tools: just, cargo-codspeed
+          cache-key: codspeed
+          save-cache: ${{ github.ref_name == 'rollipop' }}
+
+      - name: Setup Benchmark Input
+        run: just setup-bench
+
+      - name: Build benchmark
+        env:
+          RUSTFLAGS: '-C debuginfo=1 -C strip=none -g -C lto=false -C codegen-units=16 --cfg codspeed'
+        run: |
+          cargo build --release -p bench --bench bench --features codspeed
+          mkdir -p target/codspeed/analysis/bench
+          mv target/release/deps/bench-* target/codspeed/analysis/bench
+          rm target/codspeed/analysis/bench/*.d
+
+      - name: Run the benchmarks
+        uses: CodSpeedHQ/action@3194d9a39c4d46684cb44bf7207fc56626aad8fd # v4.15.1
+        with:
+          run: cargo codspeed run -p bench
+          token: ${{ secrets.CODSPEED_TOKEN }}
+          mode: simulation

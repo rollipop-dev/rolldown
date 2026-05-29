@@ -10,7 +10,9 @@ use oxc::transformer::{
 };
 use regex::Regex;
 use rolldown_error::{BatchedBuildDiagnostic, BuildDiagnostic, EventKind, Severity};
-use rolldown_plugin::{HookTransformOutput, HookUsage, Plugin, SharedTransformPluginContext};
+use rolldown_plugin::{
+  HookTransformOutput, HookTransformOutputMap, HookUsage, Plugin, SharedTransformPluginContext,
+};
 use rolldown_plugin_utils::to_string_literal;
 use rolldown_sourcemap::{SourceMap, collapse_sourcemaps};
 use rolldown_utils::pattern_filter::{FilterResult, StringOrRegex, filter};
@@ -179,12 +181,16 @@ impl Plugin for RollipopReactRefreshWrapperPlugin {
       };
       return Ok(Some(HookTransformOutput {
         code: Some(wrapped_code),
-        map: final_map,
+        map: final_map.map_or(HookTransformOutputMap::Omitted, Into::into),
         ..Default::default()
       }));
     }
 
-    Ok(Some(HookTransformOutput { code: Some(code), map: oxc_map, ..Default::default() }))
+    Ok(Some(HookTransformOutput {
+      code: Some(code),
+      map: oxc_map.map_or(HookTransformOutputMap::Omitted, Into::into),
+      ..Default::default()
+    }))
   }
 }
 

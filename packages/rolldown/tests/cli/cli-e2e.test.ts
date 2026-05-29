@@ -575,7 +575,9 @@ describe('watch cli', () => {
         cwd,
         reject: false,
         cancelSignal: controller.signal,
-      })`rolldown index.ts -d dist -w`;
+        // MARK: - rollipop
+        // Load fixture polling config; native watchers can miss this quick rewrite on macOS.
+      })`rolldown -c -w`;
       const stdoutWaiter = createStreamWaiter(process.stdout);
       await stdoutWaiter.waitFor('Waiting for changes...', { timeout: 5_000 });
 

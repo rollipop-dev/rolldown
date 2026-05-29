@@ -69,6 +69,7 @@ const {
   },
 })
 export default __napiModule.exports
+export const LegalCommentsMode = __napiModule.exports.LegalCommentsMode
 export const minify = __napiModule.exports.minify
 export const minifySync = __napiModule.exports.minifySync
 export const Severity = __napiModule.exports.Severity
@@ -108,6 +109,7 @@ export const BindingPluginContext = __napiModule.exports.BindingPluginContext
 export const BindingRenderedChunk = __napiModule.exports.BindingRenderedChunk
 export const BindingRenderedChunkMeta = __napiModule.exports.BindingRenderedChunkMeta
 export const BindingRenderedModule = __napiModule.exports.BindingRenderedModule
+export const BindingRollipopReactNativeTransformer = __napiModule.exports.BindingRollipopReactNativeTransformer
 export const BindingSourceMap = __napiModule.exports.BindingSourceMap
 export const BindingTransformPluginContext = __napiModule.exports.BindingTransformPluginContext
 export const BindingWatcher = __napiModule.exports.BindingWatcher
@@ -126,6 +128,9 @@ export const BindingPluginOrder = __napiModule.exports.BindingPluginOrder
 export const BindingPropertyReadSideEffects = __napiModule.exports.BindingPropertyReadSideEffects
 export const BindingPropertyWriteSideEffects = __napiModule.exports.BindingPropertyWriteSideEffects
 export const BindingRebuildStrategy = __napiModule.exports.BindingRebuildStrategy
+export const BindingRollipopReactNativeModuleType = __napiModule.exports.BindingRollipopReactNativeModuleType
+export const BindingRollipopReactNativeReactRuntime = __napiModule.exports.BindingRollipopReactNativeReactRuntime
+export const BindingRollipopReactNativeRuntimeTarget = __napiModule.exports.BindingRollipopReactNativeRuntimeTarget
 export const collapseSourcemaps = __napiModule.exports.collapseSourcemaps
 export const enhancedTransform = __napiModule.exports.enhancedTransform
 export const enhancedTransformSync = __napiModule.exports.enhancedTransformSync

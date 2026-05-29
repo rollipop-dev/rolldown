@@ -23,6 +23,51 @@ describe('enhanced transform', () => {
       expect(result.code).toBe('const x = 1;\n');
       expect(result.map).toBeDefined();
     });
+
+    it('should preserve import defer syntax', async () => {
+      const result = await transform(
+        'test.js',
+        'import defer * as ns from "./dep.js"; ns.value; import.defer("./lazy.js");',
+      );
+      expect(result.errors).toHaveLength(0);
+      expect(result.warnings).toHaveLength(0);
+      expect(result.code).toBe(
+        'import defer * as ns from "./dep.js";\nns.value;\nimport.defer("./lazy.js");\n',
+      );
+    });
+
+    it('should preserve import source syntax', async () => {
+      const result = await transform('test.js', 'import source wasm from "./dep.wasm"; wasm;');
+      expect(result.errors).toHaveLength(0);
+      expect(result.code).toBe('import source wasm from "./dep.wasm";\nwasm;\n');
+    });
+  });
+
+  describe('decorator metadata (strictNullChecks)', () => {
+    const code = `
+      function dec(_target: any, _key: string) {}
+      class MyClass {
+        @dec
+        field: string | null = null;
+      }
+    `;
+
+    it('emits Object for a nullable union by default (strict)', () => {
+      const result = transformSync('test.ts', code, {
+        decorator: { legacy: true, emitDecoratorMetadata: true },
+      });
+      expect(result.errors).toHaveLength(0);
+      expect(result.code).toMatch(/design:type",\s*Object/);
+    });
+
+    it('emits the underlying primitive when strictNullChecks is false', () => {
+      const result = transformSync('test.ts', code, {
+        decorator: { legacy: true, emitDecoratorMetadata: true, strictNullChecks: false },
+      });
+      expect(result.errors).toHaveLength(0);
+      expect(result.code).toMatch(/design:type",\s*String/);
+      expect(result.code).not.toMatch(/design:type",\s*Object/);
+    });
   });
 
   describe('tsconfig - raw options', () => {
@@ -497,6 +542,40 @@ describe('enhanced transform', () => {
       expect(result.errors).toHaveLength(0);
       expect(result.code).toContain('import');
       expect(result.code).toContain('buffer');
+    });
+  });
+
+  describe('enum', () => {
+    // Regression for https://github.com/rolldown/rolldown/issues/9312
+    // String-enum alias members must produce forward-only `X["Default"] = "Light"`
+    // assignment, not the buggy reverse-mapping form
+    // `X[X["Default"] = X.Light] = "Default"` which overwrites the original
+    // member's reverse mapping.
+    it('emits forward-only assignment for string-enum alias members', () => {
+      const code = `
+export enum Theme {
+  Light = "Light",
+  Dark = "Dark",
+  Default = Theme.Light,
+}
+`;
+      const result = transformSync('test.ts', code);
+      expect(result.errors).toHaveLength(0);
+      expect(result.code).toContain('Theme["Default"] = "Light";');
+      expect(result.code).not.toContain('Theme[Theme["Default"]');
+    });
+
+    it('keeps reverse mapping for numeric-enum alias members', () => {
+      const code = `
+export enum Num {
+  A = 1,
+  B = 2,
+  C = A,
+}
+`;
+      const result = transformSync('test.ts', code);
+      expect(result.errors).toHaveLength(0);
+      expect(result.code).toContain('Num[Num["C"] = 1] = "C";');
     });
   });
 

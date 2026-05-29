@@ -239,10 +239,17 @@ impl<Fs: FileSystem + Clone + 'static> Bundle<Fs> {
     if is_full_scan_mode {
       let mut output: NormalizedScanStageOutput =
         output.try_into().expect("Should be able to convert to NormalizedScanStageOutput");
-      defer_sync_scan_data(&self.options, &self.cache.module_id_to_idx, &mut output).await?;
+      // The scan produced a complete `output`; `defer_sync_scan_data` only
+      // mutates per-module `side_effects` best-effort, so its error doesn't
+      // invalidate `output`. Commit it rather than fall back to the stale prior
+      // snapshot.
+      // See meta/design/bundler-data-lifecycle.md ("Cache integrity on a failed build").
+      let result =
+        defer_sync_scan_data(&self.options, &self.cache.module_id_to_idx, &mut output).await;
       if is_incremental {
         self.cache.set_snapshot(output.make_copy());
       }
+      result?;
       return Ok(output);
     }
 
@@ -257,13 +264,20 @@ impl<Fs: FileSystem + Clone + 'static> Bundle<Fs> {
     is_write: bool,
   ) -> BuildResult<BundleOutput> {
     let start = self.plugin_driver.start_timing();
-    let mut link_stage_output = LinkStage::new(scan_stage_output, &self.options).link();
+    let (mut link_stage_output, ast_table) =
+      LinkStage::new(scan_stage_output, &self.options).link();
     self.plugin_driver.set_link_stage_time(start);
 
     let bundle_output =
-      GenerateStage::new(&mut link_stage_output, &self.options, &self.plugin_driver)
+      GenerateStage::new(&mut link_stage_output, ast_table, &self.options, &self.plugin_driver)
         .generate()
         .await; // Notice we don't use `?` to break the control flow here.
+
+    // `create_output`/`make_copy` strip symbol-table scoping from the cache for
+    // performance; reinstate it here, before the fallible steps below, so the
+    // cache stays whole on their `Err` paths.
+    // See meta/design/bundler-data-lifecycle.md ("Cache integrity on a failed build").
+    self.merge_immutable_fields_for_cache(link_stage_output.symbol_db);
 
     if let Err(errors) = &bundle_output {
       debug_assert!(errors.iter().all(|e| e.severity() == Severity::Error));
@@ -295,8 +309,6 @@ impl<Fs: FileSystem + Clone + 'static> Bundle<Fs> {
     if let Some(invalidate_js_side_cache) = &self.options.invalidate_js_side_cache {
       invalidate_js_side_cache.call().await?;
     }
-
-    self.merge_immutable_fields_for_cache(link_stage_output.symbol_db);
 
     Ok(output)
   }

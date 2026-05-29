@@ -9,8 +9,8 @@ use std::borrow::Cow;
 
 use rolldown_common::{ModuleType, RUNTIME_MODULE_KEY};
 use rolldown_plugin::{
-  HookTransformArgs, HookTransformOutput, HookTransformReturn, HookUsage, Plugin,
-  SharedTransformPluginContext,
+  HookTransformArgs, HookTransformOutput, HookTransformOutputMap, HookTransformReturn, HookUsage,
+  Plugin, SharedTransformPluginContext,
 };
 use rolldown_sourcemap::SourceMap;
 use rollipop_react_native_transform::{
@@ -97,7 +97,7 @@ impl Plugin for RollipopReactNativePlugin {
 
     Ok(Some(HookTransformOutput {
       code: Some(output.code),
-      map: Some(map),
+      map: HookTransformOutputMap::from(map),
       module_type: output.output_module_kind.map(kind_to_module_type),
       ..Default::default()
     }))

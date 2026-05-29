@@ -6,7 +6,7 @@ on:
     types: [opened, synchronize]
   push:
     branches:
-      - main
+      - rollipop
     paths:
       - '.github/workflows/**'
 
@@ -14,57 +14,11 @@ permissions: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: ${{ github.ref_name != 'main' }}
+  cancel-in-progress: ${{ github.ref_name != 'rollipop' }}
 
 jobs:
   security:
     name: Security Analysis
     runs-on: ubuntu-latest
     steps:
-      - uses: taiki-e/checkout-action@6ad50013d1190abbba79fe0c94edda8171607741 # main
-
-      - name: Detect Cargo.lock changes
-        id: cargo_lock
-        shell: bash
-        run: |
-          set -euo pipefail
-          changed=false
-          if [[ -f Cargo.lock ]]; then
-            base_sha=""
-            if [[ -n "${PR_BASE_SHA}" ]]; then
-              base_sha="${PR_BASE_SHA}"
-            elif [[ -n "${BEFORE_SHA}" && "${BEFORE_SHA}" != "0000000000000000000000000000000000000000" ]]; then
-              base_sha="${BEFORE_SHA}"
-            elif [[ "${EVENT_NAME}" == "push" ]]; then
-              changed=true
-            fi
-            if [[ -n "${base_sha}" ]]; then
-              git fetch --no-tags --depth=1 origin "${base_sha}"
-              if ! git diff --quiet "${base_sha}" HEAD -- Cargo.lock; then
-                changed=true
-              fi
-            fi
-          fi
-          echo "changed=${changed}" >> "${GITHUB_OUTPUT}"
-        env:
-          BEFORE_SHA: ${{ github.event.before }}
-          EVENT_NAME: ${{ github.event_name }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-
-      - uses: taiki-e/install-action@055f5df8c3f65ea01cd41e9dc855becd88953486 # v2.75.18
-        with:
-          tool: zizmor@1.24.1
-
-      - name: Run zizmor
-        shell: bash
-        run: zizmor --strict-collection --show-audit-urls=always --min-severity=medium .
-
-      - uses: taiki-e/install-action@055f5df8c3f65ea01cd41e9dc855becd88953486 # v2.75.18
-        if: ${{ steps.cargo_lock.outputs.changed == 'true' }}
-        with:
-          tool: cargo-deny
-
-      - name: Run cargo-deny
-        if: ${{ steps.cargo_lock.outputs.changed == 'true' }}
-        shell: bash
-        run: cargo deny check --config deny.toml
+      - uses: oxc-project/security-action@77e230508eccbb400b23746dab6c573a8ea7483e # v1.0.5

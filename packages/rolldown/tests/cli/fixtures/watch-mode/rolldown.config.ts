@@ -6,6 +6,11 @@ console.log('process.env.ROLLDOWN_WATCH', process.env.ROLLDOWN_WATCH);
 export default defineConfig({
   input: 'index.ts',
   cwd: import.meta.dirname,
+  watch: {
+    watcher: {
+      usePolling: true,
+    },
+  },
   plugins: [
     {
       name: 'test',
