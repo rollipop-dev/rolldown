@@ -2,7 +2,7 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    hookTimeout: process.env.CI ? 1000 * 30 : 1000 * 10,
+    hookTimeout: process.platform === 'win32' ? 1000 * 120 : process.env.CI ? 1000 * 30 : 1000 * 10,
     // Include playground tests
     include: ['browser.spec.ts'],
     environment: 'node',
