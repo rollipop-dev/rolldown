@@ -19,6 +19,8 @@ let lazySharedModulePage: Page | null = null;
 let nestedLazyPage: Page | null = null;
 let lazyAliasedImportPage: Page | null = null;
 
+const DEV_SERVER_CLI_PATH = nodePath.resolve(CONFIG.paths.testsDir, '../bin/cli.js');
+
 async function killPort(port: number): Promise<void> {
   try {
     await killPortImpl(port);
@@ -55,9 +57,8 @@ async function waitForDevServerReady(port: number) {
 }
 
 function startDevServer(cwd: string) {
-  const subprocess = execa('pnpm serve', {
+  const subprocess = execa(process.execPath, [DEV_SERVER_CLI_PATH], {
     cwd,
-    shell: true,
     stdio: ['inherit', 'inherit', 'inherit'],
     env: {
       RUST_BACKTRACE: 'FULL',
@@ -70,8 +71,19 @@ function startDevServer(cwd: string) {
 }
 
 async function startAndWaitDevServer(cwd: string, port: number) {
-  startDevServer(cwd);
-  await waitForDevServerReady(port);
+  const subprocess = startDevServer(cwd);
+  let onExit!: (code: number | null, signal: NodeJS.Signals | null) => void;
+  const exitPromise = new Promise<never>((_, reject) => {
+    onExit = (code, signal) => {
+      reject(new Error(`Dev server exited before port ${port} was ready: ${signal ?? code}`));
+    };
+    subprocess.once('exit', onExit);
+  });
+  try {
+    await Promise.race([waitForDevServerReady(port), exitPromise]);
+  } finally {
+    subprocess.off('exit', onExit);
+  }
 }
 
 beforeAll(async () => {
@@ -95,7 +107,7 @@ beforeAll(async () => {
   await resetTestFiles();
 
   // Start dev servers (ports configured in each playground's dev.config.mjs).
-  // Windows runners can drop one of several simultaneous `pnpm serve` processes, so start each server and wait for readiness before moving on.
+  // Copied playgrounds are outside the pnpm workspace, so call the dev-server CLI directly and wait for each server before starting the next one.
   await startAndWaitDevServer(CONFIG.paths.tmpFullBundleModeDir, CONFIG.ports.hmrFullBundleMode);
   await startAndWaitDevServer(CONFIG.paths.tmpLazyCompilationDir, CONFIG.ports.lazyCompilation);
   await startAndWaitDevServer(CONFIG.paths.tmpLazySharedModuleDir, CONFIG.ports.lazySharedModule);
