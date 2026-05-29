@@ -27,10 +27,6 @@ jobs:
             target: x86_64-pc-windows-msvc
             build: vp run ci:build-release-binding --target x86_64-pc-windows-msvc
 
-          - os: windows-latest
-            target: aarch64-pc-windows-msvc
-            build: vp run ci:build-release-binding --target aarch64-pc-windows-msvc
-
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             build: vp run ci:build-release-binding --target x86_64-unknown-linux-gnu --use-napi-cross
@@ -44,30 +40,8 @@ jobs:
             build: vp run ci:build-release-binding --use-napi-cross --target aarch64-unknown-linux-gnu
 
           - os: ubuntu-latest
-            target: aarch64-unknown-linux-ohos
-            build: vp run ci:build-release-binding --target aarch64-unknown-linux-ohos
-
-          - os: ubuntu-latest
-            target: armv7-unknown-linux-gnueabihf
-            build: vp run ci:build-release-binding --target armv7-unknown-linux-gnueabihf --use-napi-cross
-
-          - os: ubuntu-latest
-            target: aarch64-linux-android
-            build: vp run ci:build-release-binding --target aarch64-linux-android
-
-          - os: ubuntu-latest
             target: aarch64-unknown-linux-musl
             build: vp run ci:build-release-binding -x --target aarch64-unknown-linux-musl
-
-          - os: ubuntu-latest
-            target: s390x-unknown-linux-gnu
-            build: |
-              export CFLAGS="-fuse-ld=lld"
-              vp run ci:build-release-binding --target s390x-unknown-linux-gnu --use-napi-cross
-
-          - os: ubuntu-latest
-            target: powerpc64le-unknown-linux-gnu
-            build: vp run ci:build-release-binding --target powerpc64le-unknown-linux-gnu --use-napi-cross
 
     name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
@@ -120,6 +94,7 @@ jobs:
             packages/rolldown/src/rolldown-binding.*.wasm
 
   build-freebsd:
+    if: ${{ false }}
     name: Build FreeBSD
     runs-on: ubuntu-latest
     steps:
