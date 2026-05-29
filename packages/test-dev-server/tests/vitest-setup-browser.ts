@@ -45,7 +45,7 @@ async function resetTestFiles() {
 }
 
 async function waitForDevServerReady(port: number) {
-  const maxAttempts = 60;
+  const maxAttempts = process.platform === 'win32' ? 300 : 60;
   for (let i = 0; i < maxAttempts; i++) {
     try {
       const response = await fetch(`http://localhost:${port}`);

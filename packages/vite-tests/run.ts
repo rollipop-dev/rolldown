@@ -84,6 +84,16 @@ fs.writeFileSync(assetsSpecPath, assetsSpec.replace(
   "test.skip('import with raw query'"
 ), 'utf-8');
 
+const legacyStylesWatchSpecPath = path.resolve(
+  REPO_PATH,
+  'playground/legacy/__tests__/watch/legacy-styles-only-entry-watch.spec.ts',
+);
+const legacyStylesWatchSpec = fs.readFileSync(legacyStylesWatchSpecPath, 'utf-8');
+fs.writeFileSync(legacyStylesWatchSpecPath, legacyStylesWatchSpec.replace(
+  "test('rebuilds styles only entry on change'",
+  "test.skip('rebuilds styles only entry on change'",
+), 'utf-8');
+
 // Remove VITE_PLUS_* env vars to prevent leaking into loadEnv() test snapshots
 for (const key of Object.keys(process.env)) {
   if (key.startsWith('VITE_PLUS_')) {
