@@ -7,6 +7,7 @@ import {
   bindingifyResolveDynamicImport,
   bindingifyResolveId,
   bindingifyTransform,
+  bindingifyTransformCacheHit,
 } from './bindingify-build-hooks';
 
 import {
@@ -118,6 +119,11 @@ export function bindingifyPlugin(
   const { plugin: watchChange, meta: watchChangeMeta } = bindingifyWatchChange(args);
 
   const { plugin: closeWatcher, meta: closeWatcherMeta } = bindingifyCloseWatcher(args);
+
+  // MARK - rollipop
+  const { plugin: transformCacheHit, meta: transformCacheHitMeta } =
+    bindingifyTransformCacheHit(args);
+
   let hookUsage = extractHookUsage(plugin).inner();
   const result: BindingPluginOptions = {
     // The plugin name already normalized at `normalizePlugins`, see `packages/rolldown/src/utils/normalize-plugin-option.ts`
@@ -167,6 +173,9 @@ export function bindingifyPlugin(
     watchChangeMeta,
     closeWatcher,
     closeWatcherMeta,
+    // MARK - rollipop
+    transformCacheHit,
+    transformCacheHitMeta,
     hookUsage,
   };
   return wrapHandlers(result);
@@ -194,6 +203,8 @@ function wrapHandlers(plugin: BindingPluginOptions): BindingPluginOptions {
     'outro',
     'watchChange',
     'closeWatcher',
+    // MARK - rollipop
+    'transformCacheHit',
   ] as const) {
     const handler = plugin[hookName] as any;
     if (handler) {
@@ -204,7 +215,12 @@ function wrapHandlers(plugin: BindingPluginOptions): BindingPluginOptions {
           return error(
             logPluginError(e, plugin.name, {
               hook: hookName,
-              id: hookName === 'transform' ? args[2] : undefined,
+              id:
+                hookName === 'transform'
+                  ? args[2]
+                  : hookName === 'transformCacheHit'
+                    ? args[1]
+                    : undefined,
             }),
           );
         }

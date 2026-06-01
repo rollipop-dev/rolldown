@@ -212,6 +212,12 @@ pub trait Pluginable: Any + Debug + Send + Sync + 'static {
     None
   }
 
+  // MARK - rollipop
+
+  async fn call_transform_cache_hit(&self, _ctx: &PluginContext, _id: &str) -> HookNoopReturn;
+
+  fn call_transform_cache_hit_meta(&self) -> Option<PluginHookMeta>;
+
   fn call_hook_usage(&self) -> HookUsage;
 }
 
@@ -466,6 +472,16 @@ impl<T: Plugin> Pluginable for T {
 
   fn call_transform_ast_meta(&self) -> Option<PluginHookMeta> {
     Plugin::transform_ast_meta(self)
+  }
+
+  // MARK - rollipop
+
+  async fn call_transform_cache_hit(&self, ctx: &PluginContext, id: &str) -> HookNoopReturn {
+    Plugin::transform_cache_hit(self, ctx, id).await
+  }
+
+  fn call_transform_cache_hit_meta(&self) -> Option<PluginHookMeta> {
+    Plugin::transform_cache_hit_meta(self)
   }
 
   fn call_hook_usage(&self) -> HookUsage {

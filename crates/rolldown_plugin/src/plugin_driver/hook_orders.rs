@@ -29,6 +29,8 @@ pub struct PluginHookOrders {
   pub order_by_watch_change_meta: Vec<PluginIdx>,
   pub order_by_close_watcher_meta: Vec<PluginIdx>,
   pub order_by_transform_ast_meta: Vec<PluginIdx>,
+  // MARK - rollipop
+  pub order_by_transform_cache_hit_meta: Vec<PluginIdx>,
 }
 
 impl PluginHookOrders {
@@ -108,6 +110,12 @@ impl PluginHookOrders {
       }),
       order_by_transform_ast_meta: Self::sort_plugins_by_hook_meta(index_plugins, |i, p| {
         plugin_usage_vec[i].contains(HookUsage::TransformAst).then(|| p.call_transform_ast_meta())
+      }),
+      // MARK - rollipop
+      order_by_transform_cache_hit_meta: Self::sort_plugins_by_hook_meta(index_plugins, |i, p| {
+        plugin_usage_vec[i]
+          .contains(HookUsage::TransformCacheHit)
+          .then(|| p.call_transform_cache_hit_meta())
       }),
     }
   }

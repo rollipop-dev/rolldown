@@ -2607,6 +2607,8 @@ export interface BindingPluginOptions {
   introMeta?: BindingPluginHookMeta
   outro?: (ctx: BindingPluginContext, chunk: BindingRenderedChunk) => void
   outroMeta?: BindingPluginHookMeta
+  transformCacheHit?: (ctx: BindingPluginContext, id: string) => MaybePromise<VoidNullable>
+  transformCacheHitMeta?: BindingPluginHookMeta
 }
 
 export declare enum BindingPluginOrder {

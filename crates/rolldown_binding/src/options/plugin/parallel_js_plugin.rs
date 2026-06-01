@@ -194,6 +194,24 @@ impl Plugin for ParallelJsPlugin {
     }
   }
 
+  // MARK - rollipop
+
+  async fn transform_cache_hit(
+    &self,
+    ctx: &rolldown_plugin::PluginContext,
+    id: &str,
+  ) -> rolldown_plugin::HookNoopReturn {
+    if self.first_plugin().transform_cache_hit.is_some() {
+      self.run_single(|plugin| plugin.call_transform_cache_hit(ctx, id)).await
+    } else {
+      Ok(())
+    }
+  }
+
+  fn transform_cache_hit_meta(&self) -> Option<rolldown_plugin::PluginHookMeta> {
+    self.first_plugin().transform_cache_hit_meta()
+  }
+
   fn register_hook_usage(&self) -> HookUsage {
     HookUsage::all()
   }

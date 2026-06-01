@@ -538,6 +538,10 @@ export interface FunctionPluginHooks {
    * @group Build Hooks
    */
   [DEFINED_HOOK_NAMES.closeWatcher]: (this: PluginContext) => void;
+
+  // MARK - rollipop
+
+  [DEFINED_HOOK_NAMES.transformCacheHit]: (this: PluginContext, id: string) => void;
 }
 
 export type ChangeEvent = 'create' | 'update' | 'delete';
@@ -584,7 +588,9 @@ type SequentialPluginHooks = DefinedHookNames[
   | 'options'
   | 'outputOptions'
   | 'renderChunk'
-  | 'transform'];
+  | 'transform'
+  // MARK - rollipop
+  | 'transformCacheHit'];
 
 interface AddonHooks {
   /**
