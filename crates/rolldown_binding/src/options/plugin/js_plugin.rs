@@ -628,6 +628,25 @@ impl Plugin for JsPlugin {
     self.close_watcher_meta.as_ref().map(Into::into)
   }
 
+  // MARK - rollipop
+
+  async fn transform_cache_hit(
+    &self,
+    ctx: &rolldown_plugin::PluginContext,
+    id: &str,
+  ) -> rolldown_plugin::HookNoopReturn {
+    if let Some(cb) = &self.transform_cache_hit {
+      cb.await_call((ctx.clone().into(), id.to_string()).into())
+        .await
+        .with_context(|| format!("transformCacheHit hook threw an error for id={id}"))?;
+    }
+    Ok(())
+  }
+
+  fn transform_cache_hit_meta(&self) -> Option<rolldown_plugin::PluginHookMeta> {
+    self.transform_cache_hit_meta.as_ref().map(Into::into)
+  }
+
   fn register_hook_usage(&self) -> HookUsage {
     HookUsage::from_bits(self.inner.hook_usage).expect("Failed to register hook usage")
   }

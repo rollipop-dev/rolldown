@@ -293,5 +293,19 @@ pub trait Plugin: Any + Debug + Send + Sync + 'static {
     None
   }
 
+  // MARK - rollipop
+
+  fn transform_cache_hit(
+    &self,
+    _ctx: &PluginContext,
+    _id: &str,
+  ) -> impl std::future::Future<Output = HookNoopReturn> + Send {
+    async { Ok(()) }
+  }
+
+  fn transform_cache_hit_meta(&self) -> Option<PluginHookMeta> {
+    None
+  }
+
   fn register_hook_usage(&self) -> HookUsage;
 }

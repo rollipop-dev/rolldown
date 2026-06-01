@@ -391,3 +391,22 @@ export function bindingifyModuleParsed(
     meta: bindingifyPluginHookMeta(meta),
   };
 }
+
+// MARK - rollipop
+
+export function bindingifyTransformCacheHit(
+  args: BindingifyPluginArgs,
+): PluginHookWithBindingExt<BindingPluginOptions['transformCacheHit']> {
+  const hook = args.plugin.transformCacheHit;
+  if (!hook) {
+    return {};
+  }
+  const { handler, meta } = normalizeHook(hook);
+
+  return {
+    plugin: async (ctx, id) => {
+      await handler.call(createPluginContext(args, ctx), id);
+    },
+    meta: bindingifyPluginHookMeta(meta),
+  };
+}

@@ -274,6 +274,7 @@ impl PluginDriver {
         *sourcemap_chain = entry.sourcemap_chain;
         *side_effects = entry.side_effects;
         *module_type = entry.module_type;
+        self.transform_cache_hit(id).await?;
         return Ok(entry.code);
       }
     }
@@ -479,6 +480,20 @@ impl PluginDriver {
       cache.flush().await;
     }
 
+    Ok(())
+  }
+
+  // MARK - rollipop
+
+  pub async fn transform_cache_hit(&self, id: &str) -> HookNoopReturn {
+    for (plugin_idx, plugin, ctx) in
+      self.iter_plugin_with_context_by_order(&self.order_by_transform_cache_hit_meta)
+    {
+      let start = self.start_timing();
+      let result = plugin.call_transform_cache_hit(ctx, id).await;
+      self.record_timing(plugin_idx, start);
+      result.with_context(|| CausedPlugin::new(plugin.call_name()))?;
+    }
     Ok(())
   }
 }

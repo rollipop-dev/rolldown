@@ -206,6 +206,11 @@ pub struct BindingPluginOptions {
     MaybeAsyncJsCallback<FnArgs<(BindingPluginContext, BindingRenderedChunk)>, Option<String>>,
   >,
   pub outro_meta: Option<BindingPluginHookMeta>,
+
+  // MARK - rollipop
+  #[napi(ts_type = "(ctx: BindingPluginContext, id: string) => MaybePromise<VoidNullable>")]
+  pub transform_cache_hit: Option<MaybeAsyncJsCallback<FnArgs<(BindingPluginContext, String)>>>,
+  pub transform_cache_hit_meta: Option<BindingPluginHookMeta>,
 }
 
 impl Debug for BindingPluginOptions {
