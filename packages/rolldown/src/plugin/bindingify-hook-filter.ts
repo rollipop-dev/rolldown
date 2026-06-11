@@ -1,5 +1,5 @@
-import type { FilterExpression, TopLevelFilterExpression } from '@rollipop/rolldown-pluginutils';
-import * as filter from '@rollipop/rolldown-pluginutils';
+import type { FilterExpression, TopLevelFilterExpression } from '@rolldown/pluginutils';
+import * as filter from '@rolldown/pluginutils';
 import * as R from 'remeda';
 import type { BindingFilterToken, BindingHookFilter } from '../binding.cjs';
 import type { StringOrRegExp } from '../types/utils';

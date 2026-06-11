@@ -1,2 +1,2 @@
-export * from '@rollipop/rolldown-pluginutils/filter';
+export * from '@rolldown/pluginutils/filter';
 export { withFilter } from './plugin';

@@ -18,7 +18,7 @@ import type { MinimalPluginContext } from './minimal-plugin-context';
 import type { ParallelPlugin } from './parallel-plugin';
 import type { PluginContext } from './plugin-context';
 import type { TransformPluginContext } from './transform-plugin-context';
-import type { TopLevelFilterExpression } from '@rollipop/rolldown-pluginutils';
+import type { TopLevelFilterExpression } from '@rolldown/pluginutils';
 // oxlint-disable-next-line no-unused-vars -- this is used in JSDoc links
 import type { rolldown } from '../api/rolldown/index';
 // oxlint-disable-next-line no-unused-vars -- this is used in JSDoc links

@@ -1,4 +1,4 @@
-import { importerId, include } from '@rollipop/rolldown-pluginutils';
+import { importerId, include } from '@rollipop/rolldown/filter';
 import { defineTest } from 'rolldown-tests';
 import { expect, vi } from 'vitest';
 
