@@ -1,11 +1,12 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use arcstr::ArcStr;
 use dashmap::DashMap;
 use rolldown_common::{
   ModuleType, PluginIdx, SourcemapChainElement, side_effects::HookSideEffects,
 };
-use rolldown_sourcemap::SourceMap;
+use rolldown_sourcemap::OwnedSourceMap;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Semaphore;
 
@@ -21,11 +22,17 @@ pub struct TransformCacheEntry {
 #[derive(Serialize, Deserialize)]
 struct SerializableEntry {
   code: String,
-  /// Each element is (plugin_idx, sourcemap_json) stored as Transform variant
-  sourcemap_chain: Vec<(u32, String)>,
+  sourcemap_chain: Vec<SerializableSourcemapChainElement>,
   /// 0=True, 1=False, 2=NoTreeshake
   side_effects: Option<u8>,
   module_type: String,
+}
+
+#[derive(Serialize, Deserialize)]
+enum SerializableSourcemapChainElement {
+  Transform { plugin_idx: u32, map: String },
+  Omitted { plugin_idx: u32, plugin_name: String },
+  Null { plugin_idx: u32, original_content: String },
 }
 
 impl SerializableEntry {
@@ -36,7 +43,24 @@ impl SerializableEntry {
         .sourcemap_chain
         .iter()
         .filter_map(|e| match e {
-          SourcemapChainElement::Transform((idx, map)) => Some((idx.raw(), map.to_json_string())),
+          SourcemapChainElement::Transform((idx, map)) => {
+            Some(SerializableSourcemapChainElement::Transform {
+              plugin_idx: idx.raw(),
+              map: map.to_json_string(),
+            })
+          }
+          SourcemapChainElement::Omitted { plugin_idx, plugin_name } => {
+            Some(SerializableSourcemapChainElement::Omitted {
+              plugin_idx: plugin_idx.raw(),
+              plugin_name: plugin_name.to_string(),
+            })
+          }
+          SourcemapChainElement::Null { plugin_idx, original_content } => {
+            Some(SerializableSourcemapChainElement::Null {
+              plugin_idx: plugin_idx.raw(),
+              original_content: original_content.to_string(),
+            })
+          }
           SourcemapChainElement::Load(_) => None,
         })
         .collect(),
@@ -53,10 +77,25 @@ impl SerializableEntry {
     let sourcemap_chain = self
       .sourcemap_chain
       .into_iter()
-      .map(|(idx, json)| {
-        SourceMap::from_json_string(&json)
-          .ok()
-          .map(|map| SourcemapChainElement::Transform((PluginIdx::from_raw(idx), map)))
+      .map(|element| match element {
+        SerializableSourcemapChainElement::Transform { plugin_idx, map } => {
+          OwnedSourceMap::from_json_string(&map)
+            .map(OwnedSourceMap::into_inner)
+            .ok()
+            .map(|map| SourcemapChainElement::Transform((PluginIdx::from_raw(plugin_idx), map)))
+        }
+        SerializableSourcemapChainElement::Omitted { plugin_idx, plugin_name } => {
+          Some(SourcemapChainElement::Omitted {
+            plugin_idx: PluginIdx::from_raw(plugin_idx),
+            plugin_name: ArcStr::from(plugin_name),
+          })
+        }
+        SerializableSourcemapChainElement::Null { plugin_idx, original_content } => {
+          Some(SourcemapChainElement::Null {
+            plugin_idx: PluginIdx::from_raw(plugin_idx),
+            original_content: ArcStr::from(original_content),
+          })
+        }
       })
       .collect::<Option<Vec<_>>>()?;
 

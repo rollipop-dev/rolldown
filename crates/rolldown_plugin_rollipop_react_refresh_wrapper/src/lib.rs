@@ -188,7 +188,9 @@ impl Plugin for RollipopReactRefreshWrapperPlugin {
 
     Ok(Some(HookTransformOutput {
       code: Some(code),
-      map: oxc_map.map_or(HookTransformOutputMap::Omitted, Into::into),
+      map: oxc_map.map_or(HookTransformOutputMap::Omitted, |map| {
+        HookTransformOutputMap::from(map.into_inner())
+      }),
       ..Default::default()
     }))
   }

@@ -12,7 +12,7 @@ use rolldown_plugin::{
   HookTransformArgs, HookTransformOutput, HookTransformOutputMap, HookTransformReturn, HookUsage,
   Plugin, SharedTransformPluginContext,
 };
-use rolldown_sourcemap::SourceMap;
+use rolldown_sourcemap::OwnedSourceMap;
 use rollipop_react_native_transform::{
   ModuleKind, TransformInput, Transformer, TransformerOptions,
 };
@@ -92,8 +92,9 @@ impl Plugin for RollipopReactNativePlugin {
       module_kind: Some(module_kind),
     })?;
 
-    let map = SourceMap::from_json_string(&output.map_json)
-      .map_err(|e| anyhow::anyhow!("Failed to parse source map: {e}"))?;
+    let map = OwnedSourceMap::from_json_string(&output.map_json)
+      .map_err(|e| anyhow::anyhow!("Failed to parse source map: {e}"))?
+      .into_inner();
 
     Ok(Some(HookTransformOutput {
       code: Some(output.code),

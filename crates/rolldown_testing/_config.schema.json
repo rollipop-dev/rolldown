@@ -1370,6 +1370,12 @@
           "items": {
             "$ref": "#/$defs/BuiltinModuleTag"
           }
+        },
+        "includeDependenciesRecursively": {
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       },
       "additionalProperties": false,
@@ -1514,6 +1520,12 @@
           ]
         },
         "largeBarrelModules": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "sourcemapBroken": {
           "type": [
             "boolean",
             "null"
@@ -1848,10 +1860,14 @@
             "null"
           ]
         },
-        "inlineDynamicImports": {
-          "type": [
-            "boolean",
-            "null"
+        "codeSplitting": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CodeSplittingMode"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "dynamicImportInCjs": {

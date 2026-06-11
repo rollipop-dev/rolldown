@@ -114,12 +114,6 @@ pub enum ImportStatus {
     commonjs_symbol: SymbolRef,
   },
 
-  /// The import was treated as a CommonJS import but the file is known to have no exports
-  _CommonJSWithoutExports,
-
-  /// The imported file was disabled by mapping it to false in the "browser" field of package.json
-  _Disabled,
-
   /// The imported file is external and has unknown exports
   External(SymbolRef),
 }
@@ -489,10 +483,7 @@ impl LinkStage<'_> {
                     }
                     break;
                   };
-                  if !meta
-                    .sorted_and_non_ambiguous_resolved_exports
-                    .contains_key(&CompactStr::new(name))
-                  {
+                  if !meta.sorted_and_non_ambiguous_resolved_exports.contains_key(name) {
                     resolved_map.insert(
                       member_expr_ref.span,
                       MemberExprRefResolution {
@@ -831,6 +822,11 @@ impl BindImportsAndExportsContext<'_> {
       return;
     };
     let is_esm = matches!(self.options.format, OutputFormat::Esm);
+    // Reused across all named imports of this module. `match_import_with_export` always starts
+    // from an empty stack (and the ambiguous-reexport recursion gets its own cloned stack), so
+    // clearing before each call preserves behavior while reusing this allocation instead of
+    // allocating a fresh `Vec` per import.
+    let mut matching_ctx = MatchingContext { tracker_stack: Vec::new() };
     for (imported_as_ref, named_import) in &module.named_imports {
       let match_import_span = tracing::trace_span!(
         "MATCH_IMPORT",
@@ -869,9 +865,10 @@ impl BindImportsAndExportsContext<'_> {
           Specifier::Literal(_) => {}
         }
       }
+      matching_ctx.tracker_stack.clear();
       let ret = self.match_import_with_export(
         self.index_modules,
-        &mut MatchingContext { tracker_stack: Vec::default() },
+        &mut matching_ctx,
         ImportTracker {
           importer: module_idx,
           importee: resolved_module_idx,
@@ -1168,12 +1165,6 @@ impl BindImportsAndExportsContext<'_> {
           }
 
           break MatchImportKind::Normal(MatchImportKindNormal { symbol, reexports });
-        }
-        ImportStatus::_CommonJSWithoutExports => {
-          panic!("`ImportStatus::_CommonJSWithoutExports` is not implemented yet")
-        }
-        ImportStatus::_Disabled => {
-          panic!("`ImportStatus::_Disabled` is not implemented yet")
         }
         ImportStatus::External(symbol_ref) => {
           if self.options.format.keep_esm_import_export_syntax() {

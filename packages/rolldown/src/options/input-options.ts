@@ -711,8 +711,11 @@ export interface InputOptions {
      * Lazy barrel optimization avoids compiling unused re-export modules in side-effect-free barrel modules,
      * significantly improving build performance for large codebases with many barrel modules.
      *
+     * This option is planned to be removed in the future. If you need to opt out, please open an issue
+     * describing your use case so we can address it before the option is gone.
+     *
      * @see {@link https://rolldown.rs/in-depth/lazy-barrel-optimization | Lazy Barrel Documentation}
-     * @default false
+     * @default true
      */
     lazyBarrel?: boolean;
   };
@@ -762,7 +765,7 @@ export interface InputOptions {
    *
    * When enabled, Rolldown writes JSON-lines devtools output under
    * `node_modules/.rolldown/{session_id}/`. Consumers can parse the output with
-   * `@rolldown/debug` after `await bundle.close()` resolves.
+   * `@rollipop/rolldown-debug` after `await bundle.close()` resolves.
    *
    * @experimental
    */

@@ -12,9 +12,13 @@ Use this skill when syncing upstream `rolldown/rolldown` `main` into the Rollipo
 - The local `rollipop` branch starts from the latest `origin/rollipop`.
 - Upstream `main` is merged into `rollipop`.
 - Fork-specific behavior is preserved and clearly marked.
+- The pnpm catalog `rolldown` version matches the synced upstream `packages/rolldown` version.
+- After the upstream sync, each npm-published fork-managed package under `packages/*` has its patch version bumped from the pre-sync fork version.
+- NAPI binding metadata is regenerated so package versions and binding versions stay in sync.
 - Lockfiles, generated bindings, submodules, and snapshots are consistent.
 - `just roll` passes. Keep fixing and rerunning until it does.
-- The final working tree is clean.
+- After `just roll` passes, request user review before creating the merge commit.
+- Once the user approves the reviewed result, create the merge commit and leave the final working tree clean.
 
 ## Preflight
 
@@ -114,6 +118,21 @@ Rollipop-specific implementations should be easy to identify during future upstr
 - Do not bury fork behavior in unrelated refactors.
 - When a Rollipop custom dependency conflicts with an upstream upgrade, either update/remove the custom feature intentionally or document why the upstream change is being held back.
 
+### Version alignment
+
+Upstream and fork package versions are intentionally managed differently during a sync.
+
+- Match the pnpm catalog `rolldown` version to the synced upstream `packages/rolldown` package version. Verify the upstream version from the fetched `upstream/main`, rather than assuming it from memory.
+- After upstream conflicts are resolved, bump the patch version for npm-published fork-managed packages under `packages/*` from the pre-sync fork version. This fork package version is independent of the upstream version.
+- Do not bump private/internal test packages such as `@rolldown/test-dev-server`; packages with `"private": true` are not npm publish targets.
+- If any published `packages/*` version changes, ensure generated NAPI binding code includes the updated package version. `just roll` normally builds and regenerates the binding code; if package versions changed but the generated binding output did not, run the NAPI binding build explicitly:
+
+  ```bash
+  just build-rolldown-binding
+  ```
+
+- CI checks that package versions and NAPI binding versions match, so do not finish the sync while those generated files are stale.
+
 ### pluginutils follows upstream
 
 Upstream moved the Node package to the separate [`rolldown/plugins`](https://github.com/rolldown/plugins) repository under `packages/pluginutils`. This fork should not keep a separate `@rollipop/rolldown-pluginutils` workspace package. Instead, `@rollipop/rolldown` depends on upstream `@rolldown/pluginutils` and re-exports the filter helpers through `@rollipop/rolldown/filter`.
@@ -160,6 +179,7 @@ During every sync, ensure the fork still follows that shape:
 ## Conflict heuristics
 
 - **Workflows:** preserve Rollipop branch names, repository guards, package names, and publish behavior. Upstream workflow improvements can be adopted when they still apply to the fork.
+- **OXC/Rolldown API changes:** when an upstream API change breaks Rollipop code, first find the closest migrated implementation in Rolldown's upstream-owned code and follow that structure. For example, if sourcemap APIs move from borrowed to owned values, mirror nearby `OwnedSourceMap` handling instead of inventing a fork-only pattern.
 - **Generated bindings:** update Rust binding definitions first, then run `just build-rolldown`; do not hand-maintain generated declarations except as a temporary diagnostic.
 - **Lockfiles:** after resolving `package.json` / `Cargo.toml`, regenerate with `pnpm install --no-frozen-lockfile` and the relevant Cargo command (`cargo update ...` or the `just` recipe that triggered it).
 - **Snapshots:** prefer rerunning the owning test/update command over editing snapshots by hand.
@@ -194,7 +214,58 @@ just update-esbuild-diff
 
 Report the final result with:
 
-- merge commit SHA
+- merge commit SHA, if the user has approved and the merge commit has been created
 - whether `just roll` passed
 - notable fork-specific decisions made during conflict resolution
 - any unresolved risk or skipped verification
+
+If `just roll` passes but review has not happened yet, stop before committing and report:
+
+- upstream commit merged
+- current version/binding alignment
+- notable fork-specific decisions made during conflict resolution
+- any unresolved risk or skipped verification
+- that the merge commit is pending user approval
+
+## Optional Rollipop integration test
+
+After `just roll` passes, the user may ask to validate the synced Rolldown build inside a local Rollipop project before the merge commit. Treat this as optional: ask whether to create the merge commit or run Rollipop integration tests unless the user already gave a clear instruction.
+
+Use this flow when requested:
+
+1. Confirm the upstream sync is complete and `just roll` passed.
+2. Ask for the Rollipop project path if it was not provided. In that project, verify it is on `main`, fetch the remote, and fast-forward to the latest remote state before testing.
+3. Before choosing setup, build, or test commands, read the Rollipop repository's local guidance such as `README.md`, `AGENTS.md`, package scripts, or other project docs. Follow that repository's instructions for initial setup, build, and test commands instead of guessing from memory.
+4. In the Rolldown fork, build release artifacts for the current synced state. The Rollipop project normally consumes the native `.node` binary from `packages/rolldown`.
+5. Decide whether binary replacement is enough:
+   - Rollipop installs the JS package at `rollipop/node_modules/@rollipop/rolldown`.
+   - Rollipop installs native binding packages beside it at `rollipop/node_modules/@rollipop/rolldown-binding-<platform>-<arch>`. Copy or move the generated `.node` binary into this binding package directory for the current architecture.
+   - If the Rolldown binding package changed, pack `@rollipop/rolldown` and install that packed package into the Rollipop project. Before packing, temporarily change the packed package's native binding dependency from the just-bumped unpublished workspace version to the latest already-published major-compatible range, for example `^1`, so Rollipop can install the package before the local `.node` binary is copied into place. Restore the fork package metadata after packing.
+6. After the packed package is installed successfully, copy the rebuilt `.node` binary into the installed native package directory for the current architecture.
+7. Run the Rollipop test command requested by the user, or use the normal full test command from the Rollipop repository guidance if none was specified.
+8. If tests fail, determine whether the issue belongs in Rolldown or Rollipop:
+   - For Rolldown-side issues, fix the fork, rerun the relevant Rolldown checks, rebuild the release binary, replace it in Rollipop, and rerun Rollipop tests.
+   - For Rollipop-side required adaptations, report the needed Rollipop change clearly and do not hide it inside the Rolldown merge.
+9. Repeat until the Rollipop tests pass or a clear external blocker remains.
+10. Return to the Rolldown fork, report the Rollipop integration result, and ask for review before creating the merge commit.
+
+Extra guardrails learned from integration testing:
+
+- Resolve actual installed package locations from the Rollipop project before copying files. The expected layout is under the Rollipop project root, but package managers may hoist or link differently:
+
+  ```bash
+  node -p "require.resolve('@rollipop/rolldown/package.json')"
+  node -p "require.resolve('@rollipop/rolldown-binding-darwin-arm64/package.json')"
+  ```
+
+- Inspect the packed tarball's `package.json` before installing it. `pnpm pack` may not include the same native `optionalDependencies` metadata that a real publish/prepublish step would generate, so do not assume the packed package will install unpublished binding packages automatically:
+
+  ```bash
+  tar -xOf /path/to/rollipop-rolldown-*.tgz package/package.json
+  ```
+
+- If the generated JS glue checks the native package version, temporarily adjust the installed native binding package's `package.json` version only inside the Rollipop test install, then restore it. Keep this as a test-only `node_modules` change.
+- Scope `NAPI_RS_ENFORCE_VERSION_CHECK=1` to a focused Rolldown smoke test if needed. Do not run the full Rollipop test command with that environment variable unless requested; unrelated native packages in Rollipop can fail their own version checks and hide the Rolldown result.
+- Back up every Rollipop `node_modules` directory or file you replace, restore it after testing, and verify the Rollipop working tree is clean. Do not commit Rollipop-side lockfile or install changes as part of the Rolldown upstream sync.
+
+Do not let Rollipop integration testing replace the normal `just roll` gate. It is an extra compatibility check after the fork itself is already green.

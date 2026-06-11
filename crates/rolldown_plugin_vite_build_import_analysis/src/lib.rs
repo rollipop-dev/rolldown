@@ -12,11 +12,11 @@ use arcstr::ArcStr;
 use itertools::Itertools as _;
 use oxc::ast_visit::VisitMut;
 use rolldown_common::{Output, side_effects::HookSideEffects};
-use rolldown_ecmascript_utils::AstSnippet;
+use rolldown_ecmascript_utils::AstFactory;
 use rolldown_plugin::{
   HookLoadArgs, HookLoadOutput, HookLoadReturn, HookRenderChunkOutput, HookResolveIdArgs,
   HookResolveIdOutput, HookResolveIdReturn, HookTransformAstArgs, HookTransformAstReturn,
-  HookUsage, Plugin, PluginContext, SharedLoadPluginContext,
+  HookTransformOutputMap, HookUsage, Plugin, PluginContext, SharedLoadPluginContext,
 };
 use rolldown_plugin_utils::{
   AssetUrlResult, ModulePreload, RenderBuiltUrl, ToOutputFilePathEnv,
@@ -97,9 +97,9 @@ impl Plugin for ViteBuildImportAnalysisPlugin {
   ) -> HookTransformAstReturn {
     let mut ast = args.ast;
     ast.program.with_mut(|fields| {
-      let builder = AstSnippet::new(fields.allocator);
+      let ast_factory = AstFactory::new(fields.allocator);
       let mut visitor = BuildImportAnalysisVisitor::new(
-        builder,
+        ast_factory,
         self.insert_preload,
         self.render_built_url,
         self.is_relative_base,
@@ -127,7 +127,7 @@ impl Plugin for ViteBuildImportAnalysisPlugin {
         bytes[index + replacement_bytes.len()..index + IS_MODERN_FLAG.len()].fill(b' ');
       }
 
-      Ok(Some(HookRenderChunkOutput { code, map: None }))
+      Ok(Some(HookRenderChunkOutput { code, map: HookTransformOutputMap::Null }))
     } else {
       Ok(None)
     }

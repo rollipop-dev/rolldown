@@ -1,4 +1,4 @@
-# @rolldown/debug
+# @rollipop/rolldown-debug
 
 Utilities and generated TypeScript types for reading Rolldown devtools output.
 
@@ -16,7 +16,7 @@ node_modules/.rolldown/<session_id>/
 
 ```ts
 import fs from 'node:fs';
-import { parseToEvents, type Event, type StringRef } from '@rolldown/debug';
+import { parseToEvents, type Event, type StringRef } from '@rollipop/rolldown-debug';
 
 const data = fs.readFileSync('node_modules/.rolldown/<session_id>/logs.json', 'utf8');
 const events = parseToEvents(data.trim());
@@ -33,7 +33,7 @@ Use `PackageGraphReady` to build a package table. In watch/rebuild sessions, `lo
 
 ```ts
 import fs from 'node:fs';
-import { parseToEvents, type Event, type StringRef } from '@rolldown/debug';
+import { parseToEvents, type Event, type StringRef } from '@rollipop/rolldown-debug';
 
 type ActionEvent = Exclude<Event, StringRef> & { build_id: string };
 
