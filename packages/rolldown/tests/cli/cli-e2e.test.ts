@@ -1,5 +1,5 @@
 import { stripAnsi } from 'consola/utils';
-import { $, execa } from 'execa';
+import { $ as base$, execa as baseExeca } from 'execa';
 import fs from 'node:fs';
 import path from 'node:path';
 import { testsDir } from 'rolldown-tests/utils';
@@ -8,6 +8,26 @@ import { describe, expect, it, test, vi } from 'vitest';
 function cliFixturesDir(...joined: string[]) {
   return testsDir('cli/fixtures', ...joined);
 }
+
+const pathKey = Object.keys(process.env).find((key) => key.toLowerCase() === 'path') ?? 'PATH';
+const workspaceCliBinDir = path.join(testsDir(), 'node_modules', '.bin');
+
+type CliExecaOptions = { env?: NodeJS.ProcessEnv; [key: string]: unknown };
+
+function withWorkspaceCli<T extends CliExecaOptions>(options: T = {} as T) {
+  const envPath = options.env?.[pathKey] ?? process.env[pathKey];
+  return {
+    ...options,
+    preferLocal: false,
+    env: {
+      ...options.env,
+      [pathKey]: [workspaceCliBinDir, envPath].filter(Boolean).join(path.delimiter),
+    },
+  };
+}
+
+const $ = base$(withWorkspaceCli());
+const execa = baseExeca(withWorkspaceCli());
 
 // remove `Finished in x ms` since it is not deterministic
 // remove Ansi colors for snapshot testing
@@ -33,7 +53,7 @@ function createStreamWaiter(stream: NodeJS.ReadableStream) {
 describe('should not hang after running', () => {
   test.skip('basic', async () => {
     const cwd = cliFixturesDir('no-config');
-    const _ret = execa(`rolldown`, { cwd });
+    const _ret = execa({ cwd })`rolldown`;
   });
 });
 
