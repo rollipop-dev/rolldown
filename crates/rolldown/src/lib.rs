@@ -37,3 +37,6 @@ pub use rolldown_plugin as plugin;
 
 #[cfg(feature = "testing")]
 pub use crate::utils::determine_minify_internal_exports_default;
+
+// MARK: - Rollipop
+mod rollipop;

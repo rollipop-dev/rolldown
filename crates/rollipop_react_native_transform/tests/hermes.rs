@@ -47,7 +47,7 @@ const asciiCtor = new RegExp('\\p{ASCII}+', 'u');
 }
 
 #[test]
-fn preserves_private_field_updates_after_object_freeze_for_hermes_targets() {
+fn preserves_native_private_field_updates_after_object_freeze_for_hermes_targets() {
   for runtime_target in [RuntimeTarget::Hermes, RuntimeTarget::HermesV1] {
     let code = transform(
       runtime_target,
@@ -65,7 +65,18 @@ fn preserves_private_field_updates_after_object_freeze_for_hermes_targets() {
 ",
     );
 
-    assert!(code.contains("WeakMap"), "private field did not use spec storage: {code}");
+    match runtime_target {
+      RuntimeTarget::Hermes => {
+        assert!(code.contains("WeakMap"), "private field did not use spec storage: {code}");
+      }
+      RuntimeTarget::HermesV1 => {
+        assert!(code.contains("#hasPlaceholderTypes"), "private field was lowered: {code}");
+        assert!(
+          code.contains("this.#hasPlaceholderTypes"),
+          "private field access was lowered: {code}"
+        );
+      }
+    }
     assert!(
       !code.contains("Object.defineProperty(this, _hasPlaceholderTypes"),
       "private field was lowered to a frozen own property: {code}"
@@ -74,7 +85,7 @@ fn preserves_private_field_updates_after_object_freeze_for_hermes_targets() {
 }
 
 #[test]
-fn preserves_public_field_assignment_for_hermes_targets() {
+fn preserves_native_public_field_assignment_for_hermes_targets() {
   for runtime_target in [RuntimeTarget::Hermes, RuntimeTarget::HermesV1] {
     let code = transform(
       runtime_target,
@@ -84,7 +95,7 @@ fn preserves_public_field_assignment_for_hermes_targets() {
 ",
     );
 
-    assert!(code.contains("this.value = 1"), "public field was not assigned directly: {code}");
+    assert!(code.contains("value = 1;"), "public field was lowered: {code}");
     assert!(
       !code.contains(r#"_define_property(this, "value""#),
       "public field was lowered with defineProperty: {code}"

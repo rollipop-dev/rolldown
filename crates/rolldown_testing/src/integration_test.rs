@@ -109,6 +109,7 @@ impl IntegrationTest {
     let source_type = match options.format {
       OutputFormat::Cjs => SourceType::cjs(),
       OutputFormat::Esm | OutputFormat::Iife | OutputFormat::Umd => SourceType::mjs(),
+      OutputFormat::Rollipop => options.format.source_type(),
     };
 
     for output in &bundle_output.assets {

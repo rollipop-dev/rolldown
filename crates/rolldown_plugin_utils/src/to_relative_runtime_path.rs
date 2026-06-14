@@ -23,6 +23,7 @@ pub fn create_to_import_meta_url_based_relative_runtime(
         iife
       }
     }
+    OutputFormat::Rollipop => rollipop,
   };
   move |filename: &Path, importer: &Path| -> AssetUrlResult {
     let path = filename.relative(importer.parent().unwrap_or(importer));
@@ -56,6 +57,14 @@ fn umd(path: &str) -> String {
 
 fn worker_iife(path: &str) -> String {
   format!("new URL('{}', self.location.href).href", escape_id(&partial_encode_url_path(path)))
+}
+
+fn rollipop(path: &str) -> String {
+  format!(
+    "(typeof document === 'undefined' ? {} : {})",
+    get_file_url_from_relative_path(path),
+    get_relative_url_from_document(path, false)
+  )
 }
 
 pub fn partial_encode_url_path(url: &str) -> Cow<'_, str> {

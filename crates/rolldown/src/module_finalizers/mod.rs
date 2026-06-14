@@ -32,6 +32,9 @@ use rolldown_utils::indexmap::{FxIndexMap, FxIndexSet};
 use rustc_hash::{FxHashMap, FxHashSet};
 use sugar_path::SugarPath;
 
+// MARK: - Rollipop
+pub mod rollipop;
+
 use crate::utils::external_import_interop::import_record_needs_interop;
 
 mod hmr;
@@ -870,7 +873,7 @@ impl<'me, 'ast> ScopeHoistingFinalizer<'me, 'ast> {
           });
           re_export_external_stmts = Some(stmts.collect::<Vec<_>>());
         }
-        OutputFormat::Cjs | OutputFormat::Iife | OutputFormat::Umd => {
+        OutputFormat::Cjs | OutputFormat::Iife | OutputFormat::Umd | OutputFormat::Rollipop => {
           let stmts = export_all_externals_rec_ids.iter().copied().filter_map(|idx| {
             // importer_exports
             let (importer_namespace_ref_expr, _) = self.finalized_expr_for_symbol_ref(
@@ -1727,7 +1730,8 @@ impl<'me, 'ast> ScopeHoistingFinalizer<'me, 'ast> {
                   rolldown_common::OutputFormat::Esm
                   | rolldown_common::OutputFormat::Iife
                   | rolldown_common::OutputFormat::Umd
-                  | rolldown_common::OutputFormat::Cjs => {
+                  | rolldown_common::OutputFormat::Cjs
+                  | rolldown_common::OutputFormat::Rollipop => {
                     // Just remove the statement
                     return;
                   }

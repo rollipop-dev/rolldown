@@ -169,7 +169,9 @@ pub fn prepare_build_context(
 
   let platform = raw_options.platform.unwrap_or(match format {
     OutputFormat::Cjs => Platform::Node,
-    OutputFormat::Esm | OutputFormat::Iife | OutputFormat::Umd => Platform::Browser,
+    OutputFormat::Esm | OutputFormat::Iife | OutputFormat::Umd | OutputFormat::Rollipop => {
+      Platform::Browser
+    }
   });
 
   let raw_minify = raw_options.minify.unwrap_or_default();

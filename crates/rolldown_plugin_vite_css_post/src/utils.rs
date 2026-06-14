@@ -274,6 +274,9 @@ impl ViteCSSPostPlugin {
           OutputFormat::Cjs => {
             return Err(anyhow::anyhow!("CJS format is not supported for CSS injection"));
           }
+          OutputFormat::Rollipop => {
+            return Err(anyhow::anyhow!("Rollipop format is not supported for CSS injection"));
+          }
         };
 
         let content = serde_json::to_string(&self.finalize_css(css_chunk).await?)?;

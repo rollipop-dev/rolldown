@@ -111,6 +111,9 @@ mod on_demand_wrapping;
 mod post_banner_footer;
 mod render_chunk_to_assets;
 
+// MARK: - Rollipop
+mod finalize_rollipop_modules;
+
 pub struct GenerateStage<'a> {
   link_output: &'a mut LinkStageOutput,
   /// Per-module AST table threaded by value from `LinkStage::link()`. Moved out
@@ -200,8 +203,12 @@ impl<'a> GenerateStage<'a> {
     }
 
     let mut ast_table = std::mem::take(&mut self.ast_table);
-    self.compute_wrapped_esm_init_metadata(&ast_table, &chunk_graph);
-    self.finalize_modules(&mut chunk_graph, &mut ast_table);
+    if matches!(self.options.format, rolldown_common::OutputFormat::Rollipop) {
+      self.finalize_rollipop_modules(&chunk_graph, &mut ast_table);
+    } else {
+      self.compute_wrapped_esm_init_metadata(&ast_table, &chunk_graph);
+      self.finalize_modules(&mut chunk_graph, &mut ast_table);
+    }
     self.detect_ineffective_dynamic_imports(&chunk_graph);
     self.render_chunk_to_assets(&chunk_graph, ast_table).await
   }

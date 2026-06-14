@@ -140,6 +140,9 @@ function bindingifyFormat(format: OutputOptions['format']): BindingOutputOptions
     case 'umd': {
       return 'umd';
     }
+    case 'rollipop': {
+      return 'rollipop';
+    }
     default:
       unimplemented(`output.format: ${format}`);
   }

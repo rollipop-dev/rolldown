@@ -12,6 +12,9 @@ use rolldown_common::{
 };
 use rolldown_utils::concat_string;
 
+use crate::rollipop::{
+  ROLLIPOP_EXPORTS_NAME, ROLLIPOP_GLOBAL_NAME, ROLLIPOP_MODULE_NAME, ROLLIPOP_REQUIRE_NAME,
+};
 use crate::stages::link_stage::LinkStageOutput;
 
 #[derive(Debug)]
@@ -52,6 +55,12 @@ impl<'name> Renamer<'name> {
         OutputFormat::Esm => &[],
         OutputFormat::Cjs => &["module", "require", "__filename", "__dirname", "exports"],
         OutputFormat::Iife | OutputFormat::Umd => &["exports"], // Also for  AMD, but we don't support them yet.
+        OutputFormat::Rollipop => &[
+          ROLLIPOP_GLOBAL_NAME,
+          ROLLIPOP_MODULE_NAME,
+          ROLLIPOP_EXPORTS_NAME,
+          ROLLIPOP_REQUIRE_NAME,
+        ],
       };
 
       manual_reserved

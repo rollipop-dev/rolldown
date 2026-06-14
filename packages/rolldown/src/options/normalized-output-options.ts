@@ -22,7 +22,7 @@ type PathsFunction = (id: string) => string;
  * A normalized version of {@linkcode ModuleFormat}.
  * @category Plugin APIs
  */
-export type InternalModuleFormat = 'es' | 'cjs' | 'iife' | 'umd';
+export type InternalModuleFormat = 'es' | 'cjs' | 'iife' | 'umd' | 'rollipop';
 
 /** @category Plugin APIs */
 export interface NormalizedOutputOptions {
@@ -142,7 +142,7 @@ export class NormalizedOutputOptionsImpl
   }
 
   @lazyProp
-  get format(): 'es' | 'cjs' | 'iife' | 'umd' {
+  get format(): InternalModuleFormat {
     return this.inner.format;
   }
 

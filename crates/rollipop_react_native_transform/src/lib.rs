@@ -424,27 +424,13 @@ impl Transformer {
 
           match self.options.runtime_target {
             RuntimeTarget::HermesV1 => (
-              (
-                hermes_regexp(RuntimeTarget::HermesV1),
-                template_literal_caching(),
-                async_arrow_non_simple_params(),
-                super_in_object_accessor(),
-                class_in_finally(),
-                static_blocks(),
-              ),
-              (
-                // Hermes V1 has native class support, but optimized bytecode can
-                // still miscompile class bindings. Lower classes until
-                // https://github.com/facebook/hermes/issues/2035 is fixed.
-                class_properties(hermes_class_properties_config(), unresolved_mark),
-                private_in_object(),
-                async_to_generator(async_to_generator::Config::default(), unresolved_mark),
-                object_rest_spread(object_rest_spread::Config::default()),
-                parameters(parameters::Config::default(), unresolved_mark),
-                destructuring(destructuring::Config::default()),
-                classes(classes::Config::default()),
-                block_scoping(unresolved_mark),
-              ),
+              hermes_regexp(RuntimeTarget::HermesV1),
+              template_literal_caching(),
+              async_arrow_non_simple_params(),
+              super_in_object_accessor(),
+              class_in_finally(),
+              async_to_generator(async_to_generator::Config::default(), unresolved_mark),
+              block_scoping(unresolved_mark),
             )
               .process(&mut program),
             RuntimeTarget::Hermes => (

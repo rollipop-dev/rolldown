@@ -657,7 +657,8 @@
         "esm",
         "cjs",
         "iife",
-        "umd"
+        "umd",
+        "rollipop"
       ]
     },
     "OutputExports": {
