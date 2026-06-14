@@ -249,7 +249,9 @@ impl GenerateStage<'_> {
   ) -> Vec<Vec<Option<ModuleRenderOutput>>> {
     let needs_extra_indent = matches!(
       self.options.format,
-      rolldown_common::OutputFormat::Iife | rolldown_common::OutputFormat::Umd
+      rolldown_common::OutputFormat::Iife
+        | rolldown_common::OutputFormat::Umd
+        | rolldown_common::OutputFormat::Rollipop
     );
     chunk_graph
       .chunk_table

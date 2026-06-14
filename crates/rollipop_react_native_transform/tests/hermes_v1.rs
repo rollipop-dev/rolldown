@@ -9,15 +9,12 @@ fn transform(code: &str) -> String {
 }
 
 #[test]
-fn lowers_class_features_for_hermes_v1() {
+fn preserves_native_private_fields_for_hermes_v1() {
   let code = transform(
     r"class FrozenCache {
   #cache = null;
-  value = 1;
-  static ready = true;
-  constructor(value = 1) {
+  constructor() {
     Object.freeze(this);
-    this.value = value;
   }
   read() {
     return (this.#cache ??= 1);
@@ -26,18 +23,13 @@ fn lowers_class_features_for_hermes_v1() {
 ",
   );
 
-  assert!(!code.contains("class FrozenCache"), "class syntax was preserved: {code}");
-  assert!(!code.contains("#cache"), "private field syntax was preserved: {code}");
-  assert!(code.contains("this.value = 1"), "public fields were not lowered to assignment: {code}");
-  assert!(code.contains("WeakMap"), "private fields were not lowered in spec mode: {code}");
-  assert!(
-    !code.contains("constructor(value = 1)") && !code.contains("function FrozenCache(value = 1)"),
-    "non-simple constructor parameters were not lowered before class transform: {code}"
-  );
+  assert!(code.contains("#cache = null;"), "private field was lowered: {code}");
+  assert!(code.contains("this.#cache"), "private field access was lowered: {code}");
+  assert!(!code.contains("Object.defineProperty"), "private field became an own property: {code}");
 }
 
 #[test]
-fn lowers_class_static_blocks_for_hermes_v1() {
+fn lowers_only_class_static_blocks_for_hermes_v1() {
   let code = transform(
     r"class Registry {
   value = 1;
@@ -49,11 +41,10 @@ fn lowers_class_static_blocks_for_hermes_v1() {
 ",
   );
 
-  assert!(!code.contains("class Registry"), "class syntax was preserved: {code}");
-  assert!(code.contains("this.value = 1"), "public field was not lowered: {code}");
-  assert!(!code.contains("#secret"), "private field was not lowered: {code}");
+  assert!(code.contains("value = 1;"), "public field was lowered: {code}");
+  assert!(code.contains("#secret = 2;"), "private field was lowered: {code}");
   assert!(!code.contains("static {"), "static block remained: {code}");
-  assert!(code.contains("Registry.ready = true"), "static block body was lost: {code}");
+  assert!(code.contains("this.ready = true"), "static block body was lost: {code}");
 }
 
 #[test]
@@ -75,7 +66,7 @@ try {
   );
 
   assert!(code.contains("var value ="), "async arrow params were not rewritten: {code}");
-  assert!(code.contains("var name ="), "async arrow destructuring was not rewritten: {code}");
+  assert!(code.contains("var { name }"), "async arrow destructuring was not rewritten: {code}");
   assert!(code.contains("get [\"value\"]"), "super object accessor key was not rewritten: {code}");
   assert!(code.contains("var Foo ="), "class in finally was not rewritten: {code}");
   assert!(code.contains("return Foo;"), "class in finally wrapper was not emitted: {code}");

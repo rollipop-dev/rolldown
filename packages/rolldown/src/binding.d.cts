@@ -1762,7 +1762,7 @@ export declare class BindingNormalizedOptions {
   get assetFilenames(): string | undefined
   get dir(): string | null
   get file(): string | null
-  get format(): 'es' | 'cjs' | 'iife' | 'umd'
+  get format(): 'es' | 'cjs' | 'iife' | 'umd' | 'rollipop'
   get exports(): 'default' | 'named' | 'none' | 'auto'
   get esModule(): boolean | 'if-default-prop'
   get codeSplitting(): boolean
@@ -2595,7 +2595,7 @@ export interface BindingOutputOptions {
   exports?: 'default' | 'named' | 'none' | 'auto'
   extend?: boolean
   externalLiveBindings?: boolean
-  format?: 'es' | 'cjs' | 'iife' | 'umd'
+  format?: 'es' | 'cjs' | 'iife' | 'umd' | 'rollipop'
   generatedCode?: BindingGeneratedCodeOptions
   globals?: Record<string, string> | ((name: string) => string)
   hashCharacters?: 'base64' | 'base36' | 'hex'

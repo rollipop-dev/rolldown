@@ -72,6 +72,7 @@ pub fn render_wrapped_entry_chunk(
               Some(concat_string!("return ", wrapper_ref_name, "();\n"))
             }
           }
+          OutputFormat::Rollipop => None,
         }
       }
       WrapKind::None => None,
@@ -298,6 +299,7 @@ pub fn render_chunk_exports(
       }
       Some(s)
     }
+    OutputFormat::Rollipop => None,
   }
 }
 

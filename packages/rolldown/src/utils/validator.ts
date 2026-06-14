@@ -771,6 +771,7 @@ const ModuleFormatSchema = v.union([
   v.literal('commonjs'),
   v.literal('iife'),
   v.literal('umd'),
+  v.literal('rollipop'),
 ]);
 isTypeTrue<IsSchemaSubType<typeof ModuleFormatSchema, ModuleFormat>>();
 

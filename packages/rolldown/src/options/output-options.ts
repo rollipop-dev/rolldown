@@ -51,7 +51,15 @@ export interface GeneratedCodeOptions {
 }
 
 /** @inline */
-export type ModuleFormat = 'es' | 'cjs' | 'esm' | 'module' | 'commonjs' | 'iife' | 'umd';
+export type ModuleFormat =
+  | 'es'
+  | 'cjs'
+  | 'esm'
+  | 'module'
+  | 'commonjs'
+  | 'iife'
+  | 'umd'
+  | 'rollipop';
 
 /** @inline */
 export type AddonFunction = (chunk: RenderedChunk) => string | Promise<string>;

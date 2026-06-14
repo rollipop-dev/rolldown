@@ -6,8 +6,8 @@ use oxc_index::IndexVec;
 use rolldown_common::common_debug_symbol_ref;
 use rolldown_common::{
   ConstExportMeta, DependedRuntimeHelperMap, EntryPoint, EntryPointKind, FlatOptions, ImportKind,
-  ModuleIdx, ModuleTable, PreserveEntrySignatures, RuntimeModuleBrief, SymbolRef, SymbolRefDb,
-  UsedSymbolRefs, dynamic_import_usage::DynamicImportExportsUsage,
+  ModuleIdx, ModuleTable, OutputFormat, PreserveEntrySignatures, RuntimeModuleBrief, SymbolRef,
+  SymbolRefDb, UsedSymbolRefs, dynamic_import_usage::DynamicImportExportsUsage,
 };
 use rolldown_error::BuildDiagnostic;
 #[cfg(target_family = "wasm")]
@@ -127,7 +127,9 @@ pub struct LinkStage<'a> {
 impl<'a> LinkStage<'a> {
   pub fn new(mut scan_stage_output: NormalizedScanStageOutput, options: &'a SharedOptions) -> Self {
     // since constant export is spared in most of time, aggregate them would make searching more efficient
-    let constant_symbol_map = if options.optimization.is_inline_const_enabled() {
+    let constant_symbol_map = if options.optimization.is_inline_const_enabled()
+      && !matches!(options.format, OutputFormat::Rollipop)
+    {
       scan_stage_output
         .module_table
         .modules

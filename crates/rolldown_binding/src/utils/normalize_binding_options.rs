@@ -375,6 +375,7 @@ pub fn normalize_binding_options(
           "cjs" => OutputFormat::Cjs,
           "iife" => OutputFormat::Iife,
           "umd" => OutputFormat::Umd,
+          "rollipop" => OutputFormat::Rollipop,
           _ => {
             return Err(napi::Error::new(
               napi::Status::InvalidArg,

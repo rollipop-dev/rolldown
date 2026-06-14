@@ -19,7 +19,9 @@ use rolldown_utils::rayon::{IntoParallelRefIterator, ParallelIterator};
 use rustc_hash::FxHashMap;
 
 use super::format::utils::is_use_strict_directive;
-use super::format::{cjs::render_cjs, esm::render_esm, iife::render_iife, umd::render_umd};
+use super::format::{
+  cjs::render_cjs, esm::render_esm, iife::render_iife, rollipop::render_rollipop, umd::render_umd,
+};
 
 pub type RenderedModuleSources = Vec<RenderedModuleSource>;
 
@@ -255,6 +257,9 @@ impl Generator for EcmaGenerator {
           Ok(source_joiner) => source_joiner,
           Err(errors) => return Ok(Err(errors)),
         }
+      }
+      OutputFormat::Rollipop => {
+        render_rollipop(ctx, &addon_render_context, &rendered_module_sources)
       }
     };
 
