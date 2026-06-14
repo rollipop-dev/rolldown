@@ -1,4 +1,15 @@
 
+## [1.0.13] - 2026-06-14
+
+### 🚀 Features
+
+- add Rollipop module format (#22)
+
+### 🧪 Testing
+
+- fix invalid rolldown bin path
+
+
 ## [1.1.1] - 2026-06-11
 
 ### 🚀 Features
