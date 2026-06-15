@@ -10,7 +10,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha || github.event.issue.number }}
-  cancel-in-progress: ${{ github.ref_name != 'rollipop' }}
+  cancel-in-progress: ${{ github.ref_name != 'main' }}
 
 jobs:
   needs-reproduction:

@@ -38,7 +38,7 @@ jobs:
         with:
           tools: just
           cache-key: cargo-test
-          save-cache: ${{ github.ref_name == 'rollipop' }}
+          save-cache: ${{ github.ref_name == 'main' }}
           target-dir: ${{ runner.os == 'Windows' && format('{0}/target', env.DEV_DRIVE) || '' }}
 
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1 # v1.12.0

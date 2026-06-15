@@ -10,13 +10,13 @@ on:
   merge_group:
   push:
     branches:
-      - rollipop
+      - main
       - 'renovate/**' # For renovate bot "automerge": true
   workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: ${{ github.ref_name != 'rollipop' }}
+  cancel-in-progress: ${{ github.ref_name != 'main' }}
 
 jobs:
   # JOB to run change detection
@@ -26,9 +26,9 @@ jobs:
     permissions:
       pull-requests: read
     outputs:
-      rust-changes: ${{ (steps.filter.outputs.rust-changes == 'true') || (github.ref_name == 'rollipop') }}
-      node-changes: ${{ (steps.filter.outputs.node-changes == 'true') || (github.ref_name == 'rollipop') }}
-      docs-changes: ${{ (steps.filter.outputs.docs-changes == 'true') || (github.ref_name == 'rollipop') }}
+      rust-changes: ${{ (steps.filter.outputs.rust-changes == 'true') || (github.ref_name == 'main') }}
+      node-changes: ${{ (steps.filter.outputs.node-changes == 'true') || (github.ref_name == 'main') }}
+      docs-changes: ${{ (steps.filter.outputs.docs-changes == 'true') || (github.ref_name == 'main') }}
       # Allows opting into Windows CI per-PR by adding the `ci: windows` label.
       run-windows: "${{ (github.event_name == 'pull_request') && contains(github.event.pull_request.labels.*.name, 'ci: windows') }}"
     steps:
@@ -68,9 +68,9 @@ jobs:
               - 'packages/rolldown/tsconfig*.json'
       - name: Show outputs
         run: |
-          echo "Rust changes: ${{ (steps.filter.outputs.rust-changes == 'true') || (github.ref_name == 'rollipop') }}"
-          echo "Node changes: ${{ (steps.filter.outputs.node-changes == 'true') || (github.ref_name == 'rollipop') }}"
-          echo "Docs changes: ${{ (steps.filter.outputs.docs-changes == 'true') || (github.ref_name == 'rollipop') }}"
+          echo "Rust changes: ${{ (steps.filter.outputs.rust-changes == 'true') || (github.ref_name == 'main') }}"
+          echo "Node changes: ${{ (steps.filter.outputs.node-changes == 'true') || (github.ref_name == 'main') }}"
+          echo "Docs changes: ${{ (steps.filter.outputs.docs-changes == 'true') || (github.ref_name == 'main') }}"
 
   rust-validation:
     name: Rust Validation
@@ -85,7 +85,7 @@ jobs:
         with:
           tools: just
           cache-key: lint
-          save-cache: ${{ github.ref_name == 'rollipop' }}
+          save-cache: ${{ github.ref_name == 'main' }}
           components: clippy rustfmt
 
       - run: just lint-rust
@@ -95,7 +95,7 @@ jobs:
     strategy:
       matrix:
         target: >-
-          ${{ (github.ref_name == 'rollipop') && fromJSON('["ubuntu-latest","macos-latest"]')
+          ${{ (github.ref_name == 'main') && fromJSON('["ubuntu-latest","macos-latest"]')
               || (needs.changes.outputs.run-windows == 'true') && fromJSON('["ubuntu-latest","windows-latest"]')
               || fromJSON('["ubuntu-latest"]') }}
     uses: ./.github/workflows/reusable-cargo-test.yml
@@ -107,7 +107,7 @@ jobs:
     needs: [changes, build-rolldown-windows]
     uses: ./.github/workflows/reusable-node-test.yml
     if: |
-      (github.ref_name == 'rollipop' || needs.changes.outputs.run-windows == 'true') &&
+      (github.ref_name == 'main' || needs.changes.outputs.run-windows == 'true') &&
       always() &&
       (needs.build-rolldown-windows.result == 'success' || needs.build-rolldown-windows.result == 'skipped')
     with:
@@ -119,7 +119,7 @@ jobs:
     needs: [changes, build-rolldown-macos]
     uses: ./.github/workflows/reusable-node-test.yml
     if: |
-      github.ref_name == 'rollipop' &&
+      github.ref_name == 'main' &&
       always() &&
       (needs.build-rolldown-macos.result == 'success' || needs.build-rolldown-macos.result == 'skipped')
     with:
@@ -156,7 +156,7 @@ jobs:
     needs: [changes, build-rolldown-windows]
     uses: ./.github/workflows/reusable-node-dev-server-test.yml
     if: |
-      (github.ref_name == 'rollipop' || needs.changes.outputs.run-windows == 'true') &&
+      (github.ref_name == 'main' || needs.changes.outputs.run-windows == 'true') &&
       always() &&
       (needs.build-rolldown-windows.result == 'success' || needs.build-rolldown-windows.result == 'skipped')
     with:
@@ -168,7 +168,7 @@ jobs:
     needs: [changes, build-rolldown-macos]
     uses: ./.github/workflows/reusable-node-dev-server-test.yml
     if: |
-      github.ref_name == 'rollipop' &&
+      github.ref_name == 'main' &&
       always() &&
       (needs.build-rolldown-macos.result == 'success' || needs.build-rolldown-macos.result == 'skipped')
     with:
@@ -230,7 +230,7 @@ jobs:
     name: Vite Test Windows
     needs: [changes, build-rolldown-windows]
     if: |
-      (github.ref_name == 'rollipop' || needs.changes.outputs.run-windows == 'true') &&
+      (github.ref_name == 'main' || needs.changes.outputs.run-windows == 'true') &&
       always() &&
       (needs.build-rolldown-windows.result == 'success' || needs.build-rolldown-windows.result == 'skipped')
     runs-on: windows-latest
@@ -266,7 +266,7 @@ jobs:
 
   build-rolldown-windows:
     needs: changes
-    if: github.ref_name == 'rollipop' || needs.changes.outputs.run-windows == 'true'
+    if: github.ref_name == 'main' || needs.changes.outputs.run-windows == 'true'
     uses: ./.github/workflows/reusable-native-build.yml
     with:
       changed: ${{ needs.changes.outputs.node-changes == 'true' }}
@@ -274,7 +274,7 @@ jobs:
 
   build-rolldown-macos:
     needs: changes
-    if: github.ref_name == 'rollipop'
+    if: github.ref_name == 'main'
     uses: ./.github/workflows/reusable-native-build.yml
     with:
       changed: ${{ needs.changes.outputs.node-changes == 'true' }}
@@ -355,7 +355,7 @@ jobs:
         uses: oxc-project/setup-rust@3d6fb132fbe7cdcb66bf8ec193911c2945369d12 # v1.0.17
         with:
           cache-key: repo-validation
-          save-cache: ${{ github.ref_name == 'rollipop' }}
+          save-cache: ${{ github.ref_name == 'main' }}
           components: rustfmt
 
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1 # v1.12.0

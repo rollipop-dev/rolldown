@@ -5,7 +5,7 @@ permissions: {}
 on:
   push:
     branches:
-      - rollipop
+      - main
     paths:
       - packages/rolldown/package.json
 

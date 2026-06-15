@@ -1,16 +1,16 @@
 ---
 name: rollipop-upstream-sync
-description: Sync upstream rolldown/rolldown main into the rollipop-dev/rolldown rollipop fork branch, resolve fork-specific conflicts, preserve @rollipop package names and custom Rollipop patches, keep pluginutils aligned with upstream's rolldown/plugins package, and iterate until `just roll` passes.
+description: Sync upstream rolldown/rolldown main into the rollipop-dev/rolldown main fork branch, resolve fork-specific conflicts, preserve @rollipop package names and custom Rollipop patches, keep pluginutils aligned with upstream's rolldown/plugins package, and iterate until `just roll` passes.
 ---
 
 # Rollipop upstream sync
 
-Use this skill when syncing upstream `rolldown/rolldown` `main` into the Rollipop fork (`rollipop-dev/rolldown`, branch `rollipop`). This fork produces the Rolldown build used by the Rollipop project, so upstream changes must be merged while preserving fork-specific package names, custom plugins, release behavior, and compatibility patches.
+Use this skill when syncing upstream `rolldown/rolldown` `main` into the Rollipop fork (`rollipop-dev/rolldown`, branch `main`). This fork produces the Rolldown build used by the Rollipop project, so upstream changes must be merged while preserving fork-specific package names, custom plugins, release behavior, and compatibility patches.
 
 ## Success criteria
 
-- The local `rollipop` branch starts from the latest `origin/rollipop`.
-- Upstream `main` is merged into `rollipop`.
+- The local `main` branch starts from the latest `origin/main`.
+- Upstream `main` is merged into the fork's `main`.
 - Fork-specific behavior is preserved and clearly marked.
 - The pnpm catalog `rolldown` version matches the synced upstream `packages/rolldown` version.
 - After the upstream sync, each npm-published fork-managed package under `packages/*` has its patch version bumped from the pre-sync fork version.
@@ -31,17 +31,17 @@ Use this skill when syncing upstream `rolldown/rolldown` `main` into the Rollipo
 2. Fetch and verify the local branch is not behind remote:
 
    ```bash
-   git fetch origin rollipop
-   git rev-list --left-right --count HEAD...origin/rollipop
+   git fetch origin main
+   git rev-list --left-right --count HEAD...origin/main
    ```
 
    If the right-side count is nonzero, run:
 
    ```bash
-   git pull --ff-only origin rollipop
+   git pull --ff-only origin main
    ```
 
-   Do not start the sync from a branch that is behind `origin/rollipop`.
+   Do not start the sync from a branch that is behind `origin/main`.
 
 3. Fetch upstream:
 
@@ -178,7 +178,7 @@ During every sync, ensure the fork still follows that shape:
 
 ## Conflict heuristics
 
-- **Workflows:** preserve Rollipop branch names, repository guards, package names, and publish behavior. Upstream workflow improvements can be adopted when they still apply to the fork.
+- **Workflows:** preserve Rollipop repository guards, package names, and publish behavior. Upstream workflow improvements can be adopted when they still apply to the fork.
 - **OXC/Rolldown API changes:** when an upstream API change breaks Rollipop code, first find the closest migrated implementation in Rolldown's upstream-owned code and follow that structure. For example, if sourcemap APIs move from borrowed to owned values, mirror nearby `OwnedSourceMap` handling instead of inventing a fork-only pattern.
 - **Generated bindings:** update Rust binding definitions first, then run `just build-rolldown`; do not hand-maintain generated declarations except as a temporary diagnostic.
 - **Lockfiles:** after resolving `package.json` / `Cargo.toml`, regenerate with `pnpm install --no-frozen-lockfile` and the relevant Cargo command (`cargo update ...` or the `just` recipe that triggered it).

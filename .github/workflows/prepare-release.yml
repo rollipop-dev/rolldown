@@ -80,6 +80,6 @@ jobs:
           body: ${{ steps.changelog.outputs.content }}
           branch: release-v${{ env.VERSION }}
           branch-suffix: timestamp
-          base: rollipop
+          base: main
           title: 'release: v${{ env.VERSION }}'
           assignees: Boshen, shulaoda

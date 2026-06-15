@@ -12,7 +12,7 @@ on:
       - .github/workflows/copilot-setup-steps.yml
   push:
     branches:
-      - rollipop
+      - main
     paths:
       - .github/workflows/copilot-setup-steps.yml
 

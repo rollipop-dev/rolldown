@@ -24,7 +24,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: ${{ github.ref_name != 'rollipop' }}
+  cancel-in-progress: ${{ github.ref_name != 'main' }}
 
 jobs:
   codspeed-benchmark:
@@ -54,7 +54,7 @@ jobs:
         with:
           tools: just, cargo-codspeed
           cache-key: codspeed
-          save-cache: ${{ github.ref_name == 'rollipop' }}
+          save-cache: ${{ github.ref_name == 'main' }}
 
       - name: Setup Benchmark Input
         if: env.CODSPEED_TOKEN != ''

@@ -9,7 +9,7 @@ on:
     types: [labeled]
   push:
     branches:
-      - rollipop
+      - main
     paths:
       - 'crates/**'
       - 'packages/**'

@@ -18,7 +18,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: ${{ github.ref_name != 'rollipop' }}
+  cancel-in-progress: ${{ github.ref_name != 'main' }}
 
 jobs:
   benchmark-node:
@@ -54,7 +54,7 @@ jobs:
         with:
           tools: just
           cache-key: release-build
-          save-cache: ${{ github.ref_name == 'rollipop' }}
+          save-cache: ${{ github.ref_name == 'main' }}
 
       - name: Setup Benchmark Input
         run: just setup-bench

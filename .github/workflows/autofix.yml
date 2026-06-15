@@ -8,7 +8,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: ${{ github.ref_name != 'rollipop' }}
+  cancel-in-progress: ${{ github.ref_name != 'main' }}
 
 jobs:
   autofix:
