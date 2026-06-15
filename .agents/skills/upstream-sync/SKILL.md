@@ -1,11 +1,11 @@
 ---
 name: rollipop-upstream-sync
-description: Sync upstream rolldown/rolldown main into the leegeunhyeok/rolldown rollipop fork branch, resolve fork-specific conflicts, preserve @rollipop package names and custom Rollipop patches, keep pluginutils aligned with upstream's rolldown/plugins package, and iterate until `just roll` passes.
+description: Sync upstream rolldown/rolldown main into the rollipop-dev/rolldown rollipop fork branch, resolve fork-specific conflicts, preserve @rollipop package names and custom Rollipop patches, keep pluginutils aligned with upstream's rolldown/plugins package, and iterate until `just roll` passes.
 ---
 
 # Rollipop upstream sync
 
-Use this skill when syncing upstream `rolldown/rolldown` `main` into the Rollipop fork (`leegeunhyeok/rolldown`, branch `rollipop`). This fork produces the Rolldown build used by the Rollipop project, so upstream changes must be merged while preserving fork-specific package names, custom plugins, release behavior, and compatibility patches.
+Use this skill when syncing upstream `rolldown/rolldown` `main` into the Rollipop fork (`rollipop-dev/rolldown`, branch `rollipop`). This fork produces the Rolldown build used by the Rollipop project, so upstream changes must be merged while preserving fork-specific package names, custom plugins, release behavior, and compatibility patches.
 
 ## Success criteria
 

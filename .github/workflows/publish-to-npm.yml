@@ -46,7 +46,7 @@ jobs:
 
   notify-before-publish:
     needs: [check, build]
-    if: github.repository == 'leegeunhyeok/rolldown'
+    if: github.repository == 'rollipop-dev/rolldown'
     name: Notify Before Publish
     runs-on: ubuntu-latest
     env:
@@ -63,7 +63,7 @@ jobs:
 
   publish:
     needs: [build, notify-before-publish]
-    if: github.repository == 'leegeunhyeok/rolldown'
+    if: github.repository == 'rollipop-dev/rolldown'
     name: Publish npm Packages
     runs-on: ubuntu-latest
     environment: release
@@ -124,7 +124,7 @@ jobs:
 
   release:
     needs: [check, publish]
-    if: github.repository == 'leegeunhyeok/rolldown'
+    if: github.repository == 'rollipop-dev/rolldown'
     name: GitHub Release
     runs-on: ubuntu-latest
     permissions:

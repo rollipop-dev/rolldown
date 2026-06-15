@@ -17,7 +17,7 @@ concurrency:
 jobs:
   prepare:
     name: Prepare Release
-    if: github.repository == 'leegeunhyeok/rolldown'
+    if: github.repository == 'rollipop-dev/rolldown'
     runs-on: ubuntu-latest
     permissions:
       contents: write # for create-pull-request
