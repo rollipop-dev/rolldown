@@ -19,9 +19,9 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             try {
-              // Check if PR author is a member of the rolldown organization
+              // Check if PR author is a member of the rollipop-dev organization
               const { data: membership } = await github.rest.orgs.checkPublicMembershipForUser({
-                org: 'rolldown',
+                org: 'rollipop-dev',
                 username: context.payload.pull_request.user.login
               });
 
@@ -31,7 +31,7 @@ jobs:
               // If 404 or 302, user is not a member
               if (error.status === 404 || error.status === 302) {
                 core.setOutput('is_member', 'false');
-                console.log(`User ${context.payload.pull_request.user.login} is not a member of rolldown organization`);
+                console.log(`User ${context.payload.pull_request.user.login} is not a member of rollipop-dev organization`);
               } else {
                 // Re-throw other errors
                 throw error;
