@@ -1,4 +1,18 @@
 
+## [1.0.14] - 2026-06-15
+
+### 🐛 Bug Fixes
+
+- rollipop side-effect import execution (#24)
+
+### ⚙️ Miscellaneous Tasks
+
+- remove unused ci
+- update branch references to main
+- update repository references
+- skip crate releases
+
+
 ## [1.0.13] - 2026-06-14
 
 ### 🚀 Features
