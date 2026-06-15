@@ -46,6 +46,7 @@ impl GenerateStage<'_> {
               ast_factory: AstFactory::new(fields.allocator),
               modules: &self.link_output.module_table.modules,
               module,
+              metas: &self.link_output.metas,
               linking_info: &self.link_output.metas[module.idx],
               stmt_infos: &self.link_output.stmt_infos[idx],
               symbol_db: &self.link_output.symbol_db,

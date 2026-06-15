@@ -22,7 +22,7 @@ use crate::{
   rollipop::{
     ROLLIPOP_EXPORTS_NAME, ROLLIPOP_GLOBAL_NAME, ROLLIPOP_MODULE_NAME, ROLLIPOP_REQUIRE_NAME,
   },
-  types::linking_metadata::LinkingMetadata,
+  types::linking_metadata::{LinkingMetadata, LinkingMetadataVec},
 };
 
 const FACTORY_PARAM_NAMES: [&str; 4] =
@@ -33,6 +33,7 @@ pub struct RollipopAstFinalizerParams<'me, 'ast> {
   pub ast_factory: AstFactory<'ast>,
   pub modules: &'me IndexModules,
   pub module: &'me NormalModule,
+  pub metas: &'me LinkingMetadataVec,
   pub linking_info: &'me LinkingMetadata,
   pub stmt_infos: &'me StmtInfos,
   pub symbol_db: &'me SymbolRefDb,
@@ -45,6 +46,7 @@ pub struct RollipopAstFinalizer<'me, 'ast> {
   pub ast_factory: AstFactory<'ast>,
   pub modules: &'me IndexModules,
   pub module: &'me NormalModule,
+  pub metas: &'me LinkingMetadataVec,
   pub linking_info: &'me LinkingMetadata,
   pub stmt_infos: &'me StmtInfos,
   pub symbol_db: &'me SymbolRefDb,
@@ -67,6 +69,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
       ast_factory,
       modules,
       module,
+      metas,
       linking_info,
       stmt_infos,
       symbol_db,
@@ -79,6 +82,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
       ast_factory,
       modules,
       module,
+      metas,
       linking_info,
       stmt_infos,
       symbol_db,
@@ -416,6 +420,15 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     }
   }
 
+  fn should_include_static_import_for_runtime_execution(&self, stmt: &Statement<'_>) -> bool {
+    let Statement::ImportDeclaration(import_decl) = stmt else {
+      return false;
+    };
+    let rec_id = self.module.imports[&import_decl.span];
+    let rec = &self.module.import_records[rec_id];
+    rec.resolved_module.is_some_and(|importee_idx| self.metas[importee_idx].is_included)
+  }
+
   fn create_re_export_all_stmt(&self, binding_name: &str, span: Span) -> Statement<'ast> {
     let call = self.ast_factory.expression_call(
       span,
@@ -646,6 +659,7 @@ impl<'ast> Traverse<'ast, ()> for RollipopAstFinalizer<'_, 'ast> {
       {
         if self.should_include_top_level_stmt(stmt_info_idx)
           || is_export_specifier_declaration(&stmt)
+          || self.should_include_static_import_for_runtime_execution(&stmt)
         {
           self.handle_top_level_stmt(&mut node.body, stmt, ctx.scoping());
         }
