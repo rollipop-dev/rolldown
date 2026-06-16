@@ -214,6 +214,26 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
       .unwrap_or_else(|| original_name.to_string())
   }
 
+  fn generated_binding_name(&self, scoping: &Scoping, base: &str) -> String {
+    let mut used_names =
+      FACTORY_PARAM_NAMES.iter().map(std::string::ToString::to_string).collect::<FxHashSet<_>>();
+    for (name, _) in scoping.iter_bindings().flat_map(|(_, bindings)| bindings) {
+      used_names.insert(name.to_string());
+    }
+    used_names.extend(self.renamed_factory_param_bindings.values().cloned());
+
+    if !used_names.contains(base) {
+      return base.to_string();
+    }
+    for count in 1u32.. {
+      let candidate = format!("{base}${count}");
+      if !used_names.contains(&candidate) {
+        return candidate;
+      }
+    }
+    unreachable!("generated binding name should always find a free suffix");
+  }
+
   fn ensure_import_for_record(
     &mut self,
     rec_id: ImportRecordIdx,
@@ -368,7 +388,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
               let id = if let Some(id) = &function.id {
                 self.local_binding_name(id.symbol_id(), id.name.as_str())
               } else {
-                let generated = "__default".to_string();
+                let generated = self.generated_binding_name(scoping, "__default");
                 function.id = Some(self.ast_factory.make_id(SPAN, &generated));
                 generated
               };
@@ -386,7 +406,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
               let id = if let Some(id) = &class.id {
                 self.local_binding_name(id.symbol_id(), id.name.as_str())
               } else {
-                let generated = "__default".to_string();
+                let generated = self.generated_binding_name(scoping, "__default");
                 class.id = Some(self.ast_factory.make_id(SPAN, &generated));
                 generated
               };
@@ -401,7 +421,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
               )));
             }
             expr @ ast::match_expression!(ExportDefaultDeclarationKind) => {
-              let name = "__default".to_string();
+              let name = self.generated_binding_name(scoping, "__default");
               program_body.push(self.ast_factory.make_var_decl(
                 &name,
                 expr.to_expression_mut().take_in(self.ast_factory.allocator),
@@ -415,16 +435,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
             _ => {}
           },
           ast::ModuleDeclaration::ExportAllDeclaration(export_all_decl) => {
-            let rec_id = self.module.imports[&export_all_decl.span];
-            let Some((_importee_idx, binding_name, stmt)) =
-              self.ensure_import_for_record(rec_id, export_all_decl.span)
-            else {
-              return;
-            };
-            if let Some(stmt) = stmt {
-              program_body.push(stmt);
-            }
-            program_body.push(self.create_re_export_all_stmt(&binding_name, export_all_decl.span));
+            self.handle_export_all_declaration(program_body, export_all_decl);
           }
           ast::ModuleDeclaration::TSExportAssignment(_)
           | ast::ModuleDeclaration::TSNamespaceExportDeclaration(_) => program_body.push(node),
@@ -434,11 +445,48 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     }
   }
 
+  fn handle_export_all_declaration(
+    &mut self,
+    program_body: &mut oxc::allocator::Vec<'ast, Statement<'ast>>,
+    export_all_decl: &ast::ExportAllDeclaration<'ast>,
+  ) {
+    let rec_id = self.module.imports[&export_all_decl.span];
+    let Some((_importee_idx, binding_name, stmt)) =
+      self.ensure_import_for_record(rec_id, export_all_decl.span)
+    else {
+      return;
+    };
+    if let Some(stmt) = stmt {
+      program_body.push(stmt);
+    }
+    if let Some(exported) = &export_all_decl.exported {
+      let exported = exported.name();
+      self.exports.push(self.ast_factory.make_lazy_export_property(
+        &exported,
+        self.ast_factory.make_id_ref_expr(SPAN, &binding_name),
+        !is_validate_identifier_name(&exported),
+      ));
+    } else {
+      program_body.push(self.create_re_export_all_stmt(&binding_name, export_all_decl.span));
+    }
+  }
+
   fn should_include_static_import_for_runtime_execution(&self, stmt: &Statement<'_>) -> bool {
     let Statement::ImportDeclaration(import_decl) = stmt else {
       return false;
     };
     let rec_id = self.module.imports[&import_decl.span];
+    let rec = &self.module.import_records[rec_id];
+    rec.resolved_module.is_some_and(|importee_idx| self.metas[importee_idx].is_included)
+  }
+
+  fn should_include_re_export_for_runtime_execution(&self, stmt: &Statement<'_>) -> bool {
+    let span = match stmt {
+      Statement::ExportNamedDeclaration(decl) if decl.source.is_some() => decl.span,
+      Statement::ExportAllDeclaration(decl) => decl.span,
+      _ => return false,
+    };
+    let rec_id = self.module.imports[&span];
     let rec = &self.module.import_records[rec_id];
     rec.resolved_module.is_some_and(|importee_idx| self.metas[importee_idx].is_included)
   }
@@ -674,6 +722,7 @@ impl<'ast> Traverse<'ast, ()> for RollipopAstFinalizer<'_, 'ast> {
         if self.should_include_top_level_stmt(stmt_info_idx)
           || is_export_specifier_declaration(&stmt)
           || self.should_include_static_import_for_runtime_execution(&stmt)
+          || self.should_include_re_export_for_runtime_execution(&stmt)
         {
           self.handle_top_level_stmt(&mut node.body, stmt, ctx.scoping());
         }

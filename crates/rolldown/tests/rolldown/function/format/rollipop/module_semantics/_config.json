@@ -1,0 +1,7 @@
+{
+  "config": {
+    "format": "rollipop",
+    "codeSplitting": false
+  },
+  "snapshot": false
+}
