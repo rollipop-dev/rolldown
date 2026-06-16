@@ -1,0 +1,7 @@
+{
+  "config": {
+    "format": "rollipop",
+    "profilerNames": true
+  },
+  "snapshot": false
+}

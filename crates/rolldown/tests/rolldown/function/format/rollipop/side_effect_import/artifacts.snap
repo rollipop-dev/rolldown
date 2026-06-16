@@ -8,7 +8,6 @@ source: crates/rolldown_testing/src/integration_test.rs
 ```js
 (function(global) {
 	//#region \0rollipop/runtime
-	var __rollipop_modules__ = {};
 	var __rollipop_module_cache = {};
 	function __rollipop_require__(id) {
 		var cached = __rollipop_module_cache[id];
@@ -24,10 +23,6 @@ source: crates/rolldown_testing/src/integration_test.rs
 		module.loaded = true;
 		return module.exports;
 	}
-	function __rollipop_define__(factory, id) {
-		__rollipop_modules__[id] = factory;
-	}
-	__rollipop_require__.m = __rollipop_modules__;
 	__rollipop_require__.c = __rollipop_module_cache;
 	__rollipop_require__.o = function(obj, prop) {
 		return Object.prototype.hasOwnProperty.call(obj, prop);
@@ -83,19 +78,21 @@ source: crates/rolldown_testing/src/integration_test.rs
 		throw new Error("External module " + id + " is not available");
 	};
 	//#endregion
-	__rollipop_define__(function(global, module, __rollipop_exports__, __rollipop_require__) {
-		//#region dep.js
-		__rollipop_require__.r(__rollipop_exports__);
-		globalThis.__rollipop_side_effect_value = "side-effect";
-		//#endregion
-	}, 2);
-	__rollipop_define__(function(global, module, __rollipop_exports__, __rollipop_require__) {
-		//#region main.js
-		__rollipop_require__.r(__rollipop_exports__);
-		__rollipop_require__(2);
-		globalThis.__rollipop_side_effect_import_result = `entry:${globalThis.__rollipop_side_effect_value}`;
-		//#endregion
-	}, 1);
+	var __rollipop_modules__ = __rollipop_require__.m = {
+		2: function(global, module, __rollipop_exports__, __rollipop_require__) {
+			//#region dep.js
+			__rollipop_require__.r(__rollipop_exports__);
+			globalThis.__rollipop_side_effect_value = "side-effect";
+			//#endregion
+		},
+		1: function(global, module, __rollipop_exports__, __rollipop_require__) {
+			//#region main.js
+			__rollipop_require__.r(__rollipop_exports__);
+			__rollipop_require__(2);
+			globalThis.__rollipop_side_effect_import_result = `entry:${globalThis.__rollipop_side_effect_value}`;
+			//#endregion
+		}
+	};
 	__rollipop_require__(1);
 })(typeof globalThis !== "undefined" ? globalThis : this);
 

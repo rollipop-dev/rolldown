@@ -8,7 +8,9 @@ use tracing::debug_span;
 
 use crate::{
   chunk_graph::ChunkGraph,
-  module_finalizers::rollipop::{RollipopAstFinalizer, RollipopAstFinalizerParams},
+  module_finalizers::rollipop::{
+    RollipopAstFinalizer, RollipopAstFinalizerParams, RollipopRuntimeIdMode,
+  },
   type_alias::IndexEcmaAst,
 };
 
@@ -51,6 +53,11 @@ impl GenerateStage<'_> {
               stmt_infos: &self.link_output.stmt_infos[idx],
               symbol_db: &self.link_output.symbol_db,
               unique_index,
+              runtime_id_mode: if self.options.profiler_names {
+                RollipopRuntimeIdMode::StableId
+              } else {
+                RollipopRuntimeIdMode::Numeric
+              },
               is_dev_mode,
               is_runtime_module,
             });
