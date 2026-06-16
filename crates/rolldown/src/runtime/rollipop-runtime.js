@@ -1,6 +1,5 @@
-var __rollipop_modules__ = {};
 var __rollipop_module_cache = {};
-function  __rollipop_require__(id) {
+function __rollipop_require__(id) {
   var cached = __rollipop_module_cache[id];
   if (cached !== undefined) return cached.exports;
   var factory = __rollipop_modules__[id];
@@ -10,10 +9,6 @@ function  __rollipop_require__(id) {
   module.loaded = true;
   return module.exports;
 }
-function __rollipop_define__(factory, id) {
-  __rollipop_modules__[id] = factory;
-}
-__rollipop_require__.m = __rollipop_modules__;
 __rollipop_require__.c = __rollipop_module_cache;
 __rollipop_require__.o = function(obj, prop) {
   return Object.prototype.hasOwnProperty.call(obj, prop);

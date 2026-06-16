@@ -29,6 +29,12 @@ const FACTORY_PARAM_NAMES: [&str; 4] =
   [ROLLIPOP_GLOBAL_NAME, ROLLIPOP_MODULE_NAME, ROLLIPOP_EXPORTS_NAME, ROLLIPOP_REQUIRE_NAME];
 
 #[derive(Clone, Copy)]
+pub enum RollipopRuntimeIdMode {
+  Numeric,
+  StableId,
+}
+
+#[derive(Clone, Copy)]
 pub struct RollipopAstFinalizerParams<'me, 'ast> {
   pub ast_factory: AstFactory<'ast>,
   pub modules: &'me IndexModules,
@@ -38,6 +44,7 @@ pub struct RollipopAstFinalizerParams<'me, 'ast> {
   pub stmt_infos: &'me StmtInfos,
   pub symbol_db: &'me SymbolRefDb,
   pub unique_index: usize,
+  pub runtime_id_mode: RollipopRuntimeIdMode,
   pub is_dev_mode: bool,
   pub is_runtime_module: bool,
 }
@@ -51,6 +58,7 @@ pub struct RollipopAstFinalizer<'me, 'ast> {
   pub stmt_infos: &'me StmtInfos,
   pub symbol_db: &'me SymbolRefDb,
   pub unique_index: usize,
+  pub runtime_id_mode: RollipopRuntimeIdMode,
 
   import_bindings: FxHashMap<SymbolId, ImportBinding>,
   generated_static_import_infos: FxHashMap<ModuleIdx, String>,
@@ -74,6 +82,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
       stmt_infos,
       symbol_db,
       unique_index,
+      runtime_id_mode,
       is_dev_mode,
       is_runtime_module,
     } = params;
@@ -87,6 +96,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
       stmt_infos,
       symbol_db,
       unique_index,
+      runtime_id_mode,
       import_bindings: FxHashMap::default(),
       generated_static_import_infos: FxHashMap::default(),
       generated_imports: FxHashSet::default(),
@@ -99,8 +109,21 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     }
   }
 
-  fn runtime_id_for(&self, module: &Module) -> u32 {
-    module.idx().raw()
+  fn runtime_id_expr_for(&self, module: &Module) -> Expression<'ast> {
+    if matches!(self.runtime_id_mode, RollipopRuntimeIdMode::StableId) {
+      self.ast_factory.expression_string_literal(
+        SPAN,
+        self.ast_factory.str(module.stable_id().as_str()),
+        None,
+      )
+    } else {
+      self.ast_factory.expression_numeric_literal(
+        SPAN,
+        f64::from(module.idx().raw()),
+        None,
+        oxc::ast::ast::NumberBase::Decimal,
+      )
+    }
   }
 
   fn binding_name_for_import(&mut self, importee_idx: ModuleIdx, rec_id: ImportRecordIdx) -> &str {
@@ -112,16 +135,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
 
   fn require_call_for_module(&self, importee: &Module) -> Expression<'ast> {
     let callee = self.ast_factory.make_id_ref_expr(SPAN, ROLLIPOP_REQUIRE_NAME);
-    self.ast_factory.make_call_with_arg(
-      callee,
-      self.ast_factory.expression_numeric_literal(
-        SPAN,
-        f64::from(self.runtime_id_for(importee)),
-        None,
-        oxc::ast::ast::NumberBase::Decimal,
-      ),
-      false,
-    )
+    self.ast_factory.make_call_with_arg(callee, self.runtime_id_expr_for(importee), false)
   }
 
   fn require_call_for_external(&self, importee: &ExternalModule) -> Expression<'ast> {

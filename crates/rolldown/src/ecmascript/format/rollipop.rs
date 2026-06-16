@@ -1,4 +1,5 @@
-use rolldown_common::{AddonRenderContext, ExportsKind};
+use json_escape_simd::escape;
+use rolldown_common::{AddonRenderContext, ExportsKind, NormalModule};
 use rolldown_sourcemap::SourceJoiner;
 use rolldown_utils::concat_string;
 
@@ -10,7 +11,7 @@ use crate::{
 use super::utils::{is_use_strict_directive, render_chunk_directives};
 
 use crate::rollipop::{
-  ROLLIPOP_DEFINE_NAME, ROLLIPOP_EXPORTS_NAME, ROLLIPOP_GLOBAL_NAME, ROLLIPOP_MODULE_NAME,
+  ROLLIPOP_EXPORTS_NAME, ROLLIPOP_GLOBAL_NAME, ROLLIPOP_MODULE_NAME, ROLLIPOP_MODULES_NAME,
   ROLLIPOP_REQUIRE_NAME, ROLLIPOP_RUNTIME,
 };
 
@@ -66,15 +67,30 @@ fn render_module_factories<'code>(
   module_sources: &'code [RenderedModuleSource],
   source_joiner: &mut SourceJoiner<'code>,
 ) {
+  source_joiner.append_source(concat_string!(
+    "var ",
+    ROLLIPOP_MODULES_NAME,
+    " = ",
+    ROLLIPOP_REQUIRE_NAME,
+    ".m = {"
+  ));
+  let mut is_first_module = true;
   for RenderedModuleSource { module_idx, sources, .. } in module_sources {
     if *module_idx == ctx.link_output.runtime.id() {
       continue;
     }
     let Some(sources) = sources else { continue };
     let Some(module) = ctx.link_output.module_table[*module_idx].as_normal() else { continue };
+
+    if is_first_module {
+      is_first_module = false;
+    } else {
+      source_joiner.append_source(",");
+    }
+
     source_joiner.append_source(concat_string!(
-      ROLLIPOP_DEFINE_NAME,
-      "(function(",
+      render_module_runtime_id(ctx, module),
+      ": function(",
       ROLLIPOP_GLOBAL_NAME,
       ", ",
       ROLLIPOP_MODULE_NAME,
@@ -87,8 +103,9 @@ fn render_module_factories<'code>(
     for source in sources.as_ref() {
       source_joiner.append_source(source);
     }
-    source_joiner.append_source(concat_string!("}, ", module.idx.raw().to_string(), ");\n"));
+    source_joiner.append_source("}");
   }
+  source_joiner.append_source("};");
 }
 
 fn render_entry_execution(ctx: &GenerateContext<'_>) -> String {
@@ -98,9 +115,22 @@ fn render_entry_execution(ctx: &GenerateContext<'_>) -> String {
       ExportsKind::Esm | ExportsKind::CommonJs | ExportsKind::None
     )
   {
-    return concat_string!(ROLLIPOP_REQUIRE_NAME, "(", entry_module.idx.raw().to_string(), ");");
+    return concat_string!(
+      ROLLIPOP_REQUIRE_NAME,
+      "(",
+      render_module_runtime_id(ctx, entry_module),
+      ");"
+    );
   }
   String::new()
+}
+
+fn render_module_runtime_id(ctx: &GenerateContext<'_>, module: &NormalModule) -> String {
+  if ctx.options.profiler_names {
+    escape(module.stable_id.as_str())
+  } else {
+    module.idx.raw().to_string()
+  }
 }
 
 fn render_runtime_module<'code>(
