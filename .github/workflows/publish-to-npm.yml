@@ -130,8 +130,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # for softprops/action-gh-release@v1
-    env:
-      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_ROLLDOWN_CHANNEL }}
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
@@ -158,12 +156,3 @@ jobs:
             --title "$TAG_NAME" \
             --notes "$NOTES")
           echo "url=$url" >> "$GITHUB_OUTPUT"
-
-      - name: Notify Discord
-        if: ${{ env.DISCORD_WEBHOOK_URL != '' }}
-        uses: tsickert/discord-webhook@b217a69502f52803de774ded2b1ab7c282e99645 # v7.0.0
-        with:
-          webhook-url: ${{ env.DISCORD_WEBHOOK_URL }}
-          embed-title: Rolldown Release
-          embed-description: Released v${{ needs.check.outputs.version }}.
-          embed-url: ${{ steps.github_release.outputs.url }}
