@@ -50,7 +50,13 @@ pub fn render_rollipop<'code>(
   render_rollipop_runtime(&mut source_joiner);
   render_module_factories(ctx, module_sources, &mut source_joiner);
   source_joiner.append_source(render_entry_execution(ctx));
-  source_joiner.append_source("})(typeof globalThis !== 'undefined' ? globalThis : this);");
+  source_joiner.append_source(concat!(
+    "})(typeof globalThis !== 'undefined' ? globalThis",
+    " : typeof global !== 'undefined' ? global",
+    " : typeof window !== 'undefined' ? window",
+    " : this",
+    ");"
+  ));
 
   if let Some(outro) = outro {
     source_joiner.append_source(outro);

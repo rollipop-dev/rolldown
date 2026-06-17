@@ -94,6 +94,6 @@ source: crates/rolldown_testing/src/integration_test.rs
 		}
 	};
 	__rollipop_require__(1);
-})(typeof globalThis !== "undefined" ? globalThis : this);
+})(typeof globalThis !== "undefined" ? globalThis : typeof global !== "undefined" ? global : typeof window !== "undefined" ? window : this);
 
 ```
