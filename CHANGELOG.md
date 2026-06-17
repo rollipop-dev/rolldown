@@ -1,4 +1,15 @@
 
+## [1.0.15] - 2026-06-17
+
+### 🐛 Bug Fixes
+
+- support rollipop namespace re-exports (#27)
+
+### 🚜 Refactor
+
+- update rollipop module map (#26)
+
+
 ## [1.0.14] - 2026-06-15
 
 ### 🐛 Bug Fixes
