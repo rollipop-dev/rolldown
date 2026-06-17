@@ -1,6 +1,6 @@
 import { BuiltinPlugin } from './utils';
 
-export type RollipopReactNativeRuntimeTarget = 'Hermes' | 'HermesV1';
+export type RollipopReactNativeRuntimeTarget = 'hermes' | 'hermes-v1';
 export type RollipopReactNativeModuleType = 'unambiguous' | 'commonjs';
 
 /**

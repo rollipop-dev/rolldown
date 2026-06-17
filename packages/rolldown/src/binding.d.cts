@@ -2825,8 +2825,8 @@ export interface BindingRollipopReactNativePluginConfig {
    */
   envName?: string
   /**
-   * Selects the compat-pass preset. Defaults to `"HermesV1"` when omitted.
-   * `"Hermes"` adds `transform-classes` and `transform-async-to-generator`
+   * Selects the compat-pass preset. Defaults to `"hermes-v1"` when omitted.
+   * `"hermes"` adds `transform-classes` and `transform-async-to-generator`
    * on top of the V1 baseline for older Hermes / JSC fallbacks.
    */
   runtimeTarget?: BindingRollipopReactNativeRuntimeTarget
@@ -2867,8 +2867,8 @@ export type BindingRollipopReactNativeReactRuntime =  'Preserve'|
 'Automatic'|
 'Classic';
 
-export type BindingRollipopReactNativeRuntimeTarget =  'Hermes'|
-'HermesV1';
+export type BindingRollipopReactNativeRuntimeTarget =  'hermes'|
+'hermes-v1';
 
 export interface BindingRollipopReactNativeSwcConfig {
   /** SWC `.wasm` plugins to load. */

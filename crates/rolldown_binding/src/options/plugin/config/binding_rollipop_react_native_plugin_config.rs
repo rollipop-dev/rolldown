@@ -13,8 +13,8 @@ pub struct BindingRollipopReactNativePluginConfig {
   /// The name of the `env` to use when loading configs and plugins. Defaults
   /// to the value of `SWC_ENV`, or else `NODE_ENV`, or else `"development"`.
   pub env_name: Option<String>,
-  /// Selects the compat-pass preset. Defaults to `"HermesV1"` when omitted.
-  /// `"Hermes"` adds `transform-classes` and `transform-async-to-generator`
+  /// Selects the compat-pass preset. Defaults to `"hermes-v1"` when omitted.
+  /// `"hermes"` adds `transform-classes` and `transform-async-to-generator`
   /// on top of the V1 baseline for older Hermes / JSC fallbacks.
   pub runtime_target: Option<BindingRollipopReactNativeRuntimeTarget>,
   /// Flow handling configuration. Mirrors Babel's
@@ -101,7 +101,9 @@ pub struct BindingRollipopReactNativeReactConfig {
 #[napi_derive::napi(string_enum)]
 #[derive(Debug)]
 pub enum BindingRollipopReactNativeRuntimeTarget {
+  #[napi(value = "hermes")]
   Hermes,
+  #[napi(value = "hermes-v1")]
   HermesV1,
 }
 
