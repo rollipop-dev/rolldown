@@ -1,6 +1,5 @@
 use std::{borrow::Cow, path::Path, sync::LazyLock};
 
-use arcstr::ArcStr;
 use oxc::codegen::{Codegen, CodegenOptions, CodegenReturn, CommentOptions};
 use oxc::parser::Parser;
 use oxc::semantic::SemanticBuilder;
@@ -142,10 +141,10 @@ impl Plugin for RollipopReactRefreshWrapperPlugin {
 
     let allocator = oxc::allocator::Allocator::default();
     let ret = Parser::new(&allocator, args.code, source_type).parse();
-    if ret.panicked || !ret.errors.is_empty() {
+    if ret.panicked || !ret.diagnostics.is_empty() {
       return Err(BatchedBuildDiagnostic::new(BuildDiagnostic::from_oxc_diagnostics(
-        ret.errors,
-        &ArcStr::from(args.code),
+        ret.diagnostics,
+        args.code,
         args.id,
         Severity::Error,
         EventKind::ParseError,
@@ -156,10 +155,10 @@ impl Plugin for RollipopReactRefreshWrapperPlugin {
     let scoping = SemanticBuilder::new().build(&program).semantic.into_scoping();
     let transformer = Transformer::new(&allocator, Path::new(args.id), &self.transform_options);
     let transformer_return = transformer.build_with_scoping(scoping, &mut program);
-    if !transformer_return.errors.is_empty() {
+    if !transformer_return.diagnostics.is_empty() {
       return Err(BatchedBuildDiagnostic::new(BuildDiagnostic::from_oxc_diagnostics(
-        transformer_return.errors,
-        &ArcStr::from(args.code),
+        transformer_return.diagnostics,
+        args.code,
         args.id,
         Severity::Error,
         EventKind::ParseError,
@@ -176,7 +175,10 @@ impl Plugin for RollipopReactRefreshWrapperPlugin {
 
     if let Some((wrapped_code, wrapper_map)) = self.add_refresh_wrapper(&code, args.id) {
       let final_map = match oxc_map {
-        Some(oxc_map) => Some(collapse_sourcemaps(&[&oxc_map, &wrapper_map])),
+        Some(oxc_map) => {
+          let oxc_map = oxc_map.into_owned();
+          Some(collapse_sourcemaps(&[&oxc_map, &wrapper_map]))
+        }
         None => Some(wrapper_map),
       };
       return Ok(Some(HookTransformOutput {
@@ -188,9 +190,7 @@ impl Plugin for RollipopReactRefreshWrapperPlugin {
 
     Ok(Some(HookTransformOutput {
       code: Some(code),
-      map: oxc_map.map_or(HookTransformOutputMap::Omitted, |map| {
-        HookTransformOutputMap::from(map.into_inner())
-      }),
+      map: oxc_map.map_or(HookTransformOutputMap::Omitted, |map| map.into_owned().into()),
       ..Default::default()
     }))
   }

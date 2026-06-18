@@ -261,7 +261,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
         let module_decl = module_decl.to_module_declaration_mut();
         match module_decl {
           ast::ModuleDeclaration::ImportDeclaration(import_decl) => {
-            let rec_id = self.module.imports[&import_decl.span];
+            let rec_id = self.module.imports[&import_decl.node_id()];
             let rec = &self.module.import_records[rec_id];
             let Some(importee_idx) = rec.resolved_module else {
               return;
@@ -310,7 +310,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
           }
           ast::ModuleDeclaration::ExportNamedDeclaration(decl) => {
             if decl.source.is_some() {
-              let rec_id = self.module.imports[&decl.span];
+              let rec_id = self.module.imports[&decl.node_id()];
               let Some((_importee_idx, binding_name, stmt)) =
                 self.ensure_import_for_record(rec_id, decl.span)
               else {
@@ -450,7 +450,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     program_body: &mut oxc::allocator::Vec<'ast, Statement<'ast>>,
     export_all_decl: &ast::ExportAllDeclaration<'ast>,
   ) {
-    let rec_id = self.module.imports[&export_all_decl.span];
+    let rec_id = self.module.imports[&export_all_decl.node_id()];
     let Some((_importee_idx, binding_name, stmt)) =
       self.ensure_import_for_record(rec_id, export_all_decl.span)
     else {
@@ -475,18 +475,19 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     let Statement::ImportDeclaration(import_decl) = stmt else {
       return false;
     };
-    let rec_id = self.module.imports[&import_decl.span];
+    let rec_id = self.module.imports[&import_decl.node_id()];
     let rec = &self.module.import_records[rec_id];
     rec.resolved_module.is_some_and(|importee_idx| self.metas[importee_idx].is_included)
   }
 
   fn should_include_re_export_for_runtime_execution(&self, stmt: &Statement<'_>) -> bool {
-    let span = match stmt {
-      Statement::ExportNamedDeclaration(decl) if decl.source.is_some() => decl.span,
-      Statement::ExportAllDeclaration(decl) => decl.span,
+    let rec_id = match stmt {
+      Statement::ExportNamedDeclaration(decl) if decl.source.is_some() => {
+        self.module.imports[&decl.node_id()]
+      }
+      Statement::ExportAllDeclaration(decl) => self.module.imports[&decl.node_id()],
       _ => return false,
     };
-    let rec_id = self.module.imports[&span];
     let rec = &self.module.import_records[rec_id];
     rec.resolved_module.is_some_and(|importee_idx| self.metas[importee_idx].is_included)
   }
@@ -627,7 +628,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
 
   fn rewrite_dynamic_import(&self, node: &mut Expression<'ast>) {
     let Expression::ImportExpression(import_expr) = node else { return };
-    let Some(rec_idx) = self.module.imports.get(&import_expr.span) else { return };
+    let Some(rec_idx) = self.module.imports.get(&import_expr.node_id()) else { return };
     let rec = &self.module.import_records[*rec_idx];
     let Some(importee_idx) = rec.resolved_module else { return };
     let importee = &self.modules[importee_idx];
@@ -661,7 +662,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     {
       return;
     }
-    let Some(rec_idx) = self.module.imports.get(&call_expr.span) else { return };
+    let Some(rec_idx) = self.module.imports.get(&call_expr.node_id()) else { return };
     let rec = &self.module.import_records[*rec_idx];
     let Some(importee_idx) = rec.resolved_module else { return };
     let importee = &self.modules[importee_idx];

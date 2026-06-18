@@ -3,15 +3,18 @@
   "include": [
     "src/*",
     "src/**/*",
+    "playground/**/*.ts",
     "**/_config.ts",
     "**/*.test.ts",
-    "**/*.spec.ts",
-    "vitest-setup-browser.ts"
+    "**/*.spec.ts"
   ],
   "compilerOptions": {
     "types": ["node"],
     "rootDir": "./",
     "allowJs": true,
-    "isolatedDeclarations": false
+    "isolatedDeclarations": false,
+    "paths": {
+      "~utils": ["./playground/test-utils.ts"]
+    }
   }
 }

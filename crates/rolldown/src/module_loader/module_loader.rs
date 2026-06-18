@@ -5,10 +5,10 @@ use std::sync::Arc;
 use arcstr::ArcStr;
 use futures::future::join_all;
 use itertools::Itertools;
+use oxc::semantic::NodeId;
 use oxc::semantic::{ScopeId, Scoping};
 use oxc::span::Span;
 use oxc::transformer_plugins::ReplaceGlobalDefinesConfig;
-use oxc_allocator::Address;
 use oxc_index::IndexVec;
 use rolldown_common::dynamic_import_usage::DynamicImportExportsUsage;
 use rolldown_common::{
@@ -116,7 +116,7 @@ pub struct ModuleLoader<'a, Fs: FileSystem + Clone + 'static> {
   new_added_modules_from_partial_scan: FxIndexSet<ModuleIdx>,
   cache: &'a mut ScanStageCache,
   pub flat_options: FlatOptions,
-  pub magic_string_tx: Option<Arc<std::sync::mpsc::Sender<SourceMapGenMsg>>>,
+  pub magic_string_tx: Option<std::sync::mpsc::Sender<SourceMapGenMsg>>,
   tla_module_count: usize,
   /// Centralized map from modules that contain top-level `await` to the span
   /// of the first TLA keyword. Stored here instead of on every `EcmaView`
@@ -166,7 +166,7 @@ impl<'a, Fs: FileSystem + Clone + 'static> ModuleLoader<'a, Fs> {
     plugin_driver: SharedPluginDriver,
     cache: &'a mut ScanStageCache,
     is_full_scan: bool,
-    magic_string_tx: Option<Arc<std::sync::mpsc::Sender<SourceMapGenMsg>>>,
+    magic_string_tx: Option<std::sync::mpsc::Sender<SourceMapGenMsg>>,
   ) -> BuildResult<Self> {
     if is_full_scan {
       // TODO: drop the cache in another thread
@@ -384,7 +384,7 @@ impl<'a, Fs: FileSystem + Clone + 'static> ModuleLoader<'a, Fs> {
     let mut work_queue: VecDeque<(ModuleIdx, ImportedExports)> = VecDeque::new();
     let mut dynamic_import_entry_ids: FxHashMap<
       ModuleIdx,
-      Vec<(ModuleIdx, StmtInfoIdx, Address, ImportRecordIdx)>,
+      Vec<(ModuleIdx, StmtInfoIdx, NodeId, ImportRecordIdx)>,
     > = FxHashMap::default();
 
     let mut dynamic_import_exports_usage_pairs = vec![];
@@ -521,7 +521,7 @@ impl<'a, Fs: FileSystem + Clone + 'static> ModuleLoader<'a, Fs> {
               match dynamic_import_entry_ids.entry(idx) {
                 Entry::Vacant(vac) => match raw_rec.dynamic_import_expr_info.as_ref() {
                   Some(info) => {
-                    vac.insert(vec![(module_idx, info.stmt_info_idx, info.address, rec_idx)]);
+                    vac.insert(vec![(module_idx, info.stmt_info_idx, info.node_id, rec_idx)]);
                   }
                   None => {
                     vac.insert(vec![]);
@@ -529,7 +529,7 @@ impl<'a, Fs: FileSystem + Clone + 'static> ModuleLoader<'a, Fs> {
                 },
                 Entry::Occupied(mut occ) => {
                   if let Some(info) = raw_rec.dynamic_import_expr_info.as_ref() {
-                    occ.get_mut().push((module_idx, info.stmt_info_idx, info.address, rec_idx));
+                    occ.get_mut().push((module_idx, info.stmt_info_idx, info.node_id, rec_idx));
                   }
                 }
               }

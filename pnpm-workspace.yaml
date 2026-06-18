@@ -2,7 +2,7 @@ packages:
   - packages/*
   - packages/rolldown/tests
   - packages/test-dev-server/tests
-  - packages/test-dev-server/tests/playground/hmr-full-bundle-mode
+  - packages/test-dev-server/tests/playground/*
   - packages/test-dev-server/tests/fixtures/*
   - packages/rolldown/tests/fixtures/resolve/issue-5846
   - packages/rolldown/tests/fixtures/resolve/issue-5846-2
@@ -36,17 +36,17 @@ overrides:
 
 catalog:
   # upstream rolldown
-  rolldown: 1.1.1
+  rolldown: 1.1.2
   # =================
-  '@babel/core': ^7.24.7
-  '@babel/preset-env': ^7.24.7
-  '@babel/preset-typescript': ^7.24.7
-  '@napi-rs/cli': ^3.7.1
+  '@babel/core': ^7.29.7
+  '@babel/preset-env': ^7.29.7
+  '@babel/preset-typescript': ^7.29.7
+  '@napi-rs/cli': ^3.7.2
   '@napi-rs/wasm-runtime': ^1.1.5
   '@oxc-node/cli': ^0.1.0
   '@oxc-node/core': ^0.1.0
-  '@oxc-project/runtime': '=0.135.0'
-  '@oxc-project/types': '=0.135.0'
+  '@oxc-project/runtime': '=0.137.0'
+  '@oxc-project/types': '=0.137.0'
   '@pnpm/find-workspace-packages': ^6.0.9
   '@rolldown/pluginutils': ^1.0.0
   '@rollup/plugin-commonjs': ^29.0.0
@@ -62,7 +62,7 @@ catalog:
   '@types/serve-static': ^2.0.0
   '@types/strip-comments': ^2.0.4
   '@types/ws': ^8.18.0
-  acorn: ^8.12.1
+  acorn: ^8.17.0
   acorn-import-assertions: ^1.9.0
   astring: ^1.9.0
   buble: ^0.20.0
@@ -84,9 +84,9 @@ catalog:
   lodash-es: ^4.17.21
   micromatch: ^4.0.8
   mocha: ^11.7.5
-  oxc-minify: '=0.135.0'
-  oxc-parser: '=0.135.0'
-  oxc-transform: '=0.135.0'
+  oxc-minify: '=0.137.0'
+  oxc-parser: '=0.137.0'
+  oxc-transform: '=0.137.0'
   pathe: ^2.0.3
   react: ^19.0.0
   react-dom: ^19.0.0
@@ -126,21 +126,33 @@ trustPolicyExclude:
 verifyDepsBeforeRun: install
 
 minimumReleaseAgeExclude:
-  - '@napi-rs/cli@3.7.1'
+  - '@napi-rs/cli@3.7.2'
   - '@napi-rs/wasm-runtime@1.1.5'
-  - '@rolldown/binding-android-arm64@1.1.1'
-  - '@rolldown/binding-darwin-arm64@1.1.1'
-  - '@rolldown/binding-darwin-x64@1.1.1'
-  - '@rolldown/binding-freebsd-x64@1.1.1'
-  - '@rolldown/binding-linux-arm-gnueabihf@1.1.1'
-  - '@rolldown/binding-linux-arm64-gnu@1.1.1'
-  - '@rolldown/binding-linux-arm64-musl@1.1.1'
-  - '@rolldown/binding-linux-ppc64-gnu@1.1.1'
-  - '@rolldown/binding-linux-s390x-gnu@1.1.1'
-  - '@rolldown/binding-linux-x64-gnu@1.1.1'
-  - '@rolldown/binding-linux-x64-musl@1.1.1'
-  - '@rolldown/binding-openharmony-arm64@1.1.1'
-  - '@rolldown/binding-wasm32-wasi@1.1.1'
-  - '@rolldown/binding-win32-arm64-msvc@1.1.1'
-  - '@rolldown/binding-win32-x64-msvc@1.1.1'
-  - rolldown@1.1.1
+  - '@rolldown/binding-android-arm64@1.1.2'
+  - '@rolldown/binding-darwin-arm64@1.1.2'
+  - '@rolldown/binding-darwin-x64@1.1.2'
+  - '@rolldown/binding-freebsd-x64@1.1.2'
+  - '@rolldown/binding-linux-arm-gnueabihf@1.1.2'
+  - '@rolldown/binding-linux-arm64-gnu@1.1.2'
+  - '@rolldown/binding-linux-arm64-musl@1.1.2'
+  - '@rolldown/binding-linux-ppc64-gnu@1.1.2'
+  - '@rolldown/binding-linux-s390x-gnu@1.1.2'
+  - '@rolldown/binding-linux-x64-gnu@1.1.2'
+  - '@rolldown/binding-linux-x64-musl@1.1.2'
+  - '@rolldown/binding-openharmony-arm64@1.1.2'
+  - '@rolldown/binding-wasm32-wasi@1.1.2'
+  - '@rolldown/binding-win32-arm64-msvc@1.1.2'
+  - '@rolldown/binding-win32-x64-msvc@1.1.2'
+  - rolldown@1.1.2
+  - '@emnapi/core@1.11.1'
+  - '@emnapi/runtime@1.11.1'
+  - emnapi@1.11.1
+  - '@oxc-minify/*'
+  - '@oxc-parser/*'
+  - '@oxc-transform/*'
+  - '@oxc-project/*'
+  - oxc-minify
+  - oxc-parser
+  - oxc-transform
+  - '@voidzero-dev/*'
+  - vite-plus

@@ -43,7 +43,7 @@ impl GenerateStage<'_> {
           let is_dev_mode = self.options.is_dev_mode_enabled();
           let is_runtime_module = self.link_output.runtime.id() == idx;
           ast.program.with_mut(|fields| {
-            let scoping = EcmaAst::make_semantic(fields.program, /*with_cfg*/ false).into_scoping();
+            let scoping = EcmaAst::make_semantic(fields.program).into_scoping();
             let mut finalizer = RollipopAstFinalizer::new(RollipopAstFinalizerParams {
               ast_factory: AstFactory::new(fields.allocator),
               modules: &self.link_output.module_table.modules,
