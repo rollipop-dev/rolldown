@@ -1,4 +1,24 @@
 
+## [1.0.15] - 2026-06-18
+
+### 🐛 Bug Fixes
+
+- update react native runtime target values by `@leegeunhyeok`
+- support rollipop namespace re-exports (#27) by `@leegeunhyeok`
+
+### 🚜 Refactor
+
+- update rollipop global fallback by `@leegeunhyeok`
+- update rollipop module map (#26) by `@leegeunhyeok`
+
+### ⚙️ Miscellaneous Tasks
+
+- update cliff.toml by `@leegeunhyeok`
+- update by `@leegeunhyeok`
+- remove discord by `@leegeunhyeok`
+- pin vite-plus (vp) CLI to 0.1.24 in setup-vp by `@leegeunhyeok`
+
+
 ## [1.0.14] - 2026-06-15
 
 ### 🐛 Bug Fixes
