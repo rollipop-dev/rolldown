@@ -6221,9 +6221,9 @@ dependencies = [
 
 [[package]]
 name = "swc_react_native"
-version = "0.1.8"
+version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5f138af262e9c7b59f5ceb31dbdae7b200e2a9538479e34fd25a69c6654b062"
+checksum = "bc21f09c01315ddca1a256efb670489e91c802a614da9a719e4197fed86af165"
 dependencies = [
  "swc_react_native_codegen",
  "swc_react_native_hermes_v1_fixes",
