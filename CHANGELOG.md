@@ -1,4 +1,15 @@
 
+## [1.0.17] - 2026-06-19
+
+### 🚀 Features
+
+- use `globalThis` instead by `@leegeunhyeok`
+
+### ⚙️ Miscellaneous Tasks
+
+- bump swc_react_native crate to 0.1.9 by `@leegeunhyeok`
+
+
 ## [1.0.16] - 2026-06-18
 
 ### 🚀 Features
