@@ -45,8 +45,8 @@ impl RollipopReactRefreshWrapperPlugin {
         runtime: JsxRuntime::Automatic,
         import_source: options.jsx_import_source,
         refresh: Some(ReactRefreshOptions {
-          refresh_reg: "global.$RefreshReg$".to_string(),
-          refresh_sig: "global.$RefreshSig$".to_string(),
+          refresh_reg: "globalThis.$RefreshReg$".to_string(),
+          refresh_sig: "globalThis.$RefreshSig$".to_string(),
           ..ReactRefreshOptions::default()
         }),
         ..JsxOptions::default()
@@ -71,10 +71,10 @@ impl RollipopReactRefreshWrapperPlugin {
     if has_refresh {
       ms.prepend(format!(
         "\
-var __prev$RefreshReg$ = global.$RefreshReg$;
-var __prev$RefreshSig$ = global.$RefreshSig$;
-global.$RefreshReg$ = function(type, id) {{ return __ReactRefresh.register(type, {escaped_id} + ' ' + id) }}
-global.$RefreshSig$ = function() {{ return __ReactRefresh.createSignatureFunctionForTransform(); }}
+var __prev$RefreshReg$ = globalThis.$RefreshReg$;
+var __prev$RefreshSig$ = globalThis.$RefreshSig$;
+globalThis.$RefreshReg$ = function(type, id) {{ return __ReactRefresh.register(type, {escaped_id} + ' ' + id) }}
+globalThis.$RefreshSig$ = function() {{ return __ReactRefresh.createSignatureFunctionForTransform(); }}
 "
       ));
     }
@@ -94,8 +94,8 @@ global.$RefreshSig$ = function() {{ return __ReactRefresh.createSignatureFunctio
     if has_refresh {
       suffix.push_str(
         "\
-\nglobal.$RefreshReg$ = __prev$RefreshReg$;
-global.$RefreshSig$ = __prev$RefreshSig$;
+\nglobalThis.$RefreshReg$ = __prev$RefreshReg$;
+globalThis.$RefreshSig$ = __prev$RefreshSig$;
 ",
       );
     }
