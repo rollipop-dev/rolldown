@@ -45,7 +45,7 @@ Use this skill to prove that the current `rolldown` checkout works in the real R
      ```yaml
      catalogs:
        rolldown:
-         "@rollipop/rolldown": file:/Users/ghlee/workspace/rolldown/packages/rolldown/package.tgz
+         '@rollipop/rolldown': file:/Users/ghlee/workspace/rolldown/packages/rolldown/package.tgz
      ```
    - If a future Rollipop checkout uses `package.json` `resolutions` instead, set:
      ```json
