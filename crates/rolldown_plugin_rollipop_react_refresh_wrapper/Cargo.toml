@@ -16,7 +16,6 @@ doctest = false
 test = false
 
 [dependencies]
-arcstr = { workspace = true }
 memchr = { workspace = true }
 oxc = { workspace = true }
 regex = { workspace = true }

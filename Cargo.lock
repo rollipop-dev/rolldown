@@ -4554,7 +4554,6 @@ dependencies = [
 name = "rolldown_plugin_rollipop_react_refresh_wrapper"
 version = "0.1.0"
 dependencies = [
- "arcstr",
  "memchr",
  "oxc",
  "regex",
