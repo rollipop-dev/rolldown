@@ -15,7 +15,7 @@ use rolldown_plugin::{
 use rolldown_plugin_utils::to_string_literal;
 use rolldown_sourcemap::{SourceMap, collapse_sourcemaps};
 use rolldown_utils::pattern_filter::{FilterResult, StringOrRegex, filter};
-use string_wizard::{MagicString, SourceMapOptions};
+use string_wizard::{Hires, MagicString, SourceMapOptions};
 
 static REACT_COMP_RE: LazyLock<Regex> =
   LazyLock::new(|| Regex::new(r"extends\s+(?:React\.)?(?:Pure)?Component").unwrap());
@@ -105,7 +105,7 @@ globalThis.$RefreshSig$ = __prev$RefreshSig$;
     let map = ms.source_map(SourceMapOptions {
       source: id.into(),
       include_content: true,
-      ..Default::default()
+      hires: Hires::Boundary,
     });
 
     Some((ms.to_string(), map))
