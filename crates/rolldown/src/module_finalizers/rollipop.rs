@@ -10,7 +10,7 @@ use oxc::{
 use oxc_traverse::Traverse;
 use rolldown_common::{
   ExternalModule, ImportRecordIdx, IndexModules, Interop, Module, ModuleIdx, ModuleType,
-  NormalModule, Specifier, StmtInfoIdx, StmtInfos, SymbolRefDb,
+  NormalModule, Specifier, StmtInfoIdx, StmtInfos, SymbolRef, SymbolRefDb,
 };
 use rolldown_ecmascript::CJS_REQUIRE_REF_STR;
 use rolldown_ecmascript_utils::{AstFactory, ExpressionExt};
@@ -126,9 +126,9 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     }
   }
 
-  fn binding_name_for_import(&mut self, importee_idx: ModuleIdx, rec_id: ImportRecordIdx) -> &str {
-    self.generated_static_import_infos.entry(importee_idx).or_insert_with(|| {
-      let importee = &self.modules[importee_idx];
+  fn binding_name_for_import(&mut self, target_idx: ModuleIdx, rec_id: ImportRecordIdx) -> &str {
+    self.generated_static_import_infos.entry(target_idx).or_insert_with(|| {
+      let importee = &self.modules[target_idx];
       format!("import_{}_{}{}", importee.repr_name(), self.unique_index, rec_id.raw())
     })
   }
@@ -178,6 +178,148 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
 
   fn import_binding_for_imported(&self, binding_name: &str, imported: &Specifier) -> ImportBinding {
     ImportBinding { binding_name: binding_name.to_string(), imported: imported.clone() }
+  }
+
+  fn should_require_importee(&self, importee_idx: ModuleIdx) -> bool {
+    self.modules[importee_idx].as_external().is_some() || self.metas[importee_idx].is_included
+  }
+
+  fn export_name_for_canonical_ref(
+    &self,
+    module_idx: ModuleIdx,
+    canonical_ref: SymbolRef,
+    fallback: &Specifier,
+  ) -> Specifier {
+    for (exported, resolved_export) in self.metas[module_idx].canonical_exports(true) {
+      if self.symbol_db.canonical_ref_for(resolved_export.symbol_ref) == canonical_ref {
+        return Specifier::Literal(exported.clone());
+      }
+    }
+
+    fallback.clone()
+  }
+
+  fn create_import_binding_for_module(
+    &mut self,
+    module_idx: ModuleIdx,
+    rec_id: ImportRecordIdx,
+    imported: &Specifier,
+    span: Span,
+  ) -> (ImportBinding, Option<Statement<'ast>>) {
+    let binding_name = self.binding_name_for_import(module_idx, rec_id).to_string();
+    let stmt =
+      self.create_import_binding_stmt(&self.modules[module_idx], &binding_name).map(|mut stmt| {
+        *stmt.span_mut() = span;
+        stmt
+      });
+    (self.import_binding_for_imported(&binding_name, imported), stmt)
+  }
+
+  fn create_import_binding_for_import_specifier(
+    &mut self,
+    rec_id: ImportRecordIdx,
+    local_symbol_id: SymbolId,
+    imported: &Specifier,
+    span: Span,
+  ) -> Option<(ImportBinding, Option<Statement<'ast>>)> {
+    let rec = &self.module.import_records[rec_id];
+    let importee_idx = rec.resolved_module?;
+    let (target_idx, target_imported) = if self.should_require_importee(importee_idx) {
+      (importee_idx, imported.clone())
+    } else {
+      let local_ref = SymbolRef::from((self.module.idx, local_symbol_id));
+      let canonical_ref = self.symbol_db.canonical_ref_for(local_ref);
+      (
+        canonical_ref.owner,
+        self.export_name_for_canonical_ref(canonical_ref.owner, canonical_ref, imported),
+      )
+    };
+
+    Some(self.create_import_binding_for_module(target_idx, rec_id, &target_imported, span))
+  }
+
+  fn create_import_binding_for_re_export(
+    &mut self,
+    rec_id: ImportRecordIdx,
+    imported: &Specifier,
+    span: Span,
+  ) -> Option<(ImportBinding, Option<Statement<'ast>>)> {
+    let rec = &self.module.import_records[rec_id];
+    let importee_idx = rec.resolved_module?;
+    let (target_idx, target_imported) = if self.should_require_importee(importee_idx) {
+      (importee_idx, imported.clone())
+    } else {
+      let Specifier::Literal(imported_name) = imported else {
+        return None;
+      };
+      let resolved_export = self.metas[importee_idx].resolved_exports.get(imported_name)?;
+      let canonical_ref = self.symbol_db.canonical_ref_for(resolved_export.symbol_ref);
+      (
+        canonical_ref.owner,
+        self.export_name_for_canonical_ref(canonical_ref.owner, canonical_ref, imported),
+      )
+    };
+
+    Some(self.create_import_binding_for_module(target_idx, rec_id, &target_imported, span))
+  }
+
+  fn inline_import_access_for_symbol_ref(
+    &self,
+    symbol_ref: SymbolRef,
+    span: Span,
+  ) -> Expression<'ast> {
+    let canonical_ref = self.symbol_db.canonical_ref_for(symbol_ref);
+    let module = &self.modules[canonical_ref.owner];
+    let fallback = Specifier::Literal(canonical_ref.name(self.symbol_db).into());
+    let imported =
+      self.export_name_for_canonical_ref(canonical_ref.owner, canonical_ref, &fallback);
+    let (require_expr, interop) = match module {
+      Module::Normal(importee) => {
+        (self.require_call_for_module(&self.modules[importee.idx]), self.module.interop(importee))
+      }
+      Module::External(importee) => {
+        (self.require_call_for_external(importee), Some(Interop::Babel))
+      }
+    };
+    let mut expr = make_import_access_expr_for_object(
+      self.ast_factory,
+      self.to_esm_expr(require_expr, interop),
+      &imported,
+    );
+    *expr.span_mut() = span;
+    expr
+  }
+
+  fn rewrite_resolved_member_expr(
+    &self,
+    node: &Expression<'ast>,
+    scoping: &Scoping,
+  ) -> Option<Expression<'ast>> {
+    let (node_id, span) = match node {
+      Expression::StaticMemberExpression(expr) => (expr.node_id(), expr.span),
+      Expression::ComputedMemberExpression(expr) => (expr.node_id(), expr.span),
+      _ => return None,
+    };
+    let resolution = self.linking_info.resolved_member_expr_refs.get(&node_id)?;
+    if let Some(reference_id) = resolution.reference_id
+      && let Some(symbol_id) = scoping.get_reference(reference_id).symbol_id()
+      && self.import_bindings.contains_key(&symbol_id)
+    {
+      return None;
+    }
+    let Some(resolved_ref) = resolution.resolved else {
+      return Some(
+        self
+          .ast_factory
+          .make_member_expr_with_void_zero_object(&resolution.prop_and_related_span_list, span),
+      );
+    };
+    let base = self.inline_import_access_for_symbol_ref(resolved_ref, span);
+    Some(self.ast_factory.make_member_expr_or_ident_ref(
+      base,
+      &resolution.prop_and_related_span_list,
+      span,
+    ))
   }
 
   fn should_include_top_level_stmt(&self, stmt_info_idx: StmtInfoIdx) -> bool {
@@ -267,41 +409,66 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
               return;
             };
             let binding_name = self.binding_name_for_import(importee_idx, rec_id).to_string();
-            let mut needs_runtime_binding =
+            let mut needs_importee_binding =
               import_decl.specifiers.as_ref().is_none_or(|specifiers| specifiers.is_empty());
             if let Some(specifiers) = &import_decl.specifiers {
               for spec in specifiers {
                 match spec {
                   ast::ImportDeclarationSpecifier::ImportSpecifier(import_specifier) => {
                     let imported = Specifier::Literal(import_specifier.imported.name().into());
-                    let import_binding = self.import_binding_for_imported(&binding_name, &imported);
-                    needs_runtime_binding |= import_binding.needs_runtime_binding();
-                    self.import_bindings.insert(import_specifier.local.symbol_id(), import_binding);
+                    if let Some((import_binding, stmt)) = self
+                      .create_import_binding_for_import_specifier(
+                        rec_id,
+                        import_specifier.local.symbol_id(),
+                        &imported,
+                        import_decl.span,
+                      )
+                    {
+                      self
+                        .import_bindings
+                        .insert(import_specifier.local.symbol_id(), import_binding);
+                      if let Some(stmt) = stmt {
+                        program_body.push(stmt);
+                      }
+                    }
                   }
                   ast::ImportDeclarationSpecifier::ImportDefaultSpecifier(default_specifier) => {
                     let imported = Specifier::Literal("default".into());
-                    let import_binding = self.import_binding_for_imported(&binding_name, &imported);
-                    needs_runtime_binding |= import_binding.needs_runtime_binding();
-                    self
-                      .import_bindings
-                      .insert(default_specifier.local.symbol_id(), import_binding);
+                    if let Some((import_binding, stmt)) = self
+                      .create_import_binding_for_import_specifier(
+                        rec_id,
+                        default_specifier.local.symbol_id(),
+                        &imported,
+                        import_decl.span,
+                      )
+                    {
+                      self
+                        .import_bindings
+                        .insert(default_specifier.local.symbol_id(), import_binding);
+                      if let Some(stmt) = stmt {
+                        program_body.push(stmt);
+                      }
+                    }
                   }
                   ast::ImportDeclarationSpecifier::ImportNamespaceSpecifier(
                     namespace_specifier,
                   ) => {
-                    needs_runtime_binding = true;
-                    self.import_bindings.insert(
-                      namespace_specifier.local.symbol_id(),
-                      ImportBinding {
-                        binding_name: binding_name.clone(),
-                        imported: Specifier::Star,
-                      },
-                    );
+                    if self.should_require_importee(importee_idx) {
+                      needs_importee_binding = true;
+                      self.import_bindings.insert(
+                        namespace_specifier.local.symbol_id(),
+                        ImportBinding {
+                          binding_name: binding_name.clone(),
+                          imported: Specifier::Star,
+                        },
+                      );
+                    }
                   }
                 }
               }
             }
-            if needs_runtime_binding
+            if needs_importee_binding
+              && self.should_require_importee(importee_idx)
               && let Some(stmt) =
                 self.create_import_binding_stmt(&self.modules[importee_idx], &binding_name)
             {
@@ -311,13 +478,20 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
           ast::ModuleDeclaration::ExportNamedDeclaration(decl) => {
             if decl.source.is_some() {
               let rec_id = self.module.imports[&decl.node_id()];
-              let Some((_importee_idx, binding_name, stmt)) =
-                self.ensure_import_for_record(rec_id, decl.span)
-              else {
+              if decl.specifiers.is_empty() {
+                let rec = &self.module.import_records[rec_id];
+                let Some(importee_idx) = rec.resolved_module else {
+                  return;
+                };
+                if self.should_require_importee(importee_idx) {
+                  let binding_name = self.binding_name_for_import(importee_idx, rec_id).to_string();
+                  if let Some(stmt) =
+                    self.create_import_binding_stmt(&self.modules[importee_idx], &binding_name)
+                  {
+                    program_body.push(stmt);
+                  }
+                }
                 return;
-              };
-              if let Some(stmt) = stmt {
-                program_body.push(stmt);
               }
               let mut props = self.ast_factory.vec_with_capacity(decl.specifiers.len());
               for specifier in &decl.specifiers {
@@ -331,9 +505,17 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
                   ),
                 };
                 let exported = specifier.exported.name();
+                let Some((import_binding, stmt)) =
+                  self.create_import_binding_for_re_export(rec_id, &local, decl.span)
+                else {
+                  continue;
+                };
+                if let Some(stmt) = stmt {
+                  program_body.push(stmt);
+                }
                 props.push(self.ast_factory.make_lazy_export_property(
                   &exported,
-                  make_import_access_expr(self.ast_factory, &binding_name, &local),
+                  import_binding.to_expression(self.ast_factory),
                   !is_validate_identifier_name(&exported),
                 ));
               }
@@ -767,6 +949,11 @@ impl<'ast> Traverse<'ast, ()> for RollipopAstFinalizer<'_, 'ast> {
     node: &mut Expression<'ast>,
     ctx: &mut oxc_traverse::TraverseCtx<'ast, ()>,
   ) {
+    if let Some(expr) = self.rewrite_resolved_member_expr(node, ctx.scoping()) {
+      *node = expr;
+      return;
+    }
+
     if let Expression::Identifier(ident) = node
       && let Some(reference_id) = ident.reference_id.get()
       && let Some(symbol_id) = ctx.scoping().get_reference(reference_id).symbol_id()
@@ -822,10 +1009,6 @@ struct ImportBinding {
 }
 
 impl ImportBinding {
-  fn needs_runtime_binding(&self) -> bool {
-    true
-  }
-
   fn to_expression<'ast>(&self, ast_factory: AstFactory<'ast>) -> Expression<'ast> {
     make_import_access_expr(ast_factory, &self.binding_name, &self.imported)
   }
@@ -836,12 +1019,24 @@ fn make_import_access_expr<'ast>(
   binding_name: &str,
   imported: &Specifier,
 ) -> Expression<'ast> {
+  make_import_access_expr_for_object(
+    ast_factory,
+    ast_factory.make_id_ref_expr(SPAN, binding_name),
+    imported,
+  )
+}
+
+fn make_import_access_expr_for_object<'ast>(
+  ast_factory: AstFactory<'ast>,
+  object: Expression<'ast>,
+  imported: &Specifier,
+) -> Expression<'ast> {
   match imported {
-    Specifier::Star => ast_factory.make_id_ref_expr(SPAN, binding_name),
+    Specifier::Star => object,
     Specifier::Literal(name) if is_validate_identifier_name(name.as_str()) => {
       Expression::StaticMemberExpression(ast_factory.alloc_static_member_expression(
         SPAN,
-        ast_factory.make_id_ref_expr(SPAN, binding_name),
+        object,
         ast_factory.identifier_name(SPAN, ast_factory.str(name.as_str())),
         false,
       ))
@@ -849,7 +1044,7 @@ fn make_import_access_expr<'ast>(
     Specifier::Literal(name) => {
       Expression::ComputedMemberExpression(ast_factory.alloc_computed_member_expression(
         SPAN,
-        ast_factory.make_id_ref_expr(SPAN, binding_name),
+        object,
         ast_factory.expression_string_literal(SPAN, ast_factory.str(name.as_str()), None),
         false,
       ))

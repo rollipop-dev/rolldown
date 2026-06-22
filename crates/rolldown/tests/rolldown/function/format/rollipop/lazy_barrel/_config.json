@@ -1,0 +1,11 @@
+{
+  "config": {
+    "format": "rollipop",
+    "codeSplitting": false,
+    "experimental": {
+      "lazyBarrel": true
+    },
+    "treeshake": true
+  },
+  "snapshot": false
+}
