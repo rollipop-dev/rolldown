@@ -1,4 +1,11 @@
 
+## [1.0.18] - 2026-06-22
+
+### 🐛 Bug Fixes
+
+- refresh wrapper plugin sourcemap (#33) by `@leegeunhyeok`
+
+
 ## [1.0.17] - 2026-06-19
 
 ### 🚀 Features
