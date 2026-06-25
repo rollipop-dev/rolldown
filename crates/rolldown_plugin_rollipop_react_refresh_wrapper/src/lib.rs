@@ -11,6 +11,7 @@ use rolldown_utils::pattern_filter::{FilterResult, StringOrRegex, filter};
 static REACT_COMP_RE: LazyLock<Regex> =
   LazyLock::new(|| Regex::new("extends\\s+(?:React\\.)?(?:Pure)?Component").unwrap());
 const REFRESH_CONTENT: &str = "$RefreshReg$(";
+const ROLLIPOP_RUNTIME: &str = "__rollipop_runtime__";
 
 #[derive(Debug)]
 pub struct RollipopReactRefreshWrapperPluginOptions {
@@ -33,10 +34,11 @@ impl RollipopReactRefreshWrapperPlugin {
   }
 
   fn add_refresh_wrapper(&self, code: &str, id: &str, module_type: &ModuleType) -> Option<String> {
-    if !((/* is_jsx */is_jsx(id, module_type))
-      || (/* has_refresh */memchr::memmem::find(code.as_bytes(), REFRESH_CONTENT.as_bytes()).is_some())
-      || (/* only_react_comp */REACT_COMP_RE.is_match(code)))
-    {
+    let is_jsx = is_jsx(id, module_type);
+    let has_refresh = memchr::memmem::find(code.as_bytes(), REFRESH_CONTENT.as_bytes()).is_some();
+    let only_react_comp = REACT_COMP_RE.is_match(code);
+
+    if !(is_jsx || has_refresh || only_react_comp) {
       return None;
     }
 
@@ -46,11 +48,11 @@ impl RollipopReactRefreshWrapperPlugin {
       new_code,
       "\
 \nif (import.meta.hot) {{
-  if (import.meta.hot.refresh == null) throw new Error('react-refresh runtime is not initialized');
+  if ({ROLLIPOP_RUNTIME} == null) throw new Error('Rollipop dev runtime is not initialized');
   import.meta.hot.accept((nextExports) => {{
     if (!nextExports) return;
-    if (import.meta.hot.refreshUtils.isReactRefreshBoundary(nextExports)) {{
-      import.meta.hot.refreshUtils.enqueueUpdate();
+    if ({ROLLIPOP_RUNTIME}.reactRefresh.isReactRefreshBoundary(nextExports)) {{
+      {ROLLIPOP_RUNTIME}.reactRefresh.enqueueUpdate();
     }}
   }});
 }}
@@ -58,14 +60,12 @@ impl RollipopReactRefreshWrapperPlugin {
     )
     .unwrap();
 
-    if (/* is_jsx */is_jsx(id, module_type))
-      || (/* has_refresh */memchr::memmem::find(code.as_bytes(), REFRESH_CONTENT.as_bytes()).is_some())
-    {
+    if is_jsx || has_refresh {
       write!(
         new_code,
         "\
-function $RefreshReg$(type, id) {{ return __ReactRefresh.register(type, {escaped_id} + ' ' + id); }}
-function $RefreshSig$() {{ return __ReactRefresh.createSignatureFunctionForTransform(); }}
+function $RefreshReg$(type, id) {{ return {ROLLIPOP_RUNTIME}.reactRefresh.register(type, {escaped_id} + ' ' + id); }}
+function $RefreshSig$() {{ return {ROLLIPOP_RUNTIME}.reactRefresh.createSignatureFunctionForTransform(); }}
 ",
       )
       .unwrap();
