@@ -42,26 +42,8 @@ fn block_on<F: Future>(future: F) -> F::Output {
   }
 }
 
-fn line_col(code: &str, needle: &str) -> (u32, u32) {
-  let position = code.find(needle).expect("needle should exist in code");
-  let mut line = 0;
-  let mut line_start = 0;
-
-  for (index, byte) in code.bytes().enumerate() {
-    if index == position {
-      break;
-    }
-    if byte == b'\n' {
-      line += 1;
-      line_start = index + 1;
-    }
-  }
-
-  (line, u32::try_from(position - line_start).expect("fixture line should fit in u32"))
-}
-
 #[test]
-fn preserves_throw_statement_location_after_refresh_wrapper() {
+fn adds_refresh_wrapper_without_transforming_jsx_or_returning_map() {
   let input = ArcStr::from(
     "\
 import { View } from 'react-native';
@@ -97,19 +79,153 @@ export default HomeScreen;
 
   let output = block_on(plugin.transform(ctx, &args)).unwrap().expect("plugin should transform");
   let code = output.code.expect("plugin should return code");
-  assert!(code.contains("globalThis.$RefreshReg$"));
-  let map = match output.map {
-    HookTransformOutputMap::Sourcemap(map) => map,
-    HookTransformOutputMap::Omitted | HookTransformOutputMap::Null => {
-      panic!("plugin should return a sourcemap")
-    }
-  };
-  let lookup_table = map.generate_lookup_table();
-  let generated = line_col(&code, "ROLLIPOP_SYMBOLICATE_RUNTIME_CHECK");
-  let original = map
-    .lookup_source_view_token(&lookup_table, generated.0, generated.1)
-    .expect("generated throw should map back to original source");
+  assert!(code.contains("function $RefreshReg$(type, id)"));
+  assert!(code.contains("import.meta.hot.accept"));
+  assert!(code.contains("return <View navigation={navigation} />;"));
+  assert!(!code.contains("jsx-dev-runtime"));
+  assert!(matches!(output.map, HookTransformOutputMap::Null));
+}
 
-  assert_eq!(original.get_source_id(), Some(0));
-  assert_eq!(original.get_src_line(), line_col(&input, "ROLLIPOP_SYMBOLICATE_RUNTIME_CHECK").0);
+#[test]
+fn adds_refresh_wrapper_to_js_file_when_module_type_is_jsx() {
+  let input = ArcStr::from(
+    "\
+// @flow
+import { View } from 'react-native';
+
+function HomeScreen(props) {
+  return <View title={props.title} />;
+}
+
+export default HomeScreen;
+",
+  );
+  let id = "/fixture/FlowComponent.js";
+  let plugin = RollipopReactRefreshWrapperPlugin::new(RollipopReactRefreshWrapperPluginOptions {
+    cwd: "/fixture".to_string(),
+    include: vec![StringOrRegex::String("**/*.js".to_string())],
+    exclude: vec![],
+    jsx_import_source: None,
+  });
+  let sourcemap_chain = UniqueArc::<Vec<SourcemapChainElement>>::new(vec![]);
+  let ctx = Arc::new(TransformPluginContext::new(
+    PluginContext::new_napi_context(),
+    sourcemap_chain.weak_ref(),
+    input.clone(),
+    ArcStr::from(id),
+    ModuleIdx::new(0),
+    PluginIdx::new(0),
+    None,
+  ));
+  let module_type = ModuleType::Jsx;
+  let args = HookTransformArgs { id, code: &input, module_type: &module_type };
+
+  let output = block_on(plugin.transform(ctx, &args)).unwrap().expect("plugin should transform");
+  let code = output.code.expect("plugin should return code");
+  assert!(code.contains("function $RefreshReg$(type, id)"));
+  assert!(code.contains("import.meta.hot.accept"));
+  assert!(matches!(output.map, HookTransformOutputMap::Null));
+}
+
+#[test]
+fn adds_refresh_wrapper_to_js_with_refresh_content() {
+  let input = ArcStr::from(
+    "\
+function HomeScreen() {
+  return React.createElement(View);
+}
+var _c;
+$RefreshReg$(_c, 'HomeScreen');
+",
+  );
+  let id = "/fixture/App.js";
+  let plugin = RollipopReactRefreshWrapperPlugin::new(RollipopReactRefreshWrapperPluginOptions {
+    cwd: "/fixture".to_string(),
+    include: vec![StringOrRegex::String("**/*.js".to_string())],
+    exclude: vec![],
+    jsx_import_source: None,
+  });
+  let sourcemap_chain = UniqueArc::<Vec<SourcemapChainElement>>::new(vec![]);
+  let ctx = Arc::new(TransformPluginContext::new(
+    PluginContext::new_napi_context(),
+    sourcemap_chain.weak_ref(),
+    input.clone(),
+    ArcStr::from(id),
+    ModuleIdx::new(0),
+    PluginIdx::new(0),
+    None,
+  ));
+  let module_type = ModuleType::Js;
+  let args = HookTransformArgs { id, code: &input, module_type: &module_type };
+
+  let output = block_on(plugin.transform(ctx, &args)).unwrap().expect("plugin should transform");
+  let code = output.code.expect("plugin should return code");
+  assert!(code.contains("function $RefreshReg$(type, id)"));
+  assert!(code.contains("import.meta.hot.accept"));
+  assert!(matches!(output.map, HookTransformOutputMap::Null));
+}
+
+#[test]
+fn adds_refresh_boundary_to_js_react_class_without_refresh_helpers() {
+  let input = ArcStr::from(
+    "\
+class HomeScreen extends React.Component {
+  render() {
+    return React.createElement(View);
+  }
+}
+",
+  );
+  let id = "/fixture/App.js";
+  let plugin = RollipopReactRefreshWrapperPlugin::new(RollipopReactRefreshWrapperPluginOptions {
+    cwd: "/fixture".to_string(),
+    include: vec![StringOrRegex::String("**/*.js".to_string())],
+    exclude: vec![],
+    jsx_import_source: None,
+  });
+  let sourcemap_chain = UniqueArc::<Vec<SourcemapChainElement>>::new(vec![]);
+  let ctx = Arc::new(TransformPluginContext::new(
+    PluginContext::new_napi_context(),
+    sourcemap_chain.weak_ref(),
+    input.clone(),
+    ArcStr::from(id),
+    ModuleIdx::new(0),
+    PluginIdx::new(0),
+    None,
+  ));
+  let module_type = ModuleType::Js;
+  let args = HookTransformArgs { id, code: &input, module_type: &module_type };
+
+  let output = block_on(plugin.transform(ctx, &args)).unwrap().expect("plugin should transform");
+  let code = output.code.expect("plugin should return code");
+  assert!(code.contains("import.meta.hot.accept"));
+  assert!(!code.contains("function $RefreshReg$(type, id)"));
+  assert!(matches!(output.map, HookTransformOutputMap::Null));
+}
+
+#[test]
+fn skips_modules_without_refresh_content() {
+  let input = ArcStr::from("export const runtime = true;\n");
+  let id = "\0rolldown/runtime.js";
+  let plugin = RollipopReactRefreshWrapperPlugin::new(RollipopReactRefreshWrapperPluginOptions {
+    cwd: "/fixture".to_string(),
+    include: vec![StringOrRegex::String("**/*.js".to_string())],
+    exclude: vec![],
+    jsx_import_source: None,
+  });
+  let sourcemap_chain = UniqueArc::<Vec<SourcemapChainElement>>::new(vec![]);
+  let ctx = Arc::new(TransformPluginContext::new(
+    PluginContext::new_napi_context(),
+    sourcemap_chain.weak_ref(),
+    input.clone(),
+    ArcStr::from(id),
+    ModuleIdx::new(0),
+    PluginIdx::new(0),
+    None,
+  ));
+  let module_type = ModuleType::Js;
+  let args = HookTransformArgs { id, code: &input, module_type: &module_type };
+
+  let output = block_on(plugin.transform(ctx, &args)).unwrap();
+  assert!(output.is_none());
 }
