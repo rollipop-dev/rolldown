@@ -1,24 +1,16 @@
-use std::{borrow::Cow, path::Path, sync::LazyLock};
+use std::{borrow::Cow, fmt::Write, sync::LazyLock};
 
-use oxc::codegen::{Codegen, CodegenOptions, CodegenReturn, CommentOptions};
-use oxc::parser::Parser;
-use oxc::semantic::SemanticBuilder;
-use oxc::span::SourceType;
-use oxc::transformer::{
-  JsxOptions, JsxRuntime, ReactRefreshOptions, TransformOptions, Transformer,
-};
 use regex::Regex;
-use rolldown_error::{BatchedBuildDiagnostic, BuildDiagnostic, EventKind, Severity};
+use rolldown_common::ModuleType;
 use rolldown_plugin::{
   HookTransformOutput, HookTransformOutputMap, HookUsage, Plugin, SharedTransformPluginContext,
 };
 use rolldown_plugin_utils::to_string_literal;
-use rolldown_sourcemap::{SourceMap, collapse_sourcemaps};
 use rolldown_utils::pattern_filter::{FilterResult, StringOrRegex, filter};
-use string_wizard::{Hires, MagicString, SourceMapOptions};
 
 static REACT_COMP_RE: LazyLock<Regex> =
-  LazyLock::new(|| Regex::new(r"extends\s+(?:React\.)?(?:Pure)?Component").unwrap());
+  LazyLock::new(|| Regex::new("extends\\s+(?:React\\.)?(?:Pure)?Component").unwrap());
+const REFRESH_CONTENT: &str = "$RefreshReg$(";
 
 #[derive(Debug)]
 pub struct RollipopReactRefreshWrapperPluginOptions {
@@ -33,53 +25,26 @@ pub struct RollipopReactRefreshWrapperPlugin {
   cwd: String,
   include: Vec<StringOrRegex>,
   exclude: Vec<StringOrRegex>,
-  transform_options: TransformOptions,
 }
 
 impl RollipopReactRefreshWrapperPlugin {
   pub fn new(options: RollipopReactRefreshWrapperPluginOptions) -> Self {
-    let transform_options = TransformOptions {
-      jsx: JsxOptions {
-        // `react-refresh` should work with development mode.
-        development: true,
-        runtime: JsxRuntime::Automatic,
-        import_source: options.jsx_import_source,
-        refresh: Some(ReactRefreshOptions {
-          refresh_reg: "globalThis.$RefreshReg$".to_string(),
-          refresh_sig: "globalThis.$RefreshSig$".to_string(),
-          ..ReactRefreshOptions::default()
-        }),
-        ..JsxOptions::default()
-      },
-      ..TransformOptions::default()
-    };
-
-    Self { cwd: options.cwd, include: options.include, exclude: options.exclude, transform_options }
+    Self { cwd: options.cwd, include: options.include, exclude: options.exclude }
   }
 
-  /// Wraps code with react-refresh boundary using MagicString for sourcemap support.
-  fn add_refresh_wrapper(&self, code: &str, id: &str) -> Option<(String, SourceMap)> {
-    let has_refresh = memchr::memmem::find(code.as_bytes(), b"$RefreshReg$(").is_some();
-
-    if !(has_refresh || REACT_COMP_RE.is_match(code)) {
+  fn add_refresh_wrapper(&self, code: &str, id: &str, module_type: &ModuleType) -> Option<String> {
+    if !((/* is_jsx */is_jsx(id, module_type))
+      || (/* has_refresh */memchr::memmem::find(code.as_bytes(), REFRESH_CONTENT.as_bytes()).is_some())
+      || (/* only_react_comp */REACT_COMP_RE.is_match(code)))
+    {
       return None;
     }
 
     let escaped_id = to_string_literal(id);
-    let mut ms = MagicString::new(code);
-
-    if has_refresh {
-      ms.prepend(format!(
-        "\
-var __prev$RefreshReg$ = globalThis.$RefreshReg$;
-var __prev$RefreshSig$ = globalThis.$RefreshSig$;
-globalThis.$RefreshReg$ = function(type, id) {{ return __ReactRefresh.register(type, {escaped_id} + ' ' + id) }}
-globalThis.$RefreshSig$ = function() {{ return __ReactRefresh.createSignatureFunctionForTransform(); }}
-"
-      ));
-    }
-
-    let mut suffix = "\
+    let mut new_code = code.to_string();
+    write!(
+      new_code,
+      "\
 \nif (import.meta.hot) {{
   if (import.meta.hot.refresh == null) throw new Error('react-refresh runtime is not initialized');
   import.meta.hot.accept((nextExports) => {{
@@ -88,27 +53,25 @@ globalThis.$RefreshSig$ = function() {{ return __ReactRefresh.createSignatureFun
       import.meta.hot.refreshUtils.enqueueUpdate();
     }}
   }});
-}}"
-      .to_string();
+}}
+"
+    )
+    .unwrap();
 
-    if has_refresh {
-      suffix.push_str(
+    if (/* is_jsx */is_jsx(id, module_type))
+      || (/* has_refresh */memchr::memmem::find(code.as_bytes(), REFRESH_CONTENT.as_bytes()).is_some())
+    {
+      write!(
+        new_code,
         "\
-\nglobalThis.$RefreshReg$ = __prev$RefreshReg$;
-globalThis.$RefreshSig$ = __prev$RefreshSig$;
+function $RefreshReg$(type, id) {{ return __ReactRefresh.register(type, {escaped_id} + ' ' + id); }}
+function $RefreshSig$() {{ return __ReactRefresh.createSignatureFunctionForTransform(); }}
 ",
-      );
+      )
+      .unwrap();
     }
 
-    ms.append(suffix);
-
-    let map = ms.source_map(SourceMapOptions {
-      source: id.into(),
-      include_content: true,
-      hires: Hires::Boundary,
-    });
-
-    Some((ms.to_string(), map))
+    Some(new_code)
   }
 }
 
@@ -133,75 +96,22 @@ impl Plugin for RollipopReactRefreshWrapperPlugin {
       return Ok(None);
     }
 
-    let source_type = source_type_from_id(args.id);
-
-    if !source_type.is_jsx() {
+    let Some(code) = self.add_refresh_wrapper(args.code, args.id, args.module_type) else {
       return Ok(None);
-    }
-
-    let allocator = oxc::allocator::Allocator::default();
-    let ret = Parser::new(&allocator, args.code, source_type).parse();
-    if ret.panicked || !ret.diagnostics.is_empty() {
-      return Err(BatchedBuildDiagnostic::new(BuildDiagnostic::from_oxc_diagnostics(
-        ret.diagnostics,
-        args.code,
-        args.id,
-        Severity::Error,
-        EventKind::ParseError,
-      )))?;
-    }
-
-    let mut program = ret.program;
-    let scoping = SemanticBuilder::new().build(&program).semantic.into_scoping();
-    let transformer = Transformer::new(&allocator, Path::new(args.id), &self.transform_options);
-    let transformer_return = transformer.build_with_scoping(scoping, &mut program);
-    if !transformer_return.diagnostics.is_empty() {
-      return Err(BatchedBuildDiagnostic::new(BuildDiagnostic::from_oxc_diagnostics(
-        transformer_return.diagnostics,
-        args.code,
-        args.id,
-        Severity::Error,
-        EventKind::ParseError,
-      )))?;
-    }
-
-    let CodegenReturn { code, map: oxc_map, .. } = Codegen::new()
-      .with_options(CodegenOptions {
-        comments: CommentOptions { normal: false, ..CommentOptions::default() },
-        source_map_path: Some(args.id.into()),
-        ..CodegenOptions::default()
-      })
-      .build(&program);
-
-    if let Some((wrapped_code, wrapper_map)) = self.add_refresh_wrapper(&code, args.id) {
-      let final_map = match oxc_map {
-        Some(oxc_map) => {
-          let oxc_map = oxc_map.into_owned();
-          Some(collapse_sourcemaps(&[&oxc_map, &wrapper_map]))
-        }
-        None => Some(wrapper_map),
-      };
-      return Ok(Some(HookTransformOutput {
-        code: Some(wrapped_code),
-        map: final_map.map_or(HookTransformOutputMap::Omitted, Into::into),
-        ..Default::default()
-      }));
-    }
-
+    };
     Ok(Some(HookTransformOutput {
       code: Some(code),
-      map: oxc_map.map_or(HookTransformOutputMap::Omitted, |map| map.into_owned().into()),
+      map: HookTransformOutputMap::Null,
       ..Default::default()
     }))
   }
 }
 
-fn source_type_from_id(id: &str) -> SourceType {
-  let id = id.split_once('?').map_or(id, |(id, _)| id);
-  match Path::new(id).extension().and_then(|e| e.to_str()) {
-    Some("jsx") => SourceType::jsx(),
-    Some("tsx") => SourceType::tsx(),
-    Some("ts" | "cts" | "mts") => SourceType::ts(),
-    _ => SourceType::mjs(),
+fn is_jsx(id: &str, module_type: &ModuleType) -> bool {
+  if matches!(module_type, ModuleType::Jsx | ModuleType::Tsx) {
+    return true;
   }
+
+  let id_without_query = id.split_once('?').map_or(id, |(id, _)| id);
+  id_without_query.ends_with('x')
 }

@@ -392,6 +392,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     Some((importee_idx, binding_name, stmt))
   }
 
+  #[expect(clippy::too_many_lines)]
   fn handle_top_level_stmt(
     &mut self,
     program_body: &mut oxc::allocator::Vec<'ast, Statement<'ast>>,
