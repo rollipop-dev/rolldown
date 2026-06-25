@@ -58,8 +58,7 @@ impl OutputFormat {
   pub fn source_type(&self) -> SourceType {
     match self {
       Self::Esm => SourceType::mjs(),
-      // TODO: remove `.with_commonjs(true)` when https://github.com/oxc-project/oxc/pull/18276 is released
-      Self::Cjs => SourceType::cjs().with_commonjs(true),
+      Self::Cjs => SourceType::cjs(),
       Self::Iife | Self::Umd | Self::Rollipop => SourceType::cjs().with_script(true),
     }
   }

@@ -10,15 +10,15 @@ Use this skill when syncing upstream `rolldown/rolldown` `main` into the Rollipo
 ## Success criteria
 
 - The local `main` branch starts from the latest `origin/main`.
-- Upstream `main` is merged into the fork's `main`.
+- Upstream `main` changes are applied onto the fork's `main` as one single-parent, squash-style sync commit.
 - Fork-specific behavior is preserved and clearly marked.
 - The pnpm catalog `rolldown` version matches the synced upstream `packages/rolldown` version.
 - Fork-managed npm package versions under `packages/*` stay at their pre-sync fork version unless the user explicitly asks for a release version bump.
 - NAPI binding metadata is regenerated so package versions and binding versions stay in sync with the preserved fork package version.
 - Lockfiles, generated bindings, submodules, and snapshots are consistent.
 - `just roll` passes. Keep fixing and rerunning until it does.
-- After `just roll` passes, request user review before creating the merge commit.
-- Once the user approves the reviewed result, create the merge commit using the commit message rules below and leave the final working tree clean.
+- After `just roll` passes, request user review before creating the sync commit.
+- Once the user approves the reviewed result, create the single-parent sync commit using the commit message rules below and leave the final working tree clean.
 
 ## Preflight
 
@@ -53,15 +53,23 @@ Use this skill when syncing upstream `rolldown/rolldown` `main` into the Rollipo
 
 ## Merge workflow
 
-1. Merge upstream:
+1. Record the exact upstream commit being synced:
 
    ```bash
-   git merge upstream/main
+   git rev-parse upstream/main
    ```
 
-2. Resolve conflicts surgically. Prefer upstream for ordinary Rolldown code, but preserve Rollipop-specific decisions.
+2. Apply upstream changes with merge semantics, but do not create a normal upstream merge commit:
 
-3. Regenerate derived files via project commands rather than hand-editing generated outputs:
+   ```bash
+   git merge --squash upstream/main
+   ```
+
+   The final public commit must have only the fork `main` commit as its parent. Do not push a two-parent merge commit that makes upstream commits appear in the fork's mainline history. If a temporary normal merge commit was created while resolving conflicts, replace it with a single-parent commit that reuses the resolved tree before pushing.
+
+3. Resolve conflicts surgically. Prefer upstream for ordinary Rolldown code, but preserve Rollipop-specific decisions.
+
+4. Regenerate derived files via project commands rather than hand-editing generated outputs:
 
    ```bash
    just build-rolldown
@@ -70,7 +78,7 @@ Use this skill when syncing upstream `rolldown/rolldown` `main` into the Rollipo
 
    Use only the commands needed by the conflicts you resolved.
 
-4. For submodules, prefer upstream unless Rollipop intentionally pins a different commit:
+5. For submodules, prefer upstream unless Rollipop intentionally pins a different commit:
 
    ```bash
    git submodule update --init
@@ -133,9 +141,9 @@ Upstream and fork package versions are intentionally managed differently during 
 
 - CI checks that package versions and NAPI binding versions match, so do not finish the sync while those generated files are stale.
 
-### Merge commit message
+### Sync commit message
 
-When the user approves creating the merge commit, use a `chore:` subject that summarizes the actual upstream Rolldown version synced. Include the upstream commit hash in the body.
+When the user approves creating the sync commit, use a `chore:` subject that summarizes the actual upstream Rolldown version synced. Include the exact upstream commit hash in the body. Do not add generic decision-context trailers to routine upstream sync commits.
 
 Example:
 

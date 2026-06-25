@@ -13,6 +13,7 @@ Outside of GitHub, we also use a [Discord server](https://chat.rolldown.rs) for 
 When using AI tools (including LLMs like ChatGPT, Claude, Copilot, etc.) to contribute to Rolldown:
 
 - **Please disclose AI usage** to reduce maintainer fatigue
+- **Please open an issue for discussion first**, before submitting a pull request
 - **You are responsible** for all AI-generated issues or PRs you submit
 - **Low-quality or unreviewed AI content will be closed immediately**
 - **Contributors who submit repeated low-quality ("slop") PRs will be banned without prior warning.** Bans may be lifted if you commit to contributing to Rolldown in accordance with this policy. You may request an unban via our [Discord](https://chat.rolldown.rs/).
@@ -31,7 +32,7 @@ Before requesting new functionality, view [open issues](https://github.com/rolld
 
 ## Submitting a pull request
 
-We accept pull requests for all bugs, fixes, improvements, and new features. Before submitting a pull request, be sure your build passes locally using the development workflow above.
+We accept pull requests for all bugs, fixes, improvements, and new features. For anything beyond a trivial fix, please open an issue for discussion first. Before submitting a pull request, be sure your build passes locally using the development workflow above.
 
 For setting up the project's development environment, see [Project Setup](../development-guide/setup-the-project.md).
 
@@ -40,6 +41,10 @@ For setting up the project's development environment, see [Project Setup](../dev
 Please read the [Etiquette](https://developer.mozilla.org/en-US/docs/MDN/Community/Open_source_etiquette) chapter before submitting a pull request.
 
 :::
+
+### Draft pull requests
+
+If your pull request is still a work in progress, please open it as a [draft](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/changing-the-stage-of-a-pull-request) and only mark it **Ready for review** once you genuinely want the team to review it. Converting a PR to "Ready for review" notifies reviewers and code owners, so please hold off until your changes are complete and your build passes locally. This keeps maintainers' inboxes focused on PRs that actually need attention.
 
 ### Branch organization
 
