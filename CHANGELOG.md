@@ -1,4 +1,25 @@
 
+## [1.0.19] - 2026-06-25
+
+### 🚀 Features
+
+- use rollipop runtime for react refresh wrapper by `@leegeunhyeok`
+- remove `globalIdentifiers` option by `@leegeunhyeok`
+
+### 🐛 Bug Fixes
+
+- lazy barrel optimization in `rollipop` format (#35) by `@leegeunhyeok`
+
+### 🚜 Refactor
+
+- align rollipop module table formatting (#37) by `@leegeunhyeok`
+- align rollipop refresh wrapper (#36) by `@leegeunhyeok`
+
+### ⚙️ Miscellaneous Tasks
+
+- sync upstream rolldown v1.1.3 by `@leegeunhyeok`
+
+
 ## [1.1.3] - 2026-06-24
 
 ### 🐛 Bug Fixes
