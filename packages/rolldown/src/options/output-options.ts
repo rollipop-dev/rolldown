@@ -750,12 +750,6 @@ export interface OutputOptions {
    */
   strict?: boolean | 'auto';
   /**
-   * Reserved global identifiers to be avoided when generating export binding names for module chunks.
-   *
-   * @default []
-   */
-  globalIdentifiers?: string[];
-  /**
    * Enable persistent transform cache to disk.
    * @default false
    */

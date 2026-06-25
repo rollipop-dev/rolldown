@@ -43,7 +43,6 @@ export function bindingifyOutputOptions(outputOptions: OutputOptions): BindingOu
     topLevelVar,
     cleanDir,
     strictExecutionOrder,
-    globalIdentifiers,
   } = outputOptions;
 
   if (legalComments != null) {
@@ -106,7 +105,6 @@ export function bindingifyOutputOptions(outputOptions: OutputOptions): BindingOu
     strictExecutionOrder,
     strict: outputOptions.strict,
     persistentCache: outputOptions.persistentCache,
-    globalIdentifiers,
   };
 }
 

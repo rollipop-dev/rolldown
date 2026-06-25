@@ -20,10 +20,8 @@ pub fn deconflict_chunk_symbols(
   link_output: &LinkStageOutput,
   format: OutputFormat,
   index_chunk_id_to_name: &FxHashMap<ChunkIdx, ArcStr>,
-  global_identifiers: &[String],
 ) {
-  let mut renamer =
-    Renamer::new(chunk.entry_module_idx(), &link_output.symbol_db, format, global_identifiers);
+  let mut renamer = Renamer::new(chunk.entry_module_idx(), &link_output.symbol_db, format);
   // Reserve global scope symbols (unresolved references) to prevent generating conflicting names.
   // These are identifiers referenced but not defined in the module's scope (e.g., `console`, `window`).
   chunk

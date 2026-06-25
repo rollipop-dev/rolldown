@@ -156,5 +156,4 @@ pub struct BindingOutputOptions<'env> {
   pub strict_execution_order: Option<bool>,
   // MARK: - Rollipop
   pub persistent_cache: Option<bool>,
-  pub global_identifiers: Option<Vec<String>>,
 }

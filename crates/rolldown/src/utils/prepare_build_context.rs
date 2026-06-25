@@ -504,7 +504,6 @@ pub fn prepare_build_context(
     // MARK: - Rollipop
     id: raw_options.id.unwrap_or_else(|| "unknown".to_string()),
     persistent_cache: raw_options.persistent_cache.unwrap_or(false),
-    global_identifiers: raw_options.global_identifiers.unwrap_or_default(),
   };
 
   normalized.minify = raw_minify.normalize(&normalized);

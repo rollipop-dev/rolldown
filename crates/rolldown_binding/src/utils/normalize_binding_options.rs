@@ -721,7 +721,6 @@ pub fn normalize_binding_options(
     // MARK: - Rollipop
     id: input_options.id,
     persistent_cache: output_options.persistent_cache,
-    global_identifiers: output_options.global_identifiers,
   };
 
   #[cfg(not(target_family = "wasm"))]

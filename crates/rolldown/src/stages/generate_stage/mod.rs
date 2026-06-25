@@ -185,7 +185,6 @@ impl<'a> GenerateStage<'a> {
           self.link_output,
           self.options.format,
           &index_chunk_id_to_name,
-          &self.options.global_identifiers,
         );
       });
     });

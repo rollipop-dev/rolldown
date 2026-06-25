@@ -1000,12 +1000,6 @@ const OutputOptionsSchema = v.strictObject({
     v.optional(v.boolean()),
     v.description('Enable persistent transform cache to disk.'),
   ),
-  globalIdentifiers: v.pipe(
-    v.optional(v.array(v.string())),
-    v.description(
-      'Reserved global identifiers to be avoided when generating export binding names for module chunks',
-    ),
-  ),
 });
 isTypeTrue<IsSchemaSubType<typeof OutputOptionsSchema, OutputOptions>>();
 

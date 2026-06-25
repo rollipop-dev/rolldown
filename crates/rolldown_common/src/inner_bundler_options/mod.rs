@@ -240,7 +240,6 @@ pub struct BundlerOptions {
   // MARK: - Rollipop
   pub id: Option<String>,
   pub persistent_cache: Option<bool>,
-  pub global_identifiers: Option<Vec<String>>,
 }
 
 #[cfg(feature = "deserialize_bundler_options")]

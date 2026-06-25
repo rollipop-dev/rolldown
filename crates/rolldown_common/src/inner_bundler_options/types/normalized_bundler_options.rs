@@ -119,7 +119,6 @@ pub struct NormalizedBundlerOptions {
   // MARK: - Rollipop
   pub id: String,
   pub persistent_cache: bool,
-  pub global_identifiers: Vec<String>,
 }
 
 // This is only used for testing
@@ -200,7 +199,6 @@ impl Default for NormalizedBundlerOptions {
       // MARK: - Rollipop
       id: "unknown".to_string(),
       persistent_cache: false,
-      global_identifiers: Default::default(),
     }
   }
 }

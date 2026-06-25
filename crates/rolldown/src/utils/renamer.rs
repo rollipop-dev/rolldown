@@ -32,7 +32,6 @@ impl<'name> Renamer<'name> {
     base_module_index: Option<ModuleIdx>,
     symbol_db: &'name SymbolRefDb,
     format: OutputFormat,
-    global_identifiers: &[String],
   ) -> Self {
     let manual_reserved: FxHashSet<String> = {
       // Port from https://github.com/rollup/rollup/blob/master/src/Chunk.ts#L1377-L1394.
@@ -55,7 +54,6 @@ impl<'name> Renamer<'name> {
         .chain(RESERVED_KEYWORDS.iter())
         .chain(GLOBAL_OBJECTS.iter())
         .map(|&s| String::from(s))
-        .chain(global_identifiers.iter().cloned())
         .collect()
     };
 

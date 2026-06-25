@@ -2568,7 +2568,6 @@ export interface BindingOutputOptions {
   cleanDir?: boolean
   strictExecutionOrder?: boolean
   persistentCache?: boolean
-  globalIdentifiers?: Array<string>
 }
 
 export interface BindingOutputs {
