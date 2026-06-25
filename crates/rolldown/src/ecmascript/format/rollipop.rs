@@ -1,6 +1,6 @@
 use json_escape_simd::escape;
 use rolldown_common::{AddonRenderContext, ExportsKind, NormalModule};
-use rolldown_sourcemap::SourceJoiner;
+use rolldown_sourcemap::{Source, SourceJoiner};
 use rolldown_utils::concat_string;
 
 use crate::{
@@ -74,27 +74,27 @@ fn render_module_factories<'code>(
   source_joiner: &mut SourceJoiner<'code>,
 ) {
   source_joiner.append_source(concat_string!(
-    "var ",
+    "\tvar ",
     ROLLIPOP_MODULES_NAME,
     " = ",
     ROLLIPOP_REQUIRE_NAME,
     ".m = {"
   ));
-  let mut is_first_module = true;
-  for RenderedModuleSource { module_idx, sources, .. } in module_sources {
-    if *module_idx == ctx.link_output.runtime.id() {
-      continue;
-    }
-    let Some(sources) = sources else { continue };
-    let Some(module) = ctx.link_output.module_table[*module_idx].as_normal() else { continue };
+  let mut modules = module_sources
+    .iter()
+    .filter_map(|RenderedModuleSource { module_idx, sources, .. }| {
+      if *module_idx == ctx.link_output.runtime.id() {
+        return None;
+      }
+      let sources = sources.as_ref()?;
+      let module = ctx.link_output.module_table[*module_idx].as_normal()?;
+      Some((module, sources))
+    })
+    .peekable();
 
-    if is_first_module {
-      is_first_module = false;
-    } else {
-      source_joiner.append_source(",");
-    }
-
+  while let Some((module, sources)) = modules.next() {
     source_joiner.append_source(concat_string!(
+      "\t\t",
       render_module_runtime_id(ctx, module),
       ": function(",
       ROLLIPOP_GLOBAL_NAME,
@@ -106,12 +106,10 @@ fn render_module_factories<'code>(
       ROLLIPOP_REQUIRE_NAME,
       ") {"
     ));
-    for source in sources.as_ref() {
-      source_joiner.append_source(source);
-    }
-    source_joiner.append_source("}");
+    append_module_sources(sources.as_ref(), source_joiner);
+    source_joiner.append_source(if modules.peek().is_some() { "\t\t}," } else { "\t\t}" });
   }
-  source_joiner.append_source("};");
+  source_joiner.append_source("\t};");
 }
 
 fn render_entry_execution(ctx: &GenerateContext<'_>) -> String {
@@ -122,6 +120,7 @@ fn render_entry_execution(ctx: &GenerateContext<'_>) -> String {
     )
   {
     return concat_string!(
+      "\t",
       ROLLIPOP_REQUIRE_NAME,
       "(",
       render_module_runtime_id(ctx, entry_module),
@@ -155,9 +154,40 @@ fn render_runtime_module<'code>(
 }
 
 fn render_rollipop_runtime(source_joiner: &mut SourceJoiner<'_>) {
-  source_joiner.append_source("//#region \\0rollipop/runtime");
+  source_joiner.append_source("\t//#region \\0rollipop/runtime");
   for line in ROLLIPOP_RUNTIME.trim_end_matches('\n').lines() {
-    source_joiner.append_source(line);
+    source_joiner.append_source(concat_string!("\t", line));
   }
-  source_joiner.append_source("//#endregion");
+  source_joiner.append_source("\t//#endregion");
+}
+
+fn append_module_sources<'code>(
+  sources: &'code [Box<dyn Source + Send + Sync>],
+  source_joiner: &mut SourceJoiner<'code>,
+) {
+  for source in sources {
+    if source.sourcemap().is_some() {
+      source_joiner.append_source(source);
+    } else {
+      source_joiner.append_source(indent_module_source(source.content()));
+    }
+  }
+}
+
+fn indent_module_source(source: &str) -> String {
+  let mut ret = String::with_capacity(source.len() + source.lines().count() * 2);
+  for line in source.split_inclusive('\n') {
+    if line.trim_end_matches('\n').is_empty() {
+      ret.push_str(line);
+    } else {
+      let trimmed = line.trim_start();
+      if trimmed.starts_with("//#region") || trimmed.starts_with("//#endregion") {
+        ret.push_str("\t\t\t");
+      } else {
+        ret.push_str("\t\t");
+      }
+      ret.push_str(line);
+    }
+  }
+  ret
 }
