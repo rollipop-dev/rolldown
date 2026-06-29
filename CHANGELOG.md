@@ -1,4 +1,11 @@
 
+## [1.0.20] - 2026-06-29
+
+### 🚀 Features
+
+- react compiler integration (#39) by `@leegeunhyeok`
+
+
 ## [1.0.19] - 2026-06-25
 
 ### 🚀 Features
