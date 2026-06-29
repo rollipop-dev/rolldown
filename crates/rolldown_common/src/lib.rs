@@ -76,9 +76,20 @@ pub mod bundler_options {
       strict_mode::StrictMode,
       target::ESTarget,
       transform_option::{
-        CompilerAssumptions, DecoratorOptions, Either, IsolatedDeclarationsOptions, JsxOptions,
-        PluginsOptions, ReactRefreshOptions, StyledComponentsOptions,
-        TransformOptions as BundlerTransformOptions, TypeScriptOptions,
+        CompilerAssumptions,
+        DecoratorOptions,
+        Either,
+        IsolatedDeclarationsOptions,
+        JsxOptions,
+        // MARK: - Rollipop
+        PluginsOptions,
+        ReactCompilerDynamicGating,
+        ReactCompilerGating,
+        ReactCompilerOptions,
+        ReactRefreshOptions,
+        StyledComponentsOptions,
+        TransformOptions as BundlerTransformOptions,
+        TypeScriptOptions,
       },
       transform_options::{
         JsxPreset, RawTransformOptions, TransformOptions, TransformOptionsInner,

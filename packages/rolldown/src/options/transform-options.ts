@@ -1,4 +1,8 @@
-import type { JsxOptions, TransformOptions as OxcTransformOptions } from '../binding.cjs';
+import type {
+  OxcReactCompilerOptions,
+  JsxOptions,
+  TransformOptions as OxcTransformOptions,
+} from '../binding.cjs';
 
 export interface TransformOptions extends Omit<
   OxcTransformOptions,
@@ -113,4 +117,7 @@ export interface TransformOptions extends Omit<
    * - If set to `'preserve'`, JSX syntax will be preserved as-is.
    */
   jsx?: false | 'react' | 'react-jsx' | 'preserve' | JsxOptions;
+
+  // MARK: - Rollipop
+  reactCompiler?: OxcReactCompilerOptions;
 }

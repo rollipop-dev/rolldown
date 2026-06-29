@@ -31,7 +31,7 @@ use rustc_hash::FxHashMap;
 use crate::inner_bundler_options::types::transform_option::{
   CompilerAssumptions, DecoratorOptions, Either,
   IsolatedDeclarationsOptions as RolldownIsolatedDeclarationsOptions, JsxOptions, PluginsOptions,
-  TransformOptions, TypeScriptOptions,
+  ReactCompilerOptions, TransformOptions, TypeScriptOptions,
 };
 use crate::inner_bundler_options::types::tsconfig_merge::merge_transform_options_with_tsconfig;
 
@@ -139,6 +139,10 @@ pub struct EnhancedTransformOptions {
   /// - `Left(module)`: namespace/default import from the module
   /// - `Right([module, export])`: named import from the module
   pub inject: Option<InjectOptions>,
+
+  // MARK: - Rollipop
+  /// Experimental React Compiler transform options.
+  pub react_compiler: Option<ReactCompilerOptions>,
 }
 
 impl EnhancedTransformOptions {
@@ -168,6 +172,8 @@ impl EnhancedTransformOptions {
       input_map,
       define,
       inject,
+      // MARK: - Rollipop
+      react_compiler: options.react_compiler,
     }
   }
 }
@@ -299,9 +305,10 @@ pub fn enhanced_transform(
   let input_map = transform_options.input_map.clone();
   let define_options = transform_options.define.clone();
   let inject_options = transform_options.inject.clone();
+  let cwd = transform_options.cwd.clone().unwrap_or_default();
 
   let bundler_options: TransformOptions = transform_options.into();
-  let merged_options = if let Some(ref tsconfig) = tsconfig {
+  let mut merged_options = if let Some(ref tsconfig) = tsconfig {
     let (merged, merge_warnings) =
       merge_transform_options_with_tsconfig(bundler_options, tsconfig, false);
     warnings.extend(merge_warnings);
@@ -309,6 +316,11 @@ pub fn enhanced_transform(
   } else {
     bundler_options
   };
+  if let Some(react_compiler) = &merged_options.react_compiler
+    && !react_compiler.should_transform(filename, &cwd)
+  {
+    merged_options.react_compiler = None;
+  }
   let declaration_options =
     merged_options.typescript.as_ref().and_then(|ts| ts.declaration.clone());
 

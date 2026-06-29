@@ -6,7 +6,19 @@ use rolldown_common::{
   StyledComponentsOptions, TypeScriptOptions,
 };
 
-pub fn normalize_binding_transform_options(options: TransformOptions) -> BundlerTransformOptions {
+// MARK: - Rollipop
+use crate::options::BindingTransformOptions;
+
+pub fn normalize_binding_transform_options(
+  options: BindingTransformOptions,
+) -> BundlerTransformOptions {
+  let mut normalized_options = normalize_oxc_transform_options(options.options);
+  let react_compiler = options.react_compiler.map(Into::into);
+  normalized_options.react_compiler = react_compiler;
+  normalized_options
+}
+
+pub fn normalize_oxc_transform_options(options: TransformOptions) -> BundlerTransformOptions {
   let jsx = options.jsx.map(|jsx| match jsx {
     napi::Either::A(jsx) => Either::Left(jsx),
     napi::Either::B(jsx) => {
@@ -98,5 +110,14 @@ pub fn normalize_binding_transform_options(options: TransformOptions) -> Bundler
     module_name: HelperLoaderOptions::default().module_name,
   });
 
-  BundlerTransformOptions { jsx, target, decorator, typescript, assumptions, plugins, helpers }
+  BundlerTransformOptions {
+    jsx,
+    target,
+    decorator,
+    typescript,
+    assumptions,
+    plugins,
+    helpers,
+    react_compiler: None,
+  }
 }

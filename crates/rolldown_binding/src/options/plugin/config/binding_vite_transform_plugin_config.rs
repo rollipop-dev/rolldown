@@ -6,7 +6,7 @@ use sugar_path::SugarPath;
 
 use crate::{
   types::binding_string_or_regex::{BindingStringOrRegex, bindingify_string_or_regex_array},
-  utils::normalize_binding_transform_options,
+  utils::normalize_oxc_transform_options,
 };
 
 #[napi_derive::napi(object, object_to_js = false)]
@@ -46,7 +46,7 @@ impl From<BindingViteTransformPluginConfig> for ViteTransformPlugin {
       sourcemap: value.transform_options.as_ref().and_then(|v| v.sourcemap).unwrap_or(true),
       transform_options: value
         .transform_options
-        .map(normalize_binding_transform_options)
+        .map(normalize_oxc_transform_options)
         .unwrap_or_default(),
       resolver: ViteTransformPlugin::new_resolver(value.yarn_pnp.unwrap_or_default()),
     }

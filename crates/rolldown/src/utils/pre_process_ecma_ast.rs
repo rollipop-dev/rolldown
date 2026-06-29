@@ -172,9 +172,11 @@ impl PreProcessEcmaAst {
       ast.program.with_mut(|WithMutFields { program, allocator, .. }| {
         // Pass file path only for non-JS modules (TS/TSX/JSX) to enable tsconfig discovery.
         // For plain JS files, we skip tsconfig lookup since they don't need TS-specific transformations.
-        let transform_options = bundle_options
-          .transform_options
-          .options_for_file(is_not_js.then_some(Path::new(resolved_id)), &mut warnings)?;
+        let transform_options = bundle_options.transform_options.options_for_file(
+          resolved_id,
+          is_not_js.then_some(Path::new(resolved_id)),
+          &mut warnings,
+        )?;
         if !transform_options.jsx.jsx_plugin {
           preserve_jsx = true;
         }
