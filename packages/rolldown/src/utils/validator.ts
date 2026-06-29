@@ -259,6 +259,8 @@ const TransformOptionsSchema = v.object({
     v.description('Remove labeled statements with these label names'),
   ),
   plugins: v.pipe(v.optional(TransformPluginsSchema), v.description('Third-party plugins to use')),
+  // MARK: - Rollipop
+  reactCompiler: v.pipe(v.optional(v.any()), v.description('Enable React Compiler')),
 });
 isTypeTrue<IsSchemaSubType<typeof TransformOptionsSchema, TransformOptions>>();
 

@@ -11,9 +11,10 @@ use oxc_transform_napi::{
 use rolldown_common::{EnhancedTransformOptions, TsconfigOption};
 use rustc_hash::FxHashMap;
 
+use super::OxcReactCompilerOptions;
 use crate::types::binding_outputs::to_binding_error;
 use crate::types::error::BindingError;
-use crate::utils::normalize_binding_transform_options;
+use crate::utils::normalize_oxc_transform_options;
 
 fn napi_sourcemap_to_sourcemap(
   map: SourceMap,
@@ -111,7 +112,7 @@ impl From<&BindingTsconfigRawOptions> for oxc_resolver::TsConfig {
 }
 
 /// Enhanced transform options with tsconfig and inputMap support.
-#[napi(object)]
+#[napi(object, object_to_js = false)]
 #[derive(Default)]
 pub struct BindingEnhancedTransformOptions {
   // --- Oxc transform options ---
@@ -175,24 +176,27 @@ pub struct BindingEnhancedTransformOptions {
   pub tsconfig: Option<Either<bool, BindingTsconfigRawOptions>>,
   /// An input source map to collapse with the output source map.
   pub input_map: Option<SourceMap>,
+  // MARK: - Rollipop
+  /// Experimental React Compiler transform.
+  pub react_compiler: Option<OxcReactCompilerOptions>,
 }
 
 impl BindingEnhancedTransformOptions {
-  pub fn into_oxc_options(self) -> oxc_transform_napi::TransformOptions {
+  pub fn take_oxc_options(&mut self) -> oxc_transform_napi::TransformOptions {
     oxc_transform_napi::TransformOptions {
-      lang: self.lang,
-      source_type: self.source_type,
-      cwd: self.cwd,
-      sourcemap: self.sourcemap,
-      assumptions: self.assumptions,
-      typescript: self.typescript,
-      jsx: self.jsx,
-      target: self.target,
-      helpers: self.helpers,
-      define: self.define,
-      inject: self.inject,
-      decorator: self.decorator,
-      plugins: self.plugins,
+      lang: self.lang.take(),
+      source_type: self.source_type.take(),
+      cwd: self.cwd.take(),
+      sourcemap: self.sourcemap.take(),
+      assumptions: self.assumptions.take(),
+      typescript: self.typescript.take(),
+      jsx: self.jsx.take(),
+      target: self.target.take(),
+      helpers: self.helpers.take(),
+      define: self.define.take(),
+      inject: self.inject.take(),
+      decorator: self.decorator.take(),
+      plugins: self.plugins.take(),
     }
   }
 }
@@ -304,7 +308,9 @@ impl BindingEnhancedTransformOptions {
         .collect()
     });
 
-    let transform_options = normalize_binding_transform_options(self.into_oxc_options());
+    let mut transform_options = normalize_oxc_transform_options(self.take_oxc_options());
+    // MARK: - Rollipop
+    transform_options.react_compiler = self.react_compiler.take().map(Into::into);
     Ok(EnhancedTransformOptions::from_transform_options(
       transform_options,
       cwd,

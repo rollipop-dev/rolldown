@@ -251,6 +251,8 @@ napi-derive = { version = "3", default-features = false, features = ["type-def",
 oxc = { version = "0.137.0", features = [
   "ast_visit",
   "transformer",
+  # MARK: - Rollipop
+  "react_compiler",
   "minifier",
   "mangler",
   "semantic",
@@ -265,6 +267,8 @@ oxc_napi = { version = "0.137.0" }
 oxc_str = { version = "0.137.0" }
 oxc_minify_napi = { version = "0.137.0" }
 oxc_parser_napi = { version = "0.137.0" }
+# MARK: - Rollipop
+oxc_react_compiler = { version = "0.137.0" }
 oxc_transform_napi = { version = "0.137.0" }
 oxc_traverse = { version = "0.137.0" }
 

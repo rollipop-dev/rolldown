@@ -15,7 +15,9 @@ use rolldown_error::{
 };
 use rolldown_tracing::try_init_tracing;
 
-pub use normalize_binding_transform_options::normalize_binding_transform_options;
+pub use normalize_binding_transform_options::{
+  normalize_binding_transform_options, normalize_oxc_transform_options,
+};
 
 #[napi]
 pub struct TraceSubscriberGuard {

@@ -1,11 +1,25 @@
-import type { TransformOptions as OxcTransformOptions } from '../binding.cjs';
+import type {
+  OxcReactCompilerOptions,
+  TransformOptions as OxcTransformOptions,
+} from '../binding.cjs';
 import type { InputOptions } from '../options/input-options';
+
+type RolldownOxcTransformOptions = Omit<
+  OxcTransformOptions,
+  'sourceType' | 'lang' | 'cwd' | 'sourcemap' | 'define' | 'inject'
+>;
+
+type RolldownTransformOptions = {
+  options: RolldownOxcTransformOptions;
+  // MARK: - Rollipop
+  reactCompiler?: OxcReactCompilerOptions;
+};
 
 export interface NormalizedTransformOptions {
   define: Array<[string, string]> | undefined;
   inject: Record<string, string | [string, string]> | undefined;
   dropLabels: string[] | undefined;
-  oxcTransformOptions: OxcTransformOptions | undefined;
+  oxcTransformOptions: RolldownTransformOptions | undefined;
 }
 
 /**
@@ -21,15 +35,24 @@ export function normalizeTransformOptions(inputOptions: InputOptions): Normalize
   const dropLabels = transform?.dropLabels;
 
   // Extract OXC transform options (excluding define, inject, and dropLabels)
-  let oxcTransformOptions: OxcTransformOptions | undefined;
+  let oxcTransformOptions: RolldownTransformOptions | undefined;
   if (transform) {
-    const { define: _define, inject: _inject, dropLabels: _dropLabels, ...rest } = transform;
+    const {
+      define: _define,
+      inject: _inject,
+      dropLabels: _dropLabels,
+      reactCompiler,
+      ...rest
+    } = transform;
     // Only set oxcTransformOptions if there are actual options
-    if (Object.keys(rest).length > 0) {
+    if (Object.keys(rest).length > 0 || reactCompiler != null) {
       if (rest.jsx === false) {
         rest.jsx = 'disable' as any;
       }
-      oxcTransformOptions = rest as OxcTransformOptions;
+      oxcTransformOptions = {
+        options: rest as RolldownOxcTransformOptions,
+        ...(reactCompiler != null ? { reactCompiler } : {}),
+      };
     }
   }
 

@@ -377,12 +377,14 @@ pub fn prepare_build_context(
             )?,
             target,
             jsx_preset,
+            &cwd,
           )
         } else {
           TransformOptions::new_raw(
             RawTransformOptions::new(raw_transform_options, v.clone(), yarn_pnp),
             target,
             jsx_preset,
+            &cwd,
           )
         })
       }
@@ -394,12 +396,14 @@ pub fn prepare_build_context(
             RawTransformOptions::new(raw_transform_options, v, yarn_pnp),
             target,
             jsx_preset,
+            &cwd,
           )
         } else {
           TransformOptions::new(
             merge_transform_options_with_tsconfig(raw_transform_options, None, &mut warnings)?,
             target,
             jsx_preset,
+            &cwd,
           )
         })
       }

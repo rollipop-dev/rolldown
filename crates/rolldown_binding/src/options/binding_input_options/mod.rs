@@ -23,7 +23,7 @@ use binding_input_item::BindingInputItem;
 use binding_resolve_options::BindingResolveOptions;
 use binding_watch_option::BindingWatchOption;
 
-use super::plugin::BindingPluginOrParallelJsPluginPlaceholder;
+use super::{BindingTransformOptions, plugin::BindingPluginOrParallelJsPluginPlaceholder};
 use crate::generated::binding_checks_options;
 use crate::types::binding_string_or_regex::BindingStringOrRegex;
 use crate::types::defer_sync_scan_data::BindingDeferSyncScanData;
@@ -90,7 +90,8 @@ pub struct BindingInputOptions<'env> {
   pub experimental: Option<binding_experimental_options::BindingExperimentalOptions>,
   pub profiler_names: Option<bool>,
   #[debug(skip)]
-  pub transform: Option<oxc_transform_napi::TransformOptions>,
+  // MARK: - Rollipop
+  pub transform: Option<BindingTransformOptions>,
   pub watch: Option<BindingWatchOption>,
   pub keep_names: Option<bool>,
   pub checks: Option<binding_checks_options::BindingChecksOptions>,

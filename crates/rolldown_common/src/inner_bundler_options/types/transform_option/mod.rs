@@ -3,6 +3,8 @@ mod decorator_options;
 mod jsx_options;
 mod plugin_options;
 mod typescript_options;
+// MARK: - Rollipop
+mod react_compiler_options;
 
 use oxc::transformer::{EnvOptions, HelperLoaderOptions};
 
@@ -12,6 +14,7 @@ pub use {
   decorator_options::DecoratorOptions,
   jsx_options::{JsxOptions, ReactRefreshOptions},
   plugin_options::{PluginsOptions, StyledComponentsOptions},
+  react_compiler_options::{ReactCompilerDynamicGating, ReactCompilerGating, ReactCompilerOptions},
   typescript_options::{IsolatedDeclarationsOptions, TypeScriptOptions},
 };
 
@@ -48,6 +51,10 @@ pub struct TransformOptions {
 
   /// Behaviour for runtime helpers.
   pub helpers: Option<HelperLoaderOptions>,
+
+  // MARK: - Rollipop
+  /// Experimental React Compiler transform options.
+  pub react_compiler: Option<ReactCompilerOptions>,
 }
 
 impl From<crate::utils::enhanced_transform::EnhancedTransformOptions> for TransformOptions {
@@ -60,6 +67,8 @@ impl From<crate::utils::enhanced_transform::EnhancedTransformOptions> for Transf
       typescript: options.typescript,
       plugins: options.plugins,
       helpers: options.helpers,
+      // MARK: - Rollipop
+      react_compiler: options.react_compiler,
     }
   }
 }
@@ -82,6 +91,8 @@ impl From<TransformOptions> for crate::utils::enhanced_transform::EnhancedTransf
       input_map: None,
       define: None,
       inject: None,
+      // MARK: - Rollipop
+      react_compiler: options.react_compiler,
     }
   }
 }
@@ -123,6 +134,8 @@ impl TryFrom<TransformOptions> for oxc::transformer::TransformOptions {
         .helpers
         .map_or_else(HelperLoaderOptions::default, HelperLoaderOptions::from),
       plugins: oxc::transformer::PluginsOptions::from(options.plugins.unwrap_or_default()),
+      // MARK: - Rollipop
+      react_compiler: options.react_compiler.map(Into::into),
       ..Default::default()
     })
   }

@@ -2158,6 +2158,8 @@ export interface BindingEnhancedTransformOptions {
   tsconfig?: boolean | BindingTsconfigRawOptions
   /** An input source map to collapse with the output source map. */
   inputMap?: SourceMap
+  /** Experimental React Compiler transform. */
+  reactCompiler?: OxcReactCompilerOptions
 }
 
 /** Result of the enhanced transform API. */
@@ -2408,7 +2410,7 @@ export interface BindingInputOptions {
   inject?: Array<BindingInjectImport>
   experimental?: BindingExperimentalOptions
   profilerNames?: boolean
-  transform?: TransformOptions
+  transform?: BindingTransformOptions
   watch?: BindingWatchOption
   keepNames?: boolean
   checks?: BindingChecksOptions
@@ -2922,6 +2924,11 @@ export interface BindingTransformHookExtraArgs {
   moduleType: string
 }
 
+export interface BindingTransformOptions {
+  options: OxcTransformOptions
+  reactCompiler?: OxcReactCompilerOptions
+}
+
 export interface BindingTreeshake {
   moduleSideEffects: boolean | ReadonlyArray<string> | BindingModuleSideEffectsRule[] | ((id: string, external: boolean) => boolean | undefined)
   annotations?: boolean
@@ -3203,6 +3210,94 @@ export interface NativeError {
   loc?: BindingLogLocation
   /** Position in the source file in UTF-16 code units */
   pos?: number
+}
+
+export interface OxcReactCompilerDynamicGating {
+  /** Module the gating import comes from. */
+  source: string
+}
+
+export interface OxcReactCompilerGating {
+  /** Module the gating import comes from. */
+  source: string
+  /** Imported specifier used as the gate. */
+  importSpecifierName: string
+}
+
+/**
+ * Options for the experimental React Compiler transform.
+ *
+ * @category Utilities
+ */
+export interface OxcReactCompilerOptions {
+  /** File patterns to compile. Empty means all files that enter the transform pipeline. */
+  include?: Array<BindingStringOrRegex>
+  /** File patterns to skip. */
+  exclude?: Array<BindingStringOrRegex>
+  /**
+   * Which functions to compile.
+   *
+   * @default 'infer'
+   */
+  compilationMode?: 'infer' | 'syntax' | 'annotation' | 'all'
+  /**
+   * What to do when a function cannot be compiled.
+   *
+   * @default 'none'
+   */
+  panicThreshold?: 'none' | 'critical_errors' | 'all_errors'
+  /**
+   * React runtime version target.
+   *
+   * @default '19'
+   */
+  target?: '17' | '18' | '19'
+  /**
+   * Analyze and report diagnostics only; emit no transformed code.
+   *
+   * @default false
+   */
+  noEmit?: boolean
+  /**
+   * Compiler output mode.
+   *
+   * @default undefined
+   */
+  outputMode?: 'client' | 'ssr' | 'lint'
+  /**
+   * Compile even functions marked with opt-out directives.
+   *
+   * @default false
+   */
+  ignoreUseNoForget?: boolean
+  /**
+   * Treat Flow suppression comments as opt-outs.
+   *
+   * @default true
+   */
+  flowSuppressions?: boolean
+  /**
+   * Enable `react-native-reanimated` support.
+   *
+   * @default false
+   */
+  enableReanimated?: boolean
+  /**
+   * Development mode.
+   *
+   * @default false
+   */
+  isDev?: boolean
+  /** Source file name, used for the fast-refresh hash and in diagnostics. */
+  filename?: string
+  /** ESLint rules whose suppressions opt a function out of compilation. */
+  eslintSuppressionRules?: Array<string>
+  /** Extra directives that opt a function out of compilation. */
+  customOptOutDirectives?: Array<string>
+  /** Also emit a gated version of each compiled function. */
+  gating?: OxcReactCompilerGating
+  /** Dynamically-gated compilation. */
+  dynamicGating?: OxcReactCompilerDynamicGating
 }
 
 export interface PreRenderedChunk {
