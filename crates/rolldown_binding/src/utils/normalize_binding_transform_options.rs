@@ -8,11 +8,34 @@ use rolldown_common::{
 
 // MARK: - Rollipop
 use crate::options::BindingTransformOptions;
+use crate::types::binding_string_or_regex::bindingify_string_or_regex_array;
 
 pub fn normalize_binding_transform_options(
   options: BindingTransformOptions,
 ) -> BundlerTransformOptions {
   let mut normalized_options = normalize_oxc_transform_options(options.options);
+  // MARK: - Rollipop
+  if options.jsx_refresh_include.is_some() || options.jsx_refresh_exclude.is_some() {
+    let include =
+      options.jsx_refresh_include.map(bindingify_string_or_regex_array).unwrap_or_default();
+    let exclude =
+      options.jsx_refresh_exclude.map(bindingify_string_or_regex_array).unwrap_or_default();
+
+    if let Some(Either::Right(jsx)) = &mut normalized_options.jsx
+      && let Some(refresh) = &mut jsx.refresh
+    {
+      match refresh {
+        Either::Left(enabled) if *enabled => {
+          *refresh = Either::Right(ReactRefreshOptions { include, exclude, ..Default::default() });
+        }
+        Either::Right(refresh_options) => {
+          refresh_options.include = include;
+          refresh_options.exclude = exclude;
+        }
+        Either::Left(_) => {}
+      }
+    }
+  }
   let react_compiler = options.react_compiler.map(Into::into);
   normalized_options.react_compiler = react_compiler;
   normalized_options
@@ -25,6 +48,9 @@ pub fn normalize_oxc_transform_options(options: TransformOptions) -> BundlerTran
       let refresh = jsx.refresh.map(|refresh| match refresh {
         napi::Either::A(refresh) => Either::Left(refresh),
         napi::Either::B(refresh) => Either::Right(ReactRefreshOptions {
+          // MARK: - Rollipop
+          include: vec![],
+          exclude: vec![],
           refresh_reg: refresh.refresh_reg,
           refresh_sig: refresh.refresh_sig,
           emit_full_signatures: refresh.emit_full_signatures,

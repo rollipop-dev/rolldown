@@ -1,8 +1,30 @@
 import type {
   OxcReactCompilerOptions,
-  JsxOptions,
+  JsxOptions as OxcJsxOptions,
+  ReactRefreshOptions as OxcReactRefreshOptions,
   TransformOptions as OxcTransformOptions,
 } from '../binding.cjs';
+import type { StringOrRegExp } from '../types/utils';
+
+// MARK: - Rollipop
+interface ReactRefreshOptions extends OxcReactRefreshOptions {
+  /**
+   * File patterns to transform. Empty means all files that enter the transform pipeline.
+   */
+  include?: StringOrRegExp | StringOrRegExp[];
+  /**
+   * File patterns to skip.
+   */
+  exclude?: StringOrRegExp | StringOrRegExp[];
+}
+
+// MARK: - Rollipop
+interface JsxOptions extends Omit<OxcJsxOptions, 'refresh'> {
+  /**
+   * Enable React Fast Refresh.
+   */
+  refresh?: boolean | ReactRefreshOptions;
+}
 
 export interface TransformOptions extends Omit<
   OxcTransformOptions,

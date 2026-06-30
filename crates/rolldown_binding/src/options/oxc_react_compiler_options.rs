@@ -15,7 +15,10 @@ use crate::types::binding_string_or_regex::{
 #[derive(Default)]
 pub struct BindingTransformOptions {
   pub options: OxcTransformOptions,
+  // MARK: - Rollipop
   pub react_compiler: Option<OxcReactCompilerOptions>,
+  pub jsx_refresh_include: Option<Vec<BindingStringOrRegex>>,
+  pub jsx_refresh_exclude: Option<Vec<BindingStringOrRegex>>,
 }
 
 /// Options for the experimental React Compiler transform.

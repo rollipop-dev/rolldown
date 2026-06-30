@@ -2927,6 +2927,8 @@ export interface BindingTransformHookExtraArgs {
 export interface BindingTransformOptions {
   options: OxcTransformOptions
   reactCompiler?: OxcReactCompilerOptions
+  jsxRefreshInclude?: Array<BindingStringOrRegex>
+  jsxRefreshExclude?: Array<BindingStringOrRegex>
 }
 
 export interface BindingTreeshake {

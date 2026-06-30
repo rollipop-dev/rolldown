@@ -11,7 +11,7 @@ use rolldown_error::{BuildDiagnostic, BuildResult};
 use rolldown_utils::dashmap::FxDashMap;
 
 use super::tsconfig_merge::merge_transform_options_with_tsconfig as merge_tsconfig;
-use crate::{BundlerTransformOptions, ReactCompilerOptions, TsConfig};
+use crate::{BundlerTransformOptions, Either, ReactCompilerOptions, ReactRefreshOptions, TsConfig};
 
 #[derive(Debug, Default, Clone)]
 pub enum JsxPreset {
@@ -76,12 +76,18 @@ impl RawTransformOptions {
 #[derive(Debug, Clone)]
 pub struct ResolvedTransformOptions {
   options: Arc<OxcTransformOptions>,
+  // MARK: - Rollipop
   react_compiler: Option<ReactCompilerOptions>,
+  react_refresh: Option<ReactRefreshOptions>,
 }
 
 impl ResolvedTransformOptions {
-  fn new(options: OxcTransformOptions, react_compiler: Option<ReactCompilerOptions>) -> Self {
-    Self { options: Arc::new(options), react_compiler }
+  fn new(
+    options: OxcTransformOptions,
+    react_compiler: Option<ReactCompilerOptions>,
+    react_refresh: Option<ReactRefreshOptions>,
+  ) -> Self {
+    Self { options: Arc::new(options), react_compiler, react_refresh }
   }
 
   fn has_react_compiler(&self) -> bool {
@@ -89,17 +95,29 @@ impl ResolvedTransformOptions {
   }
 
   fn options_for_file(&self, file_path: &str, cwd: &str) -> TransformOptionsForFile {
-    let Some(react_compiler) = &self.react_compiler else {
-      return TransformOptionsForFile { options: Arc::clone(&self.options) };
-    };
+    let should_disable_react_compiler = self
+      .react_compiler
+      .as_ref()
+      .is_some_and(|react_compiler| !react_compiler.should_transform(file_path, cwd));
 
-    if react_compiler.should_transform(file_path, cwd) {
+    // MARK: - Rollipop
+    let should_disable_react_refresh = self
+      .react_refresh
+      .as_ref()
+      .is_some_and(|react_refresh| !react_refresh.should_transform(file_path, cwd));
+
+    if !should_disable_react_compiler && !should_disable_react_refresh {
       return TransformOptionsForFile { options: Arc::clone(&self.options) };
     }
 
     let mut options = self.options.as_ref().clone();
     // MARK: - Rollipop
-    options.react_compiler = None;
+    if should_disable_react_compiler {
+      options.react_compiler = None;
+    }
+    if should_disable_react_refresh {
+      options.jsx.refresh = None;
+    }
     TransformOptionsForFile { options: Arc::new(options) }
   }
 }
@@ -238,6 +256,7 @@ impl Default for TransformOptions {
       inner: TransformOptionsInner::Normal(Arc::new(ResolvedTransformOptions::new(
         OxcTransformOptions::default(),
         None,
+        None,
       ))),
       target: EngineTargets::default(),
       jsx_preset: JsxPreset::default(),
@@ -259,6 +278,8 @@ pub fn merge_transform_options_with_tsconfig(
     transform_options
   };
   let react_compiler = merged_options.react_compiler.clone();
+  // MARK: - Rollipop
+  let react_refresh = extract_react_refresh_options(&merged_options);
 
   let options = merged_options.try_into().map_err(|message: String| {
     let hint = message
@@ -267,5 +288,18 @@ pub fn merge_transform_options_with_tsconfig(
     BuildDiagnostic::bundler_initialize_error(message, hint)
   })?;
 
-  Ok(ResolvedTransformOptions::new(options, react_compiler))
+  Ok(ResolvedTransformOptions::new(options, react_compiler, react_refresh))
+}
+
+// MARK: - Rollipop
+fn extract_react_refresh_options(
+  transform_options: &BundlerTransformOptions,
+) -> Option<ReactRefreshOptions> {
+  match &transform_options.jsx {
+    Some(Either::Right(jsx)) => match &jsx.refresh {
+      Some(Either::Right(refresh)) => Some(refresh.clone()),
+      _ => None,
+    },
+    _ => None,
+  }
 }

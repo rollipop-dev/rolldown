@@ -1,8 +1,10 @@
 import type {
+  BindingStringOrRegex,
   OxcReactCompilerOptions,
   TransformOptions as OxcTransformOptions,
 } from '../binding.cjs';
 import type { InputOptions } from '../options/input-options';
+import { normalizedStringOrRegex } from './normalize-string-or-regex';
 
 type RolldownOxcTransformOptions = Omit<
   OxcTransformOptions,
@@ -13,6 +15,9 @@ type RolldownTransformOptions = {
   options: RolldownOxcTransformOptions;
   // MARK: - Rollipop
   reactCompiler?: OxcReactCompilerOptions;
+  // MARK: - Rollipop
+  jsxRefreshInclude?: BindingStringOrRegex[];
+  jsxRefreshExclude?: BindingStringOrRegex[];
 };
 
 export interface NormalizedTransformOptions {
@@ -49,9 +54,12 @@ export function normalizeTransformOptions(inputOptions: InputOptions): Normalize
       if (rest.jsx === false) {
         rest.jsx = 'disable' as any;
       }
+      // MARK: - Rollipop
+      const jsxRefreshFilters = normalizeJsxRefreshFilters(rest);
       oxcTransformOptions = {
         options: rest as RolldownOxcTransformOptions,
         ...(reactCompiler != null ? { reactCompiler } : {}),
+        ...jsxRefreshFilters,
       };
     }
   }
@@ -61,5 +69,35 @@ export function normalizeTransformOptions(inputOptions: InputOptions): Normalize
     inject,
     dropLabels,
     oxcTransformOptions,
+  };
+}
+
+// MARK: - Rollipop
+function normalizeJsxRefreshFilters(transformOptions: {
+  jsx?: unknown;
+}): Pick<RolldownTransformOptions, 'jsxRefreshInclude' | 'jsxRefreshExclude'> {
+  const jsx = transformOptions.jsx;
+  if (jsx == null || typeof jsx !== 'object') {
+    return {};
+  }
+
+  const refresh = (jsx as { refresh?: unknown }).refresh;
+  if (refresh == null || typeof refresh !== 'object') {
+    return {};
+  }
+
+  const { include, exclude, ...oxcRefreshOptions } = refresh as {
+    include?: BindingStringOrRegex | BindingStringOrRegex[];
+    exclude?: BindingStringOrRegex | BindingStringOrRegex[];
+  };
+
+  transformOptions.jsx = {
+    ...(jsx as Record<string, unknown>),
+    refresh: oxcRefreshOptions,
+  };
+
+  return {
+    jsxRefreshInclude: normalizedStringOrRegex<BindingStringOrRegex[]>(include),
+    jsxRefreshExclude: normalizedStringOrRegex<BindingStringOrRegex[]>(exclude),
   };
 }

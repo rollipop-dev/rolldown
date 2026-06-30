@@ -1,4 +1,9 @@
 use itertools::Either;
+// MARK: - Rollipop
+use rolldown_utils::{
+  pattern_filter::{StringOrRegex, filter},
+  url::clean_url,
+};
 
 #[derive(Debug, Default, Clone)]
 pub struct JsxOptions {
@@ -65,8 +70,15 @@ pub struct JsxOptions {
   pub refresh: Option<Either<bool, ReactRefreshOptions>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct ReactRefreshOptions {
+  // MARK: - Rollipop
+  /// File patterns to transform. Empty means all files that enter the transform pipeline.
+  pub include: Vec<StringOrRegex>,
+
+  /// File patterns to skip.
+  pub exclude: Vec<StringOrRegex>,
+
   /// Specify the identifier of the refresh registration variable.
   ///
   /// @default `$RefreshReg$`.
@@ -78,6 +90,29 @@ pub struct ReactRefreshOptions {
   pub refresh_sig: Option<String>,
 
   pub emit_full_signatures: Option<bool>,
+}
+
+// MARK: - Rollipop
+impl ReactRefreshOptions {
+  pub fn should_transform(&self, id: &str, cwd: &str) -> bool {
+    if self.include.is_empty() && self.exclude.is_empty() {
+      return true;
+    }
+
+    let exclude = (!self.exclude.is_empty()).then_some(self.exclude.as_slice());
+    let include = (!self.include.is_empty()).then_some(self.include.as_slice());
+
+    if filter(exclude, include, id, cwd).inner() {
+      return true;
+    }
+
+    let cleaned_id = clean_url(id);
+    if cleaned_id != id {
+      return filter(exclude, include, cleaned_id, cwd).inner();
+    }
+
+    false
+  }
 }
 
 impl From<ReactRefreshOptions> for oxc::transformer::ReactRefreshOptions {

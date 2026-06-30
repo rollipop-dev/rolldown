@@ -133,6 +133,15 @@ const ModuleTypesSchema = v.record(
 );
 isTypeTrue<IsSchemaSubType<typeof ModuleTypesSchema, ModuleTypes>>();
 
+// MARK: - Rollipop
+const ReactRefreshOptionsSchema = v.strictObject({
+  refreshReg: v.optional(v.string()),
+  refreshSig: v.optional(v.string()),
+  emitFullSignatures: v.optional(v.boolean()),
+  include: v.optional(v.union([StringOrRegExpSchema, v.array(StringOrRegExpSchema)])),
+  exclude: v.optional(v.union([StringOrRegExpSchema, v.array(StringOrRegExpSchema)])),
+});
+
 const JsxOptionsSchema = v.strictObject({
   runtime: v.pipe(
     v.optional(v.union([v.literal('classic'), v.literal('automatic')])),
@@ -154,7 +163,7 @@ const JsxOptionsSchema = v.strictObject({
   pragma: v.pipe(v.optional(v.string()), v.description('Jsx element transformation')),
   pragmaFrag: v.pipe(v.optional(v.string()), v.description('Jsx fragment transformation')),
   refresh: v.pipe(
-    v.optional(v.union([v.boolean(), v.any()])),
+    v.optional(v.union([v.boolean(), ReactRefreshOptionsSchema])),
     v.description('Enable react fast refresh'),
   ),
 });
