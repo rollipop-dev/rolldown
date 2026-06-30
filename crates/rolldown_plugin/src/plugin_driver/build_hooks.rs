@@ -8,7 +8,7 @@ use crate::{
   types::{
     hook_resolve_id_skipped::HookResolveIdSkipped,
     hook_transform_ast_args::HookTransformAstArgs,
-    transform_cache::{TransformCache, TransformCacheEntry},
+    transform_cache_manager::{TransformCacheEntry, TransformCacheManager},
   },
 };
 use anyhow::{Context, Result};
@@ -264,11 +264,12 @@ impl PluginDriver {
     code_changed_by_plugins: &mut Option<Vec<String>>,
   ) -> Result<String> {
     // Check transform cache
-    let transform_cache = self.meta.get::<TransformCache>();
-    let cache_key =
-      transform_cache.as_ref().map(|_| xxh3_128(format!("{}\0{}", id, &original_code).as_bytes()));
+    let transform_cache_manager = self.meta.get::<TransformCacheManager>();
+    let cache_key = transform_cache_manager
+      .as_ref()
+      .map(|_| xxh3_128(format!("{}\0{}", id, &original_code).as_bytes()));
 
-    if let (Some(cache), Some(key)) = (&transform_cache, cache_key) {
+    if let (Some(cache), Some(key)) = (&transform_cache_manager, cache_key) {
       if let Some(entry) = cache.get(key) {
         *sourcemap_chain = entry.sourcemap_chain;
         *side_effects = entry.side_effects;
@@ -369,7 +370,7 @@ impl PluginDriver {
     *sourcemap_chain = plugin_sourcemap_chain.into_inner();
 
     // Store in transform cache
-    if let (Some(cache), Some(key)) = (&transform_cache, cache_key) {
+    if let (Some(cache), Some(key)) = (&transform_cache_manager, cache_key) {
       cache.insert(
         key,
         TransformCacheEntry {
@@ -471,7 +472,7 @@ impl PluginDriver {
     }
 
     // Flush transform cache to disk
-    if let Some(cache) = self.meta.get::<TransformCache>() {
+    if let Some(cache) = self.meta.get::<TransformCacheManager>() {
       cache.flush().await;
     }
 

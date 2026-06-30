@@ -1,5 +1,8 @@
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::{
+  io,
+  path::{Path, PathBuf},
+  sync::{Arc, LazyLock, Mutex, MutexGuard, Weak},
+};
 
 use arcstr::ArcStr;
 use dashmap::DashMap;
@@ -11,6 +14,11 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::Semaphore;
 
 const MAX_CONCURRENT_WRITES: usize = 20;
+pub const ROLLIPOP_PATH: &str = ".rollipop";
+pub const ROLLIPOP_CACHE_PATH: &str = "cache";
+
+static TRANSFORM_CACHE_MANAGER_REGISTRY: LazyLock<Mutex<Vec<Weak<TransformCacheManager>>>> =
+  LazyLock::new(|| Mutex::new(Vec::new()));
 
 pub struct TransformCacheEntry {
   pub code: String,
@@ -110,7 +118,12 @@ impl SerializableEntry {
   }
 }
 
-pub struct TransformCache {
+/// Manager for persistent transform cache entries for one Rolldown `options.id`.
+///
+/// This is not a single cache entry. It owns the in-memory entry map, the pending
+/// disk-write queue, and the filesystem cache directory for that build id.
+pub struct TransformCacheManager {
+  id: String,
   /// In-memory cache for fast lookup within the current build
   entries: DashMap<u128, TransformCacheEntry>,
   /// Pending entries to be flushed to disk
@@ -119,12 +132,18 @@ pub struct TransformCache {
   cache_dir: PathBuf,
 }
 
-impl TransformCache {
-  pub fn new(cache_dir: PathBuf) -> Self {
+impl TransformCacheManager {
+  fn new(id: String, cache_dir: PathBuf) -> Self {
     if !cache_dir.exists() {
       std::fs::create_dir_all(&cache_dir).ok();
     }
-    Self { entries: DashMap::default(), pending: DashMap::default(), cache_dir }
+    Self { id, entries: DashMap::default(), pending: DashMap::default(), cache_dir }
+  }
+
+  pub fn shared(id: String, cache_dir: PathBuf) -> Arc<Self> {
+    let cache = Arc::new(Self::new(id, cache_dir));
+    transform_cache_manager_registry().push(Arc::downgrade(&cache));
+    cache
   }
 
   fn key_to_filename(key: u128) -> String {
@@ -210,8 +229,146 @@ impl TransformCache {
   }
 
   pub fn clear(&self) {
+    self.clear_inner().ok();
+  }
+
+  fn clear_inner(&self) -> io::Result<()> {
     self.entries.clear();
     self.pending.clear();
-    std::fs::remove_dir_all(&self.cache_dir).ok();
+    remove_cache_dir(&self.cache_dir)
+  }
+}
+
+pub fn clear_transform_cache(cwd: &Path) -> io::Result<()> {
+  let registered_result = clear_registered_transform_caches(None);
+  let root_result = remove_cache_dir(&cwd.join(ROLLIPOP_PATH).join(ROLLIPOP_CACHE_PATH));
+  registered_result.and(root_result)
+}
+
+pub fn clear_transform_cache_by_id(cwd: &Path, cache_id: &str) -> io::Result<()> {
+  if cache_id.is_empty() {
+    return Err(io::Error::new(io::ErrorKind::InvalidInput, "cache id must not be empty"));
+  }
+
+  let registered_result = clear_registered_transform_caches(Some(cache_id));
+  let root_result =
+    remove_cache_dir(&cwd.join(ROLLIPOP_PATH).join(ROLLIPOP_CACHE_PATH).join(cache_id));
+  registered_result.and(root_result)
+}
+
+fn clear_registered_transform_caches(cache_id: Option<&str>) -> io::Result<()> {
+  let mut caches = Vec::new();
+  transform_cache_manager_registry().retain(|cache_ref| {
+    let Some(cache) = cache_ref.upgrade() else {
+      return false;
+    };
+    let should_clear = match cache_id {
+      Some(cache_id) => cache.id == cache_id,
+      None => true,
+    };
+    if should_clear {
+      caches.push(cache);
+    }
+    true
+  });
+
+  let mut first_error = None;
+
+  for cache in caches {
+    if let Err(error) = cache.clear_inner() {
+      if first_error.is_none() {
+        first_error = Some(error);
+      }
+    }
+  }
+
+  if let Some(error) = first_error { Err(error) } else { Ok(()) }
+}
+
+fn transform_cache_manager_registry() -> MutexGuard<'static, Vec<Weak<TransformCacheManager>>> {
+  TRANSFORM_CACHE_MANAGER_REGISTRY.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+fn remove_cache_dir(path: &Path) -> io::Result<()> {
+  match std::fs::remove_dir_all(path) {
+    Ok(()) => Ok(()),
+    Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+    Err(error) => Err(error),
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use std::sync::{
+    Mutex,
+    atomic::{AtomicU64, Ordering},
+  };
+
+  static TEST_LOCK: Mutex<()> = Mutex::new(());
+  static NEXT_TEST_ID: AtomicU64 = AtomicU64::new(1);
+
+  fn test_root(label: &str) -> PathBuf {
+    let id = NEXT_TEST_ID.fetch_add(1, Ordering::Relaxed);
+    std::env::temp_dir()
+      .join(format!("rolldown-transform-cache-{label}-{}-{id}", std::process::id()))
+  }
+
+  fn test_entry(code: &str) -> TransformCacheEntry {
+    TransformCacheEntry {
+      code: code.to_string(),
+      sourcemap_chain: Vec::new(),
+      side_effects: None,
+      module_type: ModuleType::Js,
+    }
+  }
+
+  #[test]
+  fn clear_by_id_clears_registered_memory_and_filesystem_cache() {
+    let _guard = TEST_LOCK.lock().unwrap();
+    let root = test_root("by-id");
+    let cache_dir = root.join(ROLLIPOP_PATH).join(ROLLIPOP_CACHE_PATH).join("app");
+    let cache = TransformCacheManager::shared("app".to_string(), cache_dir.clone());
+
+    cache.insert(1, test_entry("cached"));
+    std::fs::create_dir_all(&cache_dir).unwrap();
+    std::fs::write(cache_dir.join("manual"), b"cached").unwrap();
+
+    clear_transform_cache_by_id(&root, "app").unwrap();
+
+    assert!(cache.get(1).is_none());
+    assert!(!cache_dir.exists());
+
+    std::fs::remove_dir_all(root).ok();
+  }
+
+  #[test]
+  fn clear_by_id_removes_filesystem_cache_before_any_cache_is_registered() {
+    let _guard = TEST_LOCK.lock().unwrap();
+    let root = test_root("by-id-no-register");
+    let cache_dir = root.join(ROLLIPOP_PATH).join(ROLLIPOP_CACHE_PATH).join("app");
+    std::fs::create_dir_all(&cache_dir).unwrap();
+    std::fs::write(cache_dir.join("manual"), b"cached").unwrap();
+
+    clear_transform_cache_by_id(&root, "app").unwrap();
+
+    assert!(!cache_dir.exists());
+
+    std::fs::remove_dir_all(root).ok();
+  }
+
+  #[test]
+  fn clear_cache_removes_current_workspace_cache_root() {
+    let _guard = TEST_LOCK.lock().unwrap();
+    let root = test_root("all");
+    let cache_dir = root.join(ROLLIPOP_PATH).join(ROLLIPOP_CACHE_PATH).join("app");
+    std::fs::create_dir_all(&cache_dir).unwrap();
+    std::fs::write(cache_dir.join("manual"), b"cached").unwrap();
+
+    clear_transform_cache(&root).unwrap();
+
+    assert!(!root.join(ROLLIPOP_PATH).join(ROLLIPOP_CACHE_PATH).exists());
+
+    std::fs::remove_dir_all(root).ok();
   }
 }

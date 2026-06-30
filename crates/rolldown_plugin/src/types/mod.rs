@@ -22,4 +22,4 @@ pub mod plugin_context_resolve_options;
 pub mod plugin_hook_meta;
 
 // MARK: - Rollipop
-pub mod transform_cache;
+pub mod transform_cache_manager;

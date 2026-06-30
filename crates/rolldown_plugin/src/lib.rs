@@ -55,7 +55,9 @@ pub use crate::{
   types::plugin_context_resolve_options::PluginContextResolveOptions,
   types::plugin_hook_meta::{PluginHookMeta, PluginOrder},
   // MARK: - Rollipop
-  types::transform_cache::TransformCache,
+  types::transform_cache_manager::{
+    TransformCacheManager, clear_transform_cache, clear_transform_cache_by_id,
+  },
 };
 
 pub use rolldown_common::PluginIdx;

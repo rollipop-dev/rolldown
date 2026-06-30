@@ -15,7 +15,10 @@ use crate::{
   plugin_context::{NativePluginContextImpl, PluginContextMeta},
   plugin_driver::{ContextLoadCompletionManager, hook_orders::PluginHookOrders},
   type_aliases::{IndexPluginContext, IndexPluginable},
-  types::{hook_timing::HookTimingCollector, transform_cache::TransformCache},
+  types::{
+    hook_timing::HookTimingCollector,
+    transform_cache_manager::{ROLLIPOP_CACHE_PATH, ROLLIPOP_PATH, TransformCacheManager},
+  },
 };
 use rolldown_error::EventKindSwitcher;
 
@@ -43,8 +46,9 @@ impl PluginDriverFactory {
 
     // Initialize transform cache only when persistent cache is enabled
     if options.persistent_cache {
-      let cache_dir = options.cwd.join(".rollipop").join("cache").join(&options.id);
-      meta.insert(Arc::new(TransformCache::new(cache_dir)));
+      let cache_dir = options.cwd.join(ROLLIPOP_PATH).join(ROLLIPOP_CACHE_PATH).join(&options.id);
+      let cache = TransformCacheManager::shared(options.id.clone(), cache_dir);
+      meta.insert(cache);
     }
 
     let tx = Arc::new(std::sync::Mutex::new(None));

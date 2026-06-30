@@ -3140,6 +3140,10 @@ export interface BindingWatchOption {
   onInvalidate?: ((id: string) => void) | undefined
 }
 
+export declare function clearCache(): Promise<void>
+
+export declare function clearCacheById(id: string): Promise<void>
+
 export declare function collapseSourcemaps(sourcemapChain: Array<BindingSourcemap>): BindingJsonSourcemap
 
 export declare function enhancedTransform(filename: string, sourceText: string, options: BindingEnhancedTransformOptions | undefined | null, cache: TsconfigCache | undefined | null, yarnPnp: boolean): Promise<BindingEnhancedTransformResult>

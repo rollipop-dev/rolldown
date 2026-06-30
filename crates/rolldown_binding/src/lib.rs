@@ -20,6 +20,7 @@ use std::sync::{
   atomic::{AtomicU32, Ordering},
 };
 
+use napi::{Env, bindgen_prelude::PromiseRaw};
 use napi_derive::napi;
 
 #[cfg(all(
@@ -80,6 +81,35 @@ pub fn start_async_runtime() {
     napi::bindgen_prelude::start_async_runtime();
     ACTIVE_TASK_COUNT.fetch_add(1, Ordering::Relaxed);
   }
+}
+
+#[napi(ts_return_type = "Promise<void>")]
+pub fn clear_cache(env: &Env) -> napi::Result<PromiseRaw<'_, ()>> {
+  run_clear_cache_task(env, rolldown_plugin::clear_transform_cache)
+}
+
+#[napi(ts_return_type = "Promise<void>")]
+pub fn clear_cache_by_id(env: &Env, id: String) -> napi::Result<PromiseRaw<'_, ()>> {
+  run_clear_cache_task(env, move |cwd| rolldown_plugin::clear_transform_cache_by_id(cwd, &id))
+}
+
+fn run_clear_cache_task(
+  env: &Env,
+  task: impl FnOnce(&std::path::Path) -> std::io::Result<()> + Send + 'static,
+) -> napi::Result<PromiseRaw<'_, ()>> {
+  env.spawn_future(async move {
+    let cwd = std::env::current_dir().map_err(to_clear_cache_error)?;
+    napi::tokio::task::spawn_blocking(move || task(&cwd))
+      .await
+      .map_err(|error| {
+        napi::Error::from_reason(format!("Failed to clear transform cache: {error}"))
+      })?
+      .map_err(to_clear_cache_error)
+  })
+}
+
+fn to_clear_cache_error(error: std::io::Error) -> napi::Error {
+  napi::Error::from_reason(format!("Failed to clear transform cache: {error}"))
 }
 
 #[napi_derive::module_init]
