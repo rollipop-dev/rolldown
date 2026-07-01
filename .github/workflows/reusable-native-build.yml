@@ -35,7 +35,7 @@ jobs:
         uses: oxc-project/setup-rust@3d6fb132fbe7cdcb66bf8ec193911c2945369d12 # v1.0.17
         with:
           tools: just
-          cache-key: native-build
+          cache-key: ${{ runner.os == 'Windows' && 'native-build-windows-no-dev-debug' || 'native-build' }}
           save-cache: ${{ github.ref_name == 'main' }}
           target-dir: ${{ runner.os == 'Windows' && format('{0}/target', env.DEV_DRIVE) || '' }}
 
@@ -45,6 +45,14 @@ jobs:
           cache: true
 
       - name: Build Native Rolldown
+        if: runner.os != 'Windows'
+        run: just build-rolldown
+
+      - name: Build Native Rolldown
+        if: runner.os == 'Windows'
+        env:
+          # React compiler pushes Windows dev PDB past MSVC link.exe limits; omit dev debug info only for this CI build.
+          CARGO_PROFILE_DEV_DEBUG: '0'
         run: just build-rolldown
 
       - name: Check no diff
