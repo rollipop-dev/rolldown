@@ -12,7 +12,7 @@ import { BuiltinPlugin } from './utils';
  *
  * @example
  * ```js
- * import { bundleAnalyzerPlugin } from 'rolldown/experimental';
+ * import { bundleAnalyzerPlugin } from '@rollipop/rolldown/experimental';
  *
  * export default {
  *   plugins: [
@@ -24,7 +24,7 @@ import { BuiltinPlugin } from './utils';
  * @example
  * **Custom filename**
  * ```js
- * import { bundleAnalyzerPlugin } from 'rolldown/experimental';
+ * import { bundleAnalyzerPlugin } from '@rollipop/rolldown/experimental';
  *
  * export default {
  *   plugins: [
@@ -38,7 +38,7 @@ import { BuiltinPlugin } from './utils';
  * @example
  * **LLM-friendly markdown output**
  * ```js
- * import { bundleAnalyzerPlugin } from 'rolldown/experimental';
+ * import { bundleAnalyzerPlugin } from '@rollipop/rolldown/experimental';
  *
  * export default {
  *   plugins: [

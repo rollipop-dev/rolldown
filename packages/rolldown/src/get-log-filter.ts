@@ -13,8 +13,8 @@ export type GetLogFilter = (filters: string[]) => (log: RolldownLog) => boolean;
  *
  * @example
  * ```ts
- * import { defineConfig } from 'rolldown';
- * import { getLogFilter } from 'rolldown/getLogFilter';
+ * import { defineConfig } from '@rollipop/rolldown';
+ * import { getLogFilter } from '@rollipop/rolldown/getLogFilter';
  *
  * const logFilter = getLogFilter(['code:FOO', 'code:BAR']);
  *

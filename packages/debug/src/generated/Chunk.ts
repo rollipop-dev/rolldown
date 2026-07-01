@@ -4,7 +4,7 @@ import type { ChunkImport } from "./ChunkImport";
 export type Chunk = { chunk_id: number, 
 /**
  * ```js
- * import { defineConfig } from 'rolldown';
+ * import { defineConfig } from '@rollipop/rolldown';
  * export default defineConfig({
  *   input: {
  *     main: './index.ts',
@@ -27,7 +27,7 @@ export type Chunk = { chunk_id: number,
 name: string | null, 
 /**
  * ```js
- * import { defineConfig } from 'rolldown';
+ * import { defineConfig } from '@rollipop/rolldown';
  * export default defineConfig({
  *   input: {
  *     main: './index.ts',

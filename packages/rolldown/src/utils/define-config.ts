@@ -16,7 +16,7 @@ export type RolldownOptionsFunction = (
  *
  * @example
  * ```js [rolldown.config.js]
- * import { defineConfig } from 'rolldown';
+ * import { defineConfig } from '@rollipop/rolldown';
  *
  * export default defineConfig({
  *   input: 'src/main.js',

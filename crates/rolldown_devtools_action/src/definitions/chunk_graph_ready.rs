@@ -11,7 +11,7 @@ pub struct ChunkGraphReady {
 pub struct Chunk {
   pub chunk_id: u32,
   /// ```js
-  /// import { defineConfig } from 'rolldown';
+  /// import { defineConfig } from '@rollipop/rolldown';
   /// export default defineConfig({
   ///   input: {
   ///     main: './index.ts',
@@ -33,7 +33,7 @@ pub struct Chunk {
   pub name: Option<String>,
 
   /// ```js
-  /// import { defineConfig } from 'rolldown';
+  /// import { defineConfig } from '@rollipop/rolldown';
   /// export default defineConfig({
   ///   input: {
   ///     main: './index.ts',

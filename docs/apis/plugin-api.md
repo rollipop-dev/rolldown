@@ -43,7 +43,7 @@ export default function examplePlugin() {
 ```
 
 ```js [rolldown.config.js]
-import { defineConfig } from 'rolldown';
+import { defineConfig } from '@rollipop/rolldown';
 import examplePlugin from './rolldown-plugin-example.js';
 
 export default defineConfig({

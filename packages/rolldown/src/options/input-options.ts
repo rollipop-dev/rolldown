@@ -312,7 +312,7 @@ export interface InputOptions {
    *
    * @example
    * ```js
-   * import { defineConfig } from 'rolldown'
+   * import { defineConfig } from '@rollipop/rolldown'
    *
    * export default defineConfig({
    *   plugins: [
@@ -516,7 +516,7 @@ export interface InputOptions {
    *
    * @example
    * ```js
-   * import { defineConfig } from 'rolldown'
+   * import { defineConfig } from '@rollipop/rolldown'
    *
    * export default defineConfig({
    *   moduleTypes: {
@@ -715,7 +715,7 @@ export interface InputOptions {
      * describing your use case so we can address it before the option is gone.
      *
      * @see {@link https://rolldown.rs/in-depth/lazy-barrel-optimization | Lazy Barrel Documentation}
-     * @default true
+     * @default false
      */
     lazyBarrel?: boolean;
   };

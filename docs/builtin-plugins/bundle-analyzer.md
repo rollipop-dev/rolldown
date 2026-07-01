@@ -3,7 +3,7 @@
 The `bundleAnalyzerPlugin` is a built-in Rolldown plugin that emits a detailed report describing your bundle's chunks, modules, dependencies, and reachability information. The report can be consumed by visualization tools, custom scripts, or LLM-based coding agents.
 
 :::tip EXPERIMENTAL
-This plugin is currently experimental and is exported from `rolldown/experimental`. Its API may change in future releases.
+This plugin is currently experimental and is exported from `@rollipop/rolldown/experimental`. Its API may change in future releases.
 :::
 
 ## Usage
@@ -11,8 +11,8 @@ This plugin is currently experimental and is exported from `rolldown/experimenta
 Import and use the plugin from Rolldown's experimental exports:
 
 ```js
-import { defineConfig } from 'rolldown';
-import { bundleAnalyzerPlugin } from 'rolldown/experimental';
+import { defineConfig } from '@rollipop/rolldown';
+import { bundleAnalyzerPlugin } from '@rollipop/rolldown/experimental';
 
 export default defineConfig({
   input: 'src/main.js',

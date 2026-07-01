@@ -7,7 +7,7 @@ Rolldown provides three main API functions for bundling your code programmatical
 `rolldown()` is the API compatible with Rollup's `rollup` function.
 
 ```js
-import { rolldown } from 'rolldown';
+import { rolldown } from '@rollipop/rolldown';
 
 let bundle,
   failed = false;
@@ -35,7 +35,7 @@ See [its reference](/reference/Function.rolldown) for more details.
 `watch()` is the API compatible with Rollup's `watch` function.
 
 ```js
-import { watch } from 'rolldown';
+import { watch } from '@rollipop/rolldown';
 
 const watcher = watch({
   /* ... */
@@ -64,7 +64,7 @@ This API is experimental and may change in patch releases.
 `build()` is the simplest option for most use cases. The API is similar to esbuild's `build` function. It bundles and writes in a single call with automatic cleanup.
 
 ```js
-import { build } from 'rolldown';
+import { build } from '@rollipop/rolldown';
 
 const result = await build({
   input: 'src/main.js',

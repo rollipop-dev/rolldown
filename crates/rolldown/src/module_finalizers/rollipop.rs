@@ -1,8 +1,9 @@
 use oxc::{
-  allocator::{Box as ArenaBox, IntoIn, TakeIn},
+  allocator::{Box as ArenaBox, TakeIn},
   ast::{
     NONE,
     ast::{self, ExportDefaultDeclarationKind, Expression, ObjectPropertyKind, Statement},
+    builder::GetAstBuilder,
   },
   semantic::{IsGlobalReference, Scoping, SymbolId},
   span::{GetSpanMut, SPAN, Span},
@@ -100,7 +101,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
       import_bindings: FxHashMap::default(),
       generated_static_import_infos: FxHashMap::default(),
       generated_imports: FxHashSet::default(),
-      exports: ast_factory.vec(),
+      exports: oxc::allocator::Vec::new_in(&ast_factory),
       named_exports: FxHashMap::default(),
       uses_import_meta_hot: false,
       is_dev_mode,
@@ -111,17 +112,19 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
 
   fn runtime_id_expr_for(&self, module: &Module) -> Expression<'ast> {
     if matches!(self.runtime_id_mode, RollipopRuntimeIdMode::StableId) {
-      self.ast_factory.expression_string_literal(
+      Expression::new_string_literal(
         SPAN,
-        self.ast_factory.str(module.stable_id().as_str()),
+        ast::Str::from_str_in(module.stable_id().as_str(), &self.ast_factory),
         None,
+        &self.ast_factory,
       )
     } else {
-      self.ast_factory.expression_numeric_literal(
+      Expression::new_numeric_literal(
         SPAN,
         f64::from(module.idx().raw()),
         None,
-        oxc::ast::ast::NumberBase::Decimal,
+        ast::NumberBase::Decimal,
+        &self.ast_factory,
       )
     }
   }
@@ -142,10 +145,11 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     let callee = self.ast_factory.make_member_access_expr(ROLLIPOP_REQUIRE_NAME, "e");
     self.ast_factory.make_call_with_arg(
       callee,
-      self.ast_factory.expression_string_literal(
+      Expression::new_string_literal(
         SPAN,
-        self.ast_factory.str(importee.id.as_str()),
+        ast::Str::from_str_in(importee.id.as_str(), &self.ast_factory),
         None,
+        &self.ast_factory,
       ),
       false,
     )
@@ -494,7 +498,8 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
                 }
                 return;
               }
-              let mut props = self.ast_factory.vec_with_capacity(decl.specifiers.len());
+              let mut props =
+                oxc::allocator::Vec::with_capacity_in(decl.specifiers.len(), &self.ast_factory);
               for specifier in &decl.specifiers {
                 let local = match &specifier.local {
                   ast::ModuleExportName::IdentifierName(ident) => {
@@ -555,7 +560,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
                 }
                 _ => {}
               }
-              program_body.push(Statement::from(decl.take_in(self.ast_factory.allocator)));
+              program_body.push(Statement::from(decl.take_in(&self.ast_factory)));
             } else {
               for specifier in &decl.specifiers {
                 if let Some(symbol_id) = scoping.get_root_binding(specifier.local.name().into()) {
@@ -581,8 +586,8 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
                 false,
               ));
               program_body.push(Statement::FunctionDeclaration(ArenaBox::new_in(
-                function.as_mut().take_in(self.ast_factory.allocator),
-                self.ast_factory.allocator,
+                function.as_mut().take_in(&self.ast_factory),
+                &self.ast_factory,
               )));
             }
             ExportDefaultDeclarationKind::ClassDeclaration(class) => {
@@ -599,16 +604,17 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
                 false,
               ));
               program_body.push(Statement::ClassDeclaration(ArenaBox::new_in(
-                class.as_mut().take_in(self.ast_factory.allocator),
-                self.ast_factory.allocator,
+                class.as_mut().take_in(&self.ast_factory),
+                &self.ast_factory,
               )));
             }
             expr @ ast::match_expression!(ExportDefaultDeclarationKind) => {
               let name = self.generated_binding_name(scoping, "__default");
-              program_body.push(self.ast_factory.make_var_decl(
-                &name,
-                expr.to_expression_mut().take_in(self.ast_factory.allocator),
-              ));
+              program_body.push(
+                self
+                  .ast_factory
+                  .make_var_decl(&name, expr.to_expression_mut().take_in(&self.ast_factory)),
+              );
               self.exports.push(self.ast_factory.make_lazy_export_property(
                 "default",
                 self.ast_factory.make_id_ref_expr(SPAN, &name),
@@ -676,30 +682,36 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
   }
 
   fn create_re_export_all_stmt(&self, binding_name: &str, span: Span) -> Statement<'ast> {
-    let call = self.ast_factory.expression_call(
+    let call = Expression::new_call_expression(
       span,
       self.ast_factory.make_member_access_expr(ROLLIPOP_REQUIRE_NAME, "re"),
       NONE,
-      self.ast_factory.vec_from_array([
-        ast::Argument::from(self.ast_factory.make_id_ref_expr(SPAN, ROLLIPOP_EXPORTS_NAME)),
-        ast::Argument::from(self.ast_factory.make_id_ref_expr(SPAN, binding_name)),
-      ]),
+      oxc::allocator::Vec::from_array_in(
+        [
+          ast::Argument::from(self.ast_factory.make_id_ref_expr(SPAN, ROLLIPOP_EXPORTS_NAME)),
+          ast::Argument::from(self.ast_factory.make_id_ref_expr(SPAN, binding_name)),
+        ],
+        &self.ast_factory,
+      ),
       false,
+      &self.ast_factory,
     );
-    self.ast_factory.statement_expression(span, call)
+    Statement::new_expression_statement(span, call, &self.ast_factory)
   }
 
   fn create_mark_esm_stmt(&self) -> Statement<'ast> {
-    let call = self.ast_factory.expression_call(
+    let call = Expression::new_call_expression(
       SPAN,
       self.ast_factory.make_member_access_expr(ROLLIPOP_REQUIRE_NAME, "r"),
       NONE,
-      self
-        .ast_factory
-        .vec1(ast::Argument::from(self.ast_factory.make_id_ref_expr(SPAN, ROLLIPOP_EXPORTS_NAME))),
+      oxc::allocator::Vec::from_value_in(
+        ast::Argument::from(self.ast_factory.make_id_ref_expr(SPAN, ROLLIPOP_EXPORTS_NAME)),
+        &self.ast_factory,
+      ),
       false,
+      &self.ast_factory,
     );
-    self.ast_factory.statement_expression(SPAN, call)
+    Statement::new_expression_statement(SPAN, call, &self.ast_factory)
   }
 
   fn create_define_exports_stmt(&mut self, scoping: &Scoping) -> Option<Statement<'ast>> {
@@ -725,21 +737,27 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
       return None;
     }
 
-    let mut obj = self
-      .ast_factory
-      .alloc_object_expression(SPAN, self.ast_factory.vec_with_capacity(self.exports.len()));
+    let mut obj = ast::ObjectExpression::boxed(
+      SPAN,
+      oxc::allocator::Vec::with_capacity_in(self.exports.len(), &self.ast_factory),
+      &self.ast_factory,
+    );
     obj.properties.extend(self.exports.drain(..));
-    let call = self.ast_factory.expression_call(
+    let call = Expression::new_call_expression(
       SPAN,
       self.ast_factory.make_member_access_expr(ROLLIPOP_REQUIRE_NAME, "d"),
       NONE,
-      self.ast_factory.vec_from_array([
-        ast::Argument::from(self.ast_factory.make_id_ref_expr(SPAN, ROLLIPOP_EXPORTS_NAME)),
-        ast::Argument::ObjectExpression(obj.into_in(self.ast_factory.allocator)),
-      ]),
+      oxc::allocator::Vec::from_array_in(
+        [
+          ast::Argument::from(self.ast_factory.make_id_ref_expr(SPAN, ROLLIPOP_EXPORTS_NAME)),
+          ast::Argument::ObjectExpression(obj),
+        ],
+        &self.ast_factory,
+      ),
       false,
+      &self.ast_factory,
     );
-    Some(self.ast_factory.statement_expression(SPAN, call))
+    Some(Statement::new_expression_statement(SPAN, call, &self.ast_factory))
   }
 
   fn add_json_metadata_exports(&mut self) {
@@ -788,7 +806,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
           return;
         };
         let Some(module_idx) = self.module.import_records[*rec_idx].resolved_module else { return };
-        lit.value = self.ast_factory.str(self.modules[module_idx].stable_id());
+        lit.value = ast::Str::from_str_in(self.modules[module_idx].stable_id(), &self.ast_factory);
       }
       ast::Argument::ArrayExpression(array) => {
         for element in &mut array.elements {
@@ -801,7 +819,8 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
             let Some(module_idx) = self.module.import_records[*rec_idx].resolved_module else {
               continue;
             };
-            lit.value = self.ast_factory.str(self.modules[module_idx].stable_id());
+            lit.value =
+              ast::Str::from_str_in(self.modules[module_idx].stable_id(), &self.ast_factory);
           }
         }
       }
@@ -865,7 +884,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
 
 impl<'me, 'ast> HmrAstBuilder<'me, 'ast> for RollipopAstFinalizer<'me, 'ast> {
   fn builder(&self) -> oxc::ast::AstBuilder<'ast> {
-    *self.ast_factory
+    *self.ast_factory.builder()
   }
 
   fn module(&self) -> &NormalModule {
@@ -873,11 +892,11 @@ impl<'me, 'ast> HmrAstBuilder<'me, 'ast> for RollipopAstFinalizer<'me, 'ast> {
   }
 
   fn binding_name_for_namespace_object_ref_atom(&self) -> ast::Str<'ast> {
-    self.builder().str(ROLLIPOP_EXPORTS_NAME)
+    ast::Str::from_str_in(ROLLIPOP_EXPORTS_NAME, &self.ast_factory)
   }
 
   fn alias_name_for_import_meta_hot(&self) -> ast::Str<'ast> {
-    self.builder().str(&self.hot_context_name())
+    ast::Str::from_str_in(&self.hot_context_name(), &self.ast_factory)
   }
 
   fn cjs_module_name() -> &'static str {
@@ -893,7 +912,7 @@ impl<'ast> Traverse<'ast, ()> for RollipopAstFinalizer<'_, 'ast> {
   ) {
     self.collect_factory_param_binding_renames(ctx.scoping());
 
-    let body = node.body.take_in(self.ast_factory.allocator);
+    let body = node.body.take_in(&self.ast_factory);
     node.body.reserve_exact(body.len() + 3);
     if self.is_runtime_module {
       for stmt in body {
@@ -919,8 +938,8 @@ impl<'ast> Traverse<'ast, ()> for RollipopAstFinalizer<'_, 'ast> {
     node: &mut ast::Program<'ast>,
     ctx: &mut oxc_traverse::TraverseCtx<'ast, ()>,
   ) {
-    let body = node.body.take_in(self.ast_factory.allocator);
-    let mut next_body = self.ast_factory.vec_with_capacity(body.len() + 3);
+    let body = node.body.take_in(&self.ast_factory);
+    let mut next_body = oxc::allocator::Vec::with_capacity_in(body.len() + 3, &self.ast_factory);
     if self.module.exports_kind.is_esm() && !self.is_runtime_module {
       next_body.push(self.create_mark_esm_stmt());
       if let Some(stmt) = self.create_define_exports_stmt(ctx.scoping()) {
@@ -975,7 +994,7 @@ impl<'ast> Traverse<'ast, ()> for RollipopAstFinalizer<'_, 'ast> {
     ctx: &mut oxc_traverse::TraverseCtx<'ast, ()>,
   ) {
     if ident.name == "exports" && ident.is_global_reference(ctx.scoping()) {
-      ident.name = self.ast_factory.str(ROLLIPOP_EXPORTS_NAME).into();
+      ident.name = ast::Str::from_str_in(ROLLIPOP_EXPORTS_NAME, &self.ast_factory).into();
       return;
     }
 
@@ -983,7 +1002,7 @@ impl<'ast> Traverse<'ast, ()> for RollipopAstFinalizer<'_, 'ast> {
     let reference = ctx.scoping().get_reference(reference_id);
     let Some(symbol_id) = reference.symbol_id() else { return };
     if let Some(binding_name) = self.renamed_factory_param_bindings.get(&symbol_id) {
-      ident.name = self.ast_factory.str(binding_name).into();
+      ident.name = ast::Str::from_str_in(binding_name, &self.ast_factory).into();
     }
   }
 
@@ -995,7 +1014,7 @@ impl<'ast> Traverse<'ast, ()> for RollipopAstFinalizer<'_, 'ast> {
     if let Some(symbol_id) = ident.symbol_id.get()
       && let Some(binding_name) = self.renamed_factory_param_bindings.get(&symbol_id)
     {
-      ident.name = self.ast_factory.str(binding_name).into();
+      ident.name = ast::Str::from_str_in(binding_name, &self.ast_factory).into();
     }
   }
 }
@@ -1035,19 +1054,26 @@ fn make_import_access_expr_for_object<'ast>(
   match imported {
     Specifier::Star => object,
     Specifier::Literal(name) if is_validate_identifier_name(name.as_str()) => {
-      Expression::StaticMemberExpression(ast_factory.alloc_static_member_expression(
+      Expression::StaticMemberExpression(ast::StaticMemberExpression::boxed(
         SPAN,
         object,
-        ast_factory.identifier_name(SPAN, ast_factory.str(name.as_str())),
+        ast_factory.make_id_name(SPAN, name.as_str()),
         false,
+        &ast_factory,
       ))
     }
     Specifier::Literal(name) => {
-      Expression::ComputedMemberExpression(ast_factory.alloc_computed_member_expression(
+      Expression::ComputedMemberExpression(ast::ComputedMemberExpression::boxed(
         SPAN,
         object,
-        ast_factory.expression_string_literal(SPAN, ast_factory.str(name.as_str()), None),
+        Expression::new_string_literal(
+          SPAN,
+          ast::Str::from_str_in(name.as_str(), &ast_factory),
+          None,
+          &ast_factory,
+        ),
         false,
+        &ast_factory,
       ))
     }
   }

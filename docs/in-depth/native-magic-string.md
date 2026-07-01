@@ -137,7 +137,7 @@ For detailed benchmark results, see the [benchmark pull request](https://github.
 ### Basic Plugin with Native MagicString
 
 ```js [rolldown.config.js]
-import { defineConfig } from 'rolldown';
+import { defineConfig } from '@rollipop/rolldown';
 
 export default defineConfig({
   experimental: {

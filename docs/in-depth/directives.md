@@ -17,7 +17,7 @@ You can control the `"use strict"` directive emission with the [`output.strict`]
 - `'auto'` (default) - Respect the `"use strict"` directive from the source code.
 
 ```ts
-import { defineConfig } from 'rolldown';
+import { defineConfig } from '@rollipop/rolldown';
 
 export default defineConfig({
   output: {
@@ -46,7 +46,7 @@ Rolldown will output the directive for any of the following cases:
 If you want to append custom directive to all files, you can use the `output.banner` option:
 
 ```ts
-import { defineConfig } from 'rolldown';
+import { defineConfig } from '@rollipop/rolldown';
 
 export default defineConfig({
   output: {

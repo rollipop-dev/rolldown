@@ -36,7 +36,7 @@ If no config file is found, Rolldown will show an error.
 You can also export a function from your config file. The function will be called with command line arguments so you can dynamically adapt your configuration:
 
 ```js [rolldown.config.js]
-import { defineConfig } from 'rolldown';
+import { defineConfig } from '@rollipop/rolldown';
 
 export default defineConfig((commandLineArgs) => {
   if (commandLineArgs.watch) {
@@ -62,7 +62,7 @@ export default {
 Alternatively you can use the `defineConfig` helper, which provides intellisense without the need for JSDoc annotations:
 
 ```js [rolldown.config.js]
-import { defineConfig } from 'rolldown';
+import { defineConfig } from '@rollipop/rolldown';
 
 export default defineConfig({
   // ...
@@ -74,7 +74,7 @@ export default defineConfig({
 To build different bundles from different inputs, you can supply an array of configuration objects:
 
 ```js [rolldown.config.js]
-import { defineConfig } from 'rolldown';
+import { defineConfig } from '@rollipop/rolldown';
 
 export default defineConfig([
   {
@@ -93,7 +93,7 @@ export default defineConfig([
 You can also supply an array for the `output` option to generate multiple outputs from the same input:
 
 ```js [rolldown.config.js]
-import { defineConfig } from 'rolldown';
+import { defineConfig } from '@rollipop/rolldown';
 
 export default defineConfig({
   input: 'src/main.js',

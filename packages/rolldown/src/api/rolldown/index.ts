@@ -13,7 +13,7 @@ import { RolldownBuild } from './rolldown-build';
  *
  * @example
  * ```js
- * import { rolldown } from 'rolldown';
+ * import { rolldown } from '@rollipop/rolldown';
  *
  * let bundle, failed = false;
  * try {

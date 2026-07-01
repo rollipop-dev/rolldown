@@ -39,7 +39,7 @@ The generated chunk names will follow the [`output.chunkFileNames`](/reference/O
 If you want to convert a set of files to another format while maintaining the file structure and export signatures, the recommended way—instead of using [`output.preserveModules`](/reference/OutputOptions.preserveModules) that may tree-shake exports as well as emit virtual files created by plugins—is to turn every file into an entry point. You can do so dynamically e.g. via the [`tinyglobby`](https://github.com/SuperchupuDev/tinyglobby) package:
 
 ```js
-import { defineConfig } from 'rolldown';
+import { defineConfig } from '@rollipop/rolldown';
 import { globSync } from 'tinyglobby';
 import path from 'node:path';
 

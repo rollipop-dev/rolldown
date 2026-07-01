@@ -17,7 +17,7 @@ import { createWatcher } from './watcher';
  *
  * @example
  * ```js
- * import { watch } from 'rolldown';
+ * import { watch } from '@rollipop/rolldown';
  *
  * const watcher = watch({ /* ... *\/ });
  * watcher.on('event', (event) => {

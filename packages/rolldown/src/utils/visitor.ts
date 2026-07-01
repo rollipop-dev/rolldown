@@ -23,8 +23,8 @@ export type VisitorObject = OriginalVisitorObject;
  *
  * @example
  * ```ts
- * import { Visitor } from 'rolldown/utils';
- * import { parseSync } from 'rolldown/utils';
+ * import { Visitor } from '@rollipop/rolldown/utils';
+ * import { parseSync } from '@rollipop/rolldown/utils';
  *
  * const result = parseSync(...);
  * const visitor = new Visitor({

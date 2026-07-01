@@ -7,8 +7,8 @@ The `replacePlugin` is a built-in Rolldown plugin that replaces the code based o
 Import and use the plugin from Rolldown's plugins exports:
 
 ```js
-import { defineConfig } from 'rolldown';
-import { replacePlugin } from 'rolldown/plugins';
+import { defineConfig } from '@rollipop/rolldown';
+import { replacePlugin } from '@rollipop/rolldown/plugins';
 
 export default defineConfig({
   input: 'src/index.js',
@@ -37,7 +37,12 @@ export default defineConfig({
 - **Type:** `[string, string]`
 - **Default:** `["\\b", "\\b(?!\\.)"]`
 
-Customizes how strings are matched. The default ensures word boundaries and prevents replacing property access (e.g., won't replace `process` in `process.env`).
+Customizes how each key is matched. A key only matches when it's surrounded by these two patterns:
+
+- `delimiters[0]` (**left**): what must come right before the key.
+- `delimiters[1]` (**right**): what must come right after the key.
+
+Both are regular expressions. The default `["\\b", "\\b(?!\\.)"]` matches a key only at word boundaries and skips property accesses, so `process` in `process.env` is left untouched.
 
 ### `preventAssignment`
 

@@ -18,7 +18,7 @@ diff --git a/apps/10000/rolldown.config.mjs b/apps/10000/rolldown.config.mjs
 --- a/apps/10000/rolldown.config.mjs
 +++ b/apps/10000/rolldown.config.mjs
 @@ -1,8 +1,25 @@
- import { defineConfig } from "rolldown";
+ import { defineConfig } from "@rollipop/rolldown";
 -import { minify } from "rollup-plugin-esbuild";
 +// import { minify } from "rollup-plugin-esbuild";
  const sourceMap = !!process.env.SOURCE_MAP;

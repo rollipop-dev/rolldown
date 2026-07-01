@@ -80,7 +80,7 @@ export class RolldownBuild {
    *
    * @example
    * ```js
-   * import { rolldown } from 'rolldown';
+   * import { rolldown } from '@rollipop/rolldown';
    *
    * {
    *   using bundle = await rolldown({ input: 'src/main.js' });

@@ -38,7 +38,7 @@ This will generate:
 Enable bundle analyzer in your `rolldown.config.js`:
 
 ```javascript
-import { bundleAnalyzerPlugin } from 'rolldown/experimental';
+import { bundleAnalyzerPlugin } from '@rollipop/rolldown/experimental';
 
 export default {
   plugins: [

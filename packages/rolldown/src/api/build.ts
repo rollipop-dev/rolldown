@@ -38,7 +38,7 @@ async function build(options: BuildOptions[]): Promise<RolldownOutput[]>;
  *
  * @example
  * ```js
- * import { build } from 'rolldown';
+ * import { build } from '@rollipop/rolldown';
  *
  * const result = await build({
  *   input: 'src/main.js',

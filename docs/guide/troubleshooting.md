@@ -54,8 +54,8 @@ If you are a plugin user and the plugin you use does not have hook filters speci
 
 ```js
 import yaml from '@rollup/plugin-yaml';
-import { defineConfig } from 'rolldown';
-import { withFilter } from 'rolldown/filter';
+import { defineConfig } from '@rollipop/rolldown';
+import { withFilter } from '@rollipop/rolldown/filter';
 
 export default defineConfig({
   plugins: [
@@ -90,7 +90,7 @@ For example, the following common Rollup plugins may be replaced with Rolldown's
 <!--
 experimental plugins (do we want to document these?)
 
-- `@rollup/plugin-dynamic-import-vars`: `import { viteDynamicImportVarsPlugin } from 'rolldown/experimental'`
+- `@rollup/plugin-dynamic-import-vars`: `import { viteDynamicImportVarsPlugin } from '@rollipop/rolldown/experimental'`
 
 -->
 

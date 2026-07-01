@@ -22,8 +22,8 @@ However, this approach relies on the Node.js module API, which isn't available i
 Import and use the plugin from Rolldown's experimental exports:
 
 ```js
-import { defineConfig } from 'rolldown';
-import { esmExternalRequirePlugin } from 'rolldown/plugins';
+import { defineConfig } from '@rollipop/rolldown';
+import { esmExternalRequirePlugin } from '@rollipop/rolldown/plugins';
 
 export default defineConfig({
   input: 'src/index.js',

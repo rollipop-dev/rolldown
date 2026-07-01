@@ -27,7 +27,7 @@ Rollup supports polyfilling `import.meta.url` in IIFE and UMD formats. However, 
 ::: code-group
 
 ```ts [rolldown.config.ts (IIFE)]
-import { defineConfig } from 'rolldown';
+import { defineConfig } from '@rollipop/rolldown';
 
 const importMetaUrlPolyfillVariableName = '__import_meta_url__';
 
@@ -47,7 +47,7 @@ export default defineConfig({
 ```
 
 ```ts [rolldown.config.ts (UMD)]
-import { defineConfig } from 'rolldown';
+import { defineConfig } from '@rollipop/rolldown';
 
 const importMetaUrlPolyfillVariableName = '__import_meta_url__';
 

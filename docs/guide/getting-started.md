@@ -177,7 +177,7 @@ $ bun run build
 When more options are needed, it is recommended to use a config file for more flexibility. A config file can be written in `.js`, `.cjs`, `.mjs`, `.ts`, `.mts`, or `.cts` formats. Let's create the following config file:
 
 ```js [rolldown.config.js]
-import { defineConfig } from 'rolldown';
+import { defineConfig } from '@rollipop/rolldown';
 
 export default defineConfig({
   input: 'src/main.js',
@@ -211,7 +211,7 @@ Next, in the npm script, we can instruct Rolldown to use the config file with th
 You can also specify multiple configurations as an array, and Rolldown will bundle them in parallel.
 
 ```js [rolldown.config.js]
-import { defineConfig } from 'rolldown';
+import { defineConfig } from '@rollipop/rolldown';
 
 export default defineConfig([
   {
@@ -243,7 +243,7 @@ Community plugins that are published to npm are listed in [Vite Plugin Registry]
 Rolldown provides a JavaScript API that is compatible with [Rollup's](https://rollupjs.org/javascript-api/), which separates `input` and `output` options:
 
 ```js
-import { rolldown } from 'rolldown';
+import { rolldown } from '@rollipop/rolldown';
 
 const bundle = await rolldown({
   // input options
@@ -269,7 +269,7 @@ await bundle.write({
 Alternatively, you can also use the more concise `build` API, which accepts the exact same options as the config file export:
 
 ```js
-import { build } from 'rolldown';
+import { build } from '@rollipop/rolldown';
 
 // build writes to disk by default
 await build({
@@ -285,7 +285,7 @@ await build({
 The rolldown watcher api is compatible with rollup [watch](https://rollupjs.org/javascript-api/#rollup-watch).
 
 ```js
-import { watch } from 'rolldown';
+import { watch } from '@rollipop/rolldown';
 
 const watcher = watch({
   /* option */
