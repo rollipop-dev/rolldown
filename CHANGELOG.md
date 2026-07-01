@@ -1,4 +1,17 @@
 
+## [1.0.21] - 2026-07-01
+
+### 🚀 Features
+
+- add transform cache manager NAPI utils by `@leegeunhyeok`
+- add `include`, `exclude` to react refresh transform option by `@leegeunhyeok`
+
+### ⚙️ Miscellaneous Tasks
+
+- avoid Windows dev PDB overflow (#41) by `@leegeunhyeok`
+- sync upstream rolldown v1.1.4 by `@leegeunhyeok`
+
+
 ## [1.1.4] - 2026-07-01
 
 ### 🚀 Features

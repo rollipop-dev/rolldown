@@ -1,6 +1,6 @@
 {
   "name": "@rollipop/rolldown",
-  "version": "1.0.20",
+  "version": "1.0.21",
   "description": "Fast JavaScript/TypeScript bundler in Rust with Rollup-compatible API.",
   "keywords": [
     "bundler",
