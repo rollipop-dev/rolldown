@@ -23,10 +23,10 @@
     "@rollipop/rolldown": "workspace:*",
     "@types/node": "catalog:",
     "cjs-module-lexer": "^2.1.0",
-    "knip": "^6.32.0",
+    "knip": "^6.34.0",
     "playwright-chromium": "^1.62.0",
     "publint": "^0.3.21",
-    "remove-unused-vars": "^0.0.14",
+    "remove-unused-vars": "^0.0.15",
     "typescript": "catalog:",
     "vite-plus": "^0.3.0"
   },

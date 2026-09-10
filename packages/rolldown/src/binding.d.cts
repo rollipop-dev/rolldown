@@ -2025,6 +2025,7 @@ export interface BindingChecksOptions {
   unresolvedEntry?: boolean
   unresolvedImport?: boolean
   filenameConflict?: boolean
+  moduleLevelDirective?: boolean
   commonJsVariableInEsm?: boolean
   importIsUndefined?: boolean
   emptyImportMeta?: boolean
@@ -2105,6 +2106,7 @@ export interface BindingDevOptions {
   onAdditionalAssets?: undefined | ((output: BindingOutputs) => void | Promise<void>)
   rebuildStrategy?: BindingRebuildStrategy
   watch?: BindingDevWatchOptions
+  hotUpdate?: boolean
 }
 
 export interface BindingDevtoolsOptions {
@@ -2635,6 +2637,7 @@ export interface BindingManualCodeSplittingOptions {
   maxSize?: number
   minModuleSize?: number
   maxModuleSize?: number
+  internalInvalidateModuleInfoCache?: () => void
 }
 
 export interface BindingMatchGroup {
