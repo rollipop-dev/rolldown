@@ -1,3 +1,14 @@
+
+## [1.0.29] - 2026-09-11
+
+### ⚙️ Miscellaneous Tasks
+
+- sync upstream rolldown v1.2.8 by `@leegeunhyeok`
+- bump swc_react_native by `@leegeunhyeok`
+- sync upstream rolldown v1.2.7 by `@leegeunhyeok`
+- sync upstream rolldown v1.2.6 by `@leegeunhyeok`
+- sync upstream rolldown v1.2.5 by `@leegeunhyeok`
+
 ## [1.2.8] - 2026-09-09
 
 ### 🚀 Features
