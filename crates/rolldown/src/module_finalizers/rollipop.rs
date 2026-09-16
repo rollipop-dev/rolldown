@@ -238,7 +238,14 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     let unique_index = self.ctx.unique_index;
     self.generated_static_import_infos.entry(target_idx).or_insert_with(|| {
       let importee = &modules[target_idx];
-      format!("import_{}_{}{}", importee.repr_name(), unique_index, rec_id.raw())
+      // A removed barrel can resolve one import record to multiple same-named modules.
+      format!(
+        "import_{}_{}_{}_{}",
+        importee.repr_name(),
+        unique_index,
+        rec_id.raw(),
+        target_idx.raw()
+      )
     })
   }
 
