@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -49,6 +49,56 @@ const orderingCode = `
   console!.log('non-null-log');
   record('retained-side-effect');
 `;
+
+describe.skipIf(unsupportedWasmPlugins)('native SWC compiled module cache', () => {
+  test('reuses loaded modules across transformers for the process lifetime, like SWC', () => {
+    const path = join(cacheRoot!, 'replaceable.wasm');
+    copyFileSync(plugins[0][0], path);
+    const options = { swc: { plugins: [[path, { exclude: ['error'] }]] as typeof plugins } };
+    const first = new RollipopReactNativeTransformer(options);
+    const code = `console.log('log'); console.error('error');`;
+    expect(evaluate(first.transformSync('first.js', code).code)).toEqual(['error:error']);
+
+    writeFileSync(path, 'invalid WASM');
+    const cached = new RollipopReactNativeTransformer(options);
+    expect(evaluate(cached.transformSync('cached.js', code).code)).toEqual(['error:error']);
+    rmSync(path);
+    const deleted = new RollipopReactNativeTransformer(options);
+    expect(evaluate(deleted.transformSync('deleted.js', code).code)).toEqual(['error:error']);
+  });
+
+  test('rejects an invalid uncached plugin and can retry after it is fixed', () => {
+    const path = join(cacheRoot!, 'invalid.wasm');
+    const options = { swc: { plugins: [[path, { exclude: ['error'] }]] as typeof plugins } };
+    writeFileSync(path, 'invalid WASM');
+    expect(() => new RollipopReactNativeTransformer(options)).toThrow(/Failed to load wasm plugin/);
+    copyFileSync(plugins[0][0], path);
+    const restored = new RollipopReactNativeTransformer(options);
+    const code = `console.log('log'); console.error('error');`;
+    expect(evaluate(restored.transformSync('restored.js', code).code)).toEqual(['error:error']);
+  });
+
+  test('keeps configurations isolated across transformers sharing a WASM module', async () => {
+    const path = plugins[0][0];
+    const keepErrors = new RollipopReactNativeTransformer({
+      swc: { plugins: [[path, { exclude: ['error'] }]] },
+    });
+    const keepWarnings = new RollipopReactNativeTransformer({
+      swc: { plugins: [[path, { exclude: ['warn'] }]] },
+    });
+    const code = `console.error('error'); console.warn('warn'); console.log('log');`;
+    const results = await Promise.all([
+      keepErrors.transform('first.js', code),
+      keepWarnings.transform('second.js', code),
+      keepErrors.transform('third.js', code),
+    ]);
+    expect(results.map((result) => evaluate(result.code))).toEqual([
+      ['error:error'],
+      ['warn:warn'],
+      ['error:error'],
+    ]);
+  });
+});
 
 function evaluate(code: string): string[] {
   const events: string[] = [];

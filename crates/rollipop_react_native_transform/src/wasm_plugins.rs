@@ -2,21 +2,28 @@
 //! `wasm_plugins` feature — see the crate-level Cargo manifest for the
 //! target gating rationale.
 
-use std::sync::Arc;
+use std::path::Path;
+use std::sync::{Arc, LazyLock};
 
+use anyhow::Context;
 use swc_common::comments::SingleThreadedComments;
 use swc_common::plugin::metadata::TransformPluginMetadataContext;
 use swc_common::plugin::serialized::{PluginSerializedBytes, VersionedSerializable};
 use swc_common::sync::Lrc;
 use swc_common::{Mark, SourceMap};
 use swc_ecma_ast::{Module, Program};
+use swc_plugin_runner::cache::PluginModuleCache;
 use swc_plugin_runner::create_plugin_transform_executor;
-use swc_plugin_runner::plugin_module_bytes::{CompiledPluginModuleBytes, RawPluginModuleBytes};
 
 use crate::SwcWasmPlugin;
 
+// Reuse SWC's cache and compile_wasm_plugins lifecycle, including its disk cache.
+// https://github.com/swc-project/swc/blob/v1.15.8/crates/swc_plugin_runner/src/cache.rs
+// https://github.com/swc-project/swc/blob/v1.15.8/crates/swc/src/plugin.rs
+static PLUGIN_MODULE_CACHE: LazyLock<PluginModuleCache> = LazyLock::new(PluginModuleCache::default);
+
 struct Preloaded {
-  compiled: CompiledPluginModuleBytes,
+  path: String,
   config: Arc<serde_json::Value>,
 }
 
@@ -40,11 +47,16 @@ impl WasmPlugins {
     let plugins = plugins
       .into_iter()
       .map(|p| {
-        let bytes = std::fs::read(&p.path)
-          .map_err(|e| anyhow::anyhow!("Failed to read wasm plugin '{}': {e}", p.path))?;
-        let raw = RawPluginModuleBytes::new(p.path, bytes);
-        let compiled = CompiledPluginModuleBytes::from_raw_module(&*runtime, raw);
-        Ok(Preloaded { compiled, config: Arc::new(p.config) })
+        let mut cache = PLUGIN_MODULE_CACHE
+          .inner
+          .get_or_init(|| PluginModuleCache::create_inner(true, None).into())
+          .lock();
+        if !cache.contains(&*runtime, &p.path) {
+          cache
+            .store_bytes_from_path(&*runtime, Path::new(&p.path), &p.path)
+            .with_context(|| format!("Failed to load wasm plugin '{}'", p.path))?;
+        }
+        Ok(Preloaded { path: p.path, config: Arc::new(p.config) })
       })
       .collect::<Result<Vec<_>, anyhow::Error>>()?;
     Ok(Self { runtime, plugins, env_name: env_name.unwrap_or_else(default_env_name) })
@@ -74,7 +86,14 @@ impl WasmPlugins {
       || -> Result<PluginSerializedBytes, anyhow::Error> {
         let mut serialized = initial;
         for p in &self.plugins {
-          let module = p.compiled.clone_module(&*self.runtime);
+          // Release the cache lock before creating the per-file execution instance.
+          let module = PLUGIN_MODULE_CACHE
+            .inner
+            .get()
+            .expect("WASM plugin cache should be initialized")
+            .lock()
+            .get(&*self.runtime, &p.path)
+            .expect("WASM plugin module should be loaded");
           let metadata = Arc::new(TransformPluginMetadataContext::new(
             Some(filename.to_string()),
             self.env_name.clone(),
@@ -85,7 +104,7 @@ impl WasmPlugins {
             &unresolved_mark,
             &metadata,
             None,
-            Box::new(module),
+            module,
             Some((*p.config).clone()),
             Arc::clone(&self.runtime),
           );

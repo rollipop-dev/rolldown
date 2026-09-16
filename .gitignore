@@ -201,3 +201,6 @@ nul
 # vitejs/vite created by `just setup-vite`, never tracked, and repo tools
 # must not lint/format its contents.
 /vite/
+
+# SWC compiled plugin cache
+.swc/
