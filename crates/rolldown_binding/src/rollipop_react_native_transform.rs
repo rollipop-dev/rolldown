@@ -73,9 +73,11 @@ fn run(
   filename: &str,
   code: &str,
 ) -> napi::Result<BindingRollipopReactNativeTransformResult> {
-  let output = transformer
-    .transform(TransformInput { filename, code, module_kind: None })
-    .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+  // WASI plugins require a Tokio context on both JS and libuv worker threads.
+  let output = napi::bindgen_prelude::within_runtime_if_available(|| {
+    transformer.transform(TransformInput { filename, code, module_kind: None })
+  })
+  .map_err(|e| napi::Error::from_reason(e.to_string()))?;
   Ok(BindingRollipopReactNativeTransformResult { code: output.code, map: output.map_json })
 }
 

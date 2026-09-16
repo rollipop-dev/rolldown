@@ -2,8 +2,9 @@
 //!
 //! Mirrors the Babel preset used by Metro: Flow strip → codegen native
 //! component → TS strip → react-native-worklets → Hermes compat passes.
-//! Optional user-supplied SWC `.wasm` plugins run first (under the
-//! `wasm_plugins` feature).
+//! Optional user-supplied SWC `.wasm` plugins run after type stripping by default,
+//! or before it when `swc.run_plugin_first` is enabled. Scope resolution always
+//! precedes plugins, matching SWC's `jsc.experimental.runPluginFirst` pipeline.
 //!
 //! This crate has no rolldown dependencies. It powers both the rolldown
 //! plugin (which forwards `HookTransformArgs` into [`Transformer`]) and a
@@ -126,8 +127,11 @@ pub struct ModuleConfig {
 /// around as a unit.
 #[derive(Debug, Default, Clone)]
 pub struct SwcConfig {
-  /// User-supplied SWC `.wasm` plugins to run before the built-in passes.
+  /// User-supplied SWC `.wasm` plugins, run after scope resolution.
   pub plugins: Vec<SwcWasmPlugin>,
+  /// Run plugins before TS/Flow stripping instead of after it. Defaults to `false`,
+  /// matching SWC's `jsc.experimental.runPluginFirst`.
+  pub run_plugin_first: bool,
   /// When `true`, runtime helpers are emitted as `import` / `require` calls
   /// to `@swc/helpers` so a downstream bundler can deduplicate them. When
   /// `false` (default), helpers are inlined into each transformed file —
@@ -360,26 +364,31 @@ impl Transformer {
       let unresolved_mark = Mark::new();
       let top_level_mark = Mark::new();
 
-      #[cfg(feature = "wasm_plugins")]
-      self.wasm_plugins.run(&cm, unresolved_mark, &comments, input.filename, &mut program)?;
-
-      resolver(unresolved_mark, top_level_mark, false).process(&mut program);
-
-      // Codegen must run before TS strip — it relies on the type annotations.
-      if is_codegen_required(module_kind, input.code, is_flow) {
-        program.visit_mut_with(&mut CodegenVisitor::new(
-          Arc::clone(&cm),
-          CodegenOptions { filename: input.filename.to_string() },
-        ));
-      }
-
-      if is_flow {
-        program.visit_mut_with(&mut RemoveFlowTypeOnlyFields {});
-      }
+      resolver(unresolved_mark, top_level_mark, syntax.typescript()).process(&mut program);
 
       helpers::HELPERS.set(
         &Helpers::new(self.options.swc.as_ref().is_some_and(|cfg| cfg.external_helpers)),
         || -> Result<(), anyhow::Error> {
+          #[cfg(feature = "wasm_plugins")]
+          let run_plugin_first = self.options.swc.as_ref().is_some_and(|cfg| cfg.run_plugin_first);
+
+          #[cfg(feature = "wasm_plugins")]
+          if run_plugin_first {
+            self.wasm_plugins.run(&cm, unresolved_mark, &comments, input.filename, &mut program)?;
+          }
+
+          // Codegen must run before TS strip — it relies on the type annotations.
+          if is_codegen_required(module_kind, input.code, is_flow) {
+            program.visit_mut_with(&mut CodegenVisitor::new(
+              Arc::clone(&cm),
+              CodegenOptions { filename: input.filename.to_string() },
+            ));
+          }
+
+          if is_flow {
+            program.visit_mut_with(&mut RemoveFlowTypeOnlyFields {});
+          }
+
           // Strip TS/Flow types first so the worklets visitor sees plain JS,
           // matching the babel pipeline order in react-native-reanimated.
           typescript(
@@ -395,6 +404,11 @@ impl Transformer {
             top_level_mark,
           )
           .process(&mut program);
+
+          #[cfg(feature = "wasm_plugins")]
+          if !run_plugin_first {
+            self.wasm_plugins.run(&cm, unresolved_mark, &comments, input.filename, &mut program)?;
+          }
 
           // Run the JSX pass before downstream class/worklet passes so they see the desugared call shape.
           if let Some(react) = self.options.swc.as_ref().map(|s| &s.react)

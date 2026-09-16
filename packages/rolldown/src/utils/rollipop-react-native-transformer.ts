@@ -36,6 +36,7 @@ export class RollipopReactNativeTransformer {
       worklets: config?.worklets,
       swc: {
         plugins,
+        runPluginFirst: swc?.runPluginFirst,
         externalHelpers: swc?.externalHelpers,
         react: swc?.react,
         module: swc?.module,

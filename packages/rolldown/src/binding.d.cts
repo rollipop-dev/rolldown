@@ -3011,6 +3011,12 @@ export interface BindingRollipopReactNativeSwcConfig {
   /** SWC `.wasm` plugins to load. */
   plugins?: Array<BindingRollipopReactNativeSwcPlugin>
   /**
+   * Run WASM plugins before TS/Flow type stripping. Defaults to `false`,
+   * matching SWC's `jsc.experimental.runPluginFirst`. Bindings are resolved
+   * before plugins in either mode.
+   */
+  runPluginFirst?: boolean
+  /**
    * When `true`, runtime helpers are emitted as imports of `@swc/helpers`
    * so a downstream bundler can deduplicate them. When `false` (default),
    * helpers are inlined into each transformed file.

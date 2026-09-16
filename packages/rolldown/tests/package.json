@@ -34,6 +34,8 @@
     "@rolldown/test-dual-format": "link:./package-fixtures/test-dual-format",
     "@rolldown/test-side-effects-field": "link:./package-fixtures/test-side-effects-field",
     "@rolldown/test-side-effects-field-glob": "file:./package-fixtures/test-side-effects-field-glob",
+    "@swc/core": "1.16.2",
+    "@swc/plugin-remove-console": "14.0.0",
     "@types/node": "catalog:",
     "source-map-js": "^1.2.1",
     "tsx": "catalog:"

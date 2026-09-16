@@ -89,6 +89,12 @@ export interface RollipopReactNativeSwcConfig {
   /** SWC `.wasm` plugins to load. Each entry is `[pluginPath, pluginConfig]`. */
   plugins?: [string, Record<string, unknown>][];
   /**
+   * Run WASM plugins before TS/Flow type stripping. Defaults to `false`,
+   * matching SWC's `jsc.experimental.runPluginFirst`. Bindings are resolved
+   * before plugins in either mode.
+   */
+  runPluginFirst?: boolean;
+  /**
    * When `true`, runtime helpers are emitted as imports of `@swc/helpers` so
    * a downstream bundler can deduplicate them. When `false` (default), helpers
    * are inlined into each transformed file — preferred when feeding the
@@ -125,6 +131,7 @@ function lowerSwc(swc: RollipopReactNativeSwcConfig | undefined) {
       path,
       config: JSON.stringify(pluginConfig ?? {}),
     })),
+    runPluginFirst: swc.runPluginFirst,
     externalHelpers: swc.externalHelpers,
     react: swc.react,
     module: swc.module,

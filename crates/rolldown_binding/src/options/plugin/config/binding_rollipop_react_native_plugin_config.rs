@@ -33,6 +33,10 @@ pub struct BindingRollipopReactNativePluginConfig {
 pub struct BindingRollipopReactNativeSwcConfig {
   /// SWC `.wasm` plugins to load.
   pub plugins: Option<Vec<BindingRollipopReactNativeSwcPlugin>>,
+  /// Run WASM plugins before TS/Flow type stripping. Defaults to `false`,
+  /// matching SWC's `jsc.experimental.runPluginFirst`. Bindings are resolved
+  /// before plugins in either mode.
+  pub run_plugin_first: Option<bool>,
   /// When `true`, runtime helpers are emitted as imports of `@swc/helpers`
   /// so a downstream bundler can deduplicate them. When `false` (default),
   /// helpers are inlined into each transformed file.
@@ -256,6 +260,7 @@ impl TryFrom<BindingRollipopReactNativeSwcConfig> for SwcConfig {
 
     Ok(SwcConfig {
       plugins,
+      run_plugin_first: value.run_plugin_first.unwrap_or(false),
       external_helpers: value.external_helpers.unwrap_or(false),
       react: value.react.map(ReactConfig::from).unwrap_or_default(),
       module: value.module.map(ModuleConfig::from),
