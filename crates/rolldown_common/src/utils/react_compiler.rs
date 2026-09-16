@@ -1,4 +1,9 @@
-use oxc::{allocator::Allocator, ast::ast::Program, diagnostics::Diagnostics, semantic::Scoping};
+use oxc::{
+  allocator::Allocator,
+  ast::ast::Program,
+  diagnostics::{Diagnostics, Severity},
+  semantic::Scoping,
+};
 use rolldown_ecmascript::semantic_builder_for_transform;
 
 /// Run OXC React Compiler before the regular OXC transformer.
@@ -17,7 +22,14 @@ pub fn run_react_compiler<'a>(
   };
 
   match result {
-    oxc_react_compiler::CompileResult::Success { output, diagnostics } => {
+    oxc_react_compiler::CompileResult::Success { output, mut diagnostics } => {
+      // Compiler bailouts can have error severity without being fatal under panic_threshold.
+      // Only CompileResult::Fatal should fail the surrounding transform or bundle.
+      for diagnostic in diagnostics.iter_mut() {
+        if diagnostic.severity == Severity::Error {
+          diagnostic.severity = Severity::Warning;
+        }
+      }
       if let Some(output) = output {
         output.transform(program);
         let scoping = semantic_builder_for_transform().build(program).semantic.into_scoping();
