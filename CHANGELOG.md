@@ -1,4 +1,11 @@
 
+## [1.0.31] - 2026-09-16
+
+### 🚀 Features
+
+- add `runPluginFirst` option by `@leegeunhyeok`
+
+
 ## [1.0.30] - 2026-09-16
 
 ### 🐛 Bug Fixes
