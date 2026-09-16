@@ -1,4 +1,11 @@
 
+## [1.0.30] - 2026-09-16
+
+### 🐛 Bug Fixes
+
+- preserve module semantics in rollipop finalizer by `@leegeunhyeok`
+
+
 ## [1.0.29] - 2026-09-11
 
 ### ⚙️ Miscellaneous Tasks
