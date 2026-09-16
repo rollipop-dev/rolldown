@@ -7,10 +7,11 @@ use oxc::{
   semantic::{IsGlobalReference, Scoping, SymbolId},
   span::{GetSpanMut, SPAN, Span},
 };
-use oxc_traverse::Traverse;
+use oxc_traverse::{Ancestor, Traverse};
 use rolldown_common::{
   ExternalModule, ImportRecordIdx, IndexModules, Interop, Module, ModuleIdx, ModuleType,
-  NormalModule, Specifier, StmtInfoIdx, StmtInfos, SymbolRef, SymbolRefDb,
+  NormalModule, Specifier, StmtInfoIdx, StmtInfos, StrictMode, SymbolRef, SymbolRefDb,
+  ThisExprReplaceKind,
 };
 use rolldown_ecmascript::CJS_REQUIRE_REF_STR;
 use rolldown_ecmascript_utils::{
@@ -300,6 +301,13 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     canonical_ref: SymbolRef,
     fallback: &Specifier,
   ) -> Specifier {
+    if self.modules()[module_idx]
+      .as_normal()
+      .is_some_and(|module| module.namespace_object_ref == canonical_ref)
+    {
+      return Specifier::Star;
+    }
+
     for (exported, resolved_export) in self.metas()[module_idx].canonical_exports(true) {
       if self.symbol_db().canonical_ref_for(resolved_export.symbol_ref) == canonical_ref {
         return Specifier::Literal(exported.clone());
@@ -346,6 +354,9 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
       )
     };
 
+    if !self.should_require_importee(target_idx) {
+      return None;
+    }
     Some(self.create_import_binding_for_module(target_idx, rec_id, &target_imported, span))
   }
 
@@ -371,6 +382,9 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
       )
     };
 
+    if !self.should_require_importee(target_idx) {
+      return None;
+    }
     Some(self.create_import_binding_for_module(target_idx, rec_id, &target_imported, span))
   }
 
@@ -413,9 +427,20 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
       _ => return None,
     };
     let resolution = self.linking_info().resolved_member_expr_refs.get(&node_id)?;
+    // JSON default properties can resolve to individual exports after the default object is tree-shaken.
+    // Those reads must use the linker's surviving symbol.
+    let is_json_resolution = resolution.resolved.is_some_and(|symbol_ref| {
+      self.modules()[symbol_ref.owner]
+        .as_normal()
+        .is_some_and(|module| matches!(module.module_type, ModuleType::Json))
+    });
     if let Some(reference_id) = resolution.reference_id
       && let Some(symbol_id) = scoping.get_reference(reference_id).symbol_id()
       && self.import_bindings.contains_key(&symbol_id)
+      && self.should_require_importee(
+        self.symbol_db().canonical_ref_for((self.ctx.module.idx, symbol_id).into()).owner,
+      )
+      && !is_json_resolution
     {
       return None;
     }
@@ -498,6 +523,9 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
   ) -> Option<(ModuleIdx, String, Option<Statement<'ast>>)> {
     let rec = &self.ctx.module.import_records[rec_id];
     let importee_idx = rec.resolved_module?;
+    if !self.should_require_importee(importee_idx) {
+      return None;
+    }
     let binding_name = self.binding_name_for_import(importee_idx, rec_id).to_string();
     let importee = &self.modules()[importee_idx];
     let stmt = self.create_import_binding_stmt(importee, &binding_name).map(|mut stmt| {
@@ -843,6 +871,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
       self.exports.push(prop);
     }
     self.add_json_metadata_exports();
+    self.add_missing_re_exports();
 
     if self.exports.is_empty() {
       return None;
@@ -901,6 +930,39 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     }
   }
 
+  fn add_missing_re_exports(&mut self) {
+    let existing_exports = self
+      .exports
+      .iter()
+      .filter_map(|property| match property {
+        ObjectPropertyKind::ObjectProperty(property) => {
+          property.key.static_name().map(std::borrow::Cow::into_owned)
+        }
+        ObjectPropertyKind::SpreadProperty(_) => None,
+      })
+      .collect::<FxHashSet<_>>();
+    // A retained barrel can forward through a removed barrel. Its declarations
+    // no longer provide getters, but the live canonical exports still must.
+    for (exported, resolved_export) in self.linking_info().canonical_exports(true) {
+      if existing_exports.contains(exported.as_str()) {
+        continue;
+      }
+      let canonical_ref = self.symbol_db().canonical_ref_for(resolved_export.symbol_ref);
+      if canonical_ref.owner == self.ctx.module.idx
+        || !self.ctx.link_output.retained_export_symbols.contains(&canonical_ref)
+        || !self.should_require_importee(canonical_ref.owner)
+      {
+        continue;
+      }
+      let expr = self.inline_import_access_for_symbol_ref(canonical_ref, SPAN);
+      self.exports.push(self.ast_factory.make_lazy_export_property(
+        exported,
+        expr,
+        !is_validate_identifier_name(exported.as_str()),
+      ));
+    }
+  }
+
   fn hot_context_name(&self) -> String {
     format!("hot_{}", self.ctx.module.repr_name)
   }
@@ -948,11 +1010,20 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     let rec = &self.ctx.module.import_records[*rec_idx];
     let Some(importee_idx) = rec.resolved_module else { return };
     let importee = &self.modules()[importee_idx];
-    let require_expr = match importee {
-      Module::Normal(_) => self.require_call_for_module(importee),
-      Module::External(importee) => self.require_call_for_external(importee),
+    let (require_expr, needs_interop) = match importee {
+      Module::Normal(module) => {
+        (self.require_call_for_module(importee), module.exports_kind.is_commonjs())
+      }
+      Module::External(importee) => (self.require_call_for_external(importee), true),
     };
-    *node = self.ast_factory.make_promise_resolve_then(self.to_esm_expr(require_expr, None));
+    let interop = needs_interop.then(|| {
+      if self.ctx.module.should_consider_node_esm_spec_for_dynamic_import() {
+        Interop::Node
+      } else {
+        Interop::Babel
+      }
+    });
+    *node = self.ast_factory.make_promise_resolve_then(self.to_esm_expr(require_expr, interop));
   }
 
   fn rewrite_require(
@@ -990,8 +1061,12 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
 
   fn rewrite_import_meta_hot(&mut self, node: &mut Expression<'ast>) {
     if node.is_import_meta_hot() {
-      self.uses_import_meta_hot = true;
-      *node = self.ast_factory.make_id_ref_expr(SPAN, &self.hot_context_name());
+      if self.is_dev_mode {
+        self.uses_import_meta_hot = true;
+        *node = self.ast_factory.make_id_ref_expr(SPAN, &self.hot_context_name());
+      } else {
+        *node = Expression::new_void_0(SPAN, &self.ast_factory);
+      }
     }
   }
 }
@@ -1025,6 +1100,23 @@ impl<'ast> Traverse<'ast, ()> for RollipopAstFinalizer<'_, 'ast> {
     ctx: &mut oxc_traverse::TraverseCtx<'ast, ()>,
   ) {
     self.collect_factory_param_binding_renames(ctx.scoping());
+    // The chunk renderer emits the entry hashbang outside all module factories.
+    node.hashbang.take();
+    match self.ctx.options.strict {
+      StrictMode::Always if !node.has_use_strict_directive() => {
+        node.directives.insert(
+          0,
+          ast::Directive::new(
+            SPAN,
+            ast::StringLiteral::new(SPAN, "use strict", None, &self.ast_factory),
+            "use strict",
+            &self.ast_factory,
+          ),
+        );
+      }
+      StrictMode::Never => node.directives.retain(|directive| !directive.is_use_strict()),
+      _ => {}
+    }
 
     let body = node.body.take_in(&self.ast_factory);
     node.body.reserve_exact(body.len() + 3);
@@ -1093,13 +1185,64 @@ impl<'ast> Traverse<'ast, ()> for RollipopAstFinalizer<'_, 'ast> {
       && let Some(symbol_id) = ctx.scoping().get_reference(reference_id).symbol_id()
       && let Some(import_binding) = self.import_bindings.get(&symbol_id)
     {
-      *node = import_binding.to_expression(&self.ast_factory);
+      let mut expr = import_binding.to_expression(&self.ast_factory);
+      // Imported bindings are bare values, not methods of the generated namespace.
+      let parent = ctx
+        .ancestors()
+        .find(|ancestor| !matches!(ancestor, Ancestor::ParenthesizedExpressionExpression(_)));
+      if matches!(
+        parent,
+        Some(Ancestor::CallExpressionCallee(_) | Ancestor::TaggedTemplateExpressionTag(_))
+      ) && !matches!(import_binding.imported, Specifier::Star)
+      {
+        expr = Expression::new_seq_in_parens(
+          Expression::new_numeric_literal(
+            SPAN,
+            0.0,
+            None,
+            ast::NumberBase::Decimal,
+            &self.ast_factory,
+          ),
+          expr,
+          &self.ast_factory,
+        );
+      }
+      *node = expr;
       return;
     }
 
     self.rewrite_dynamic_import(node);
     self.rewrite_require(node, ctx);
+  }
+
+  fn enter_expression(
+    &mut self,
+    node: &mut Expression<'ast>,
+    _ctx: &mut oxc_traverse::TraverseCtx<'ast, ()>,
+  ) {
+    // Handle hot before visiting its import.meta object.
     self.rewrite_import_meta_hot(node);
+    match node {
+      Expression::ImportMeta(_) => {
+        *node = Expression::new_object_expression(SPAN, [], &self.ast_factory);
+      }
+      Expression::ThisExpression(expr) => {
+        if let Some(kind) = self.ctx.module.this_expr_replace_map.get(&expr.node_id()) {
+          *node = match kind {
+            ThisExprReplaceKind::Exports => {
+              self.ast_factory.make_id_ref_expr(SPAN, ROLLIPOP_EXPORTS_NAME)
+            }
+            ThisExprReplaceKind::Context if self.ctx.options.context.is_empty() => {
+              Expression::new_void_0(SPAN, &self.ast_factory)
+            }
+            ThisExprReplaceKind::Context => {
+              self.ast_factory.make_id_ref_expr(SPAN, self.ctx.options.context.as_str())
+            }
+          };
+        }
+      }
+      _ => {}
+    }
   }
 
   fn exit_identifier_reference(

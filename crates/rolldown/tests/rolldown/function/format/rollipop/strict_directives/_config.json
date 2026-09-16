@@ -1,0 +1,8 @@
+{
+  "config": { "format": "rollipop", "codeSplitting": false },
+  "snapshot": false,
+  "configVariants": [
+    { "strict": "always", "_configName": "always" },
+    { "strict": "never", "_configName": "never" }
+  ]
+}

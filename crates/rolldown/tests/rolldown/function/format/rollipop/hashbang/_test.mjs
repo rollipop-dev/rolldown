@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import vm from 'node:vm';
+const code = await readFile(new URL('./dist/main.js', import.meta.url), 'utf8');
+assert.equal(code.match(/#!/g)?.length, 1);
+assert.ok(code.startsWith('#!/usr/bin/env node\n'));
+const context = {};
+vm.runInNewContext(code, context);
+assert.equal(context.result, 42);
+assert.equal(context.loaded, true);

@@ -83,7 +83,7 @@ source: crates/rolldown_testing/src/integration_test.rs
 			//#region main.js
 			__rollipop_require__.r(__rollipop_exports__);
 			var import_dep_10 = __rollipop_require__(2);
-			globalThis.__rollipop_static_import_no_minify_result = `${import_dep_10.default()}:${import_dep_10.count}`;
+			globalThis.__rollipop_static_import_no_minify_result = `${(0, import_dep_10.default)()}:${import_dep_10.count}`;
 
 			//#endregion
 		}

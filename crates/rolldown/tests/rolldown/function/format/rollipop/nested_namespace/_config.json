@@ -1,0 +1,5 @@
+{
+  "config": { "format": "rollipop", "codeSplitting": false },
+  "snapshot": false,
+  "configVariants": [{ "treeshake": false }, { "minify": true }]
+}
