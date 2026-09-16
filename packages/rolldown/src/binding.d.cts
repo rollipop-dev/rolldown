@@ -3040,6 +3040,7 @@ export interface BindingRollipopReactNativeSwcPlugin {
   path: string
   /** JSON-serialized plugin config */
   config: string
+  filter?: BindingHookFilter
 }
 
 export interface BindingRollipopReactNativeTransformResult {

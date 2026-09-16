@@ -15,7 +15,7 @@ use swc_ecma_ast::{Module, Program};
 use swc_plugin_runner::cache::PluginModuleCache;
 use swc_plugin_runner::create_plugin_transform_executor;
 
-use crate::SwcWasmPlugin;
+use crate::{SwcWasmPlugin, SwcWasmPluginFilter, TransformInput};
 
 // Reuse SWC's cache and compile_wasm_plugins lifecycle, including its disk cache.
 // https://github.com/swc-project/swc/blob/v1.15.8/crates/swc_plugin_runner/src/cache.rs
@@ -25,6 +25,7 @@ static PLUGIN_MODULE_CACHE: LazyLock<PluginModuleCache> = LazyLock::new(PluginMo
 struct Preloaded {
   path: String,
   config: Arc<serde_json::Value>,
+  filter: Option<Arc<dyn SwcWasmPluginFilter>>,
 }
 
 pub struct WasmPlugins {
@@ -56,7 +57,7 @@ impl WasmPlugins {
             .store_bytes_from_path(&*runtime, Path::new(&p.path), &p.path)
             .with_context(|| format!("Failed to load wasm plugin '{}'", p.path))?;
         }
-        Ok(Preloaded { path: p.path, config: Arc::new(p.config) })
+        Ok(Preloaded { path: p.path, config: Arc::new(p.config), filter: p.filter })
       })
       .collect::<Result<Vec<_>, anyhow::Error>>()?;
     Ok(Self { runtime, plugins, env_name: env_name.unwrap_or_else(default_env_name) })
@@ -71,10 +72,15 @@ impl WasmPlugins {
     cm: &Lrc<SourceMap>,
     unresolved_mark: Mark,
     comments: &SingleThreadedComments,
-    filename: &str,
+    input: &TransformInput<'_>,
     program: &mut Program,
   ) -> Result<(), anyhow::Error> {
-    if self.plugins.is_empty() {
+    let mut plugins = self
+      .plugins
+      .iter()
+      .filter(|p| p.filter.as_ref().is_none_or(|filter| filter.matches(input.code)))
+      .peekable();
+    if plugins.peek().is_none() {
       return Ok(());
     }
 
@@ -85,7 +91,7 @@ impl WasmPlugins {
       &swc_plugin_proxy::HostCommentsStorage { inner: Some(comments.clone()) },
       || -> Result<PluginSerializedBytes, anyhow::Error> {
         let mut serialized = initial;
-        for p in &self.plugins {
+        for p in plugins {
           // Release the cache lock before creating the per-file execution instance.
           let module = PLUGIN_MODULE_CACHE
             .inner
@@ -95,7 +101,7 @@ impl WasmPlugins {
             .get(&*self.runtime, &p.path)
             .expect("WASM plugin module should be loaded");
           let metadata = Arc::new(TransformPluginMetadataContext::new(
-            Some(filename.to_string()),
+            Some(input.filename.to_string()),
             self.env_name.clone(),
             None,
           ));

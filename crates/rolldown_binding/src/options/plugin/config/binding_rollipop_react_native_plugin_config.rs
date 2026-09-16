@@ -1,11 +1,17 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use rolldown_plugin_rollipop_react_native::{
   FlowConfig, ModuleConfig, ReactConfig, ReactRuntime, RollipopReactNativePlugin, RuntimeTarget,
   SwcConfig, SwcModuleType, SwcWasmPlugin, WorkletsConfig,
 };
-use rollipop_react_native_transform::TransformerOptions;
+use rolldown_utils::filter_expression::{self, FilterExpr, FilterExprKind};
+use rollipop_react_native_transform::{SwcWasmPluginFilter, TransformerOptions};
 use rustc_hash::FxBuildHasher;
+
+use crate::options::plugin::types::{
+  binding_filter_expression::normalized_tokens, binding_hook_filter::BindingHookFilter,
+};
 
 #[napi_derive::napi(object, object_to_js = false)]
 #[derive(Debug)]
@@ -57,6 +63,43 @@ pub struct BindingRollipopReactNativeSwcPlugin {
   pub path: String,
   /// JSON-serialized plugin config
   pub config: String,
+  pub filter: Option<BindingHookFilter>,
+}
+
+#[derive(Debug)]
+// See internal-docs/native-swc-code-filter/implementation.md.
+struct SwcCodeFilter(Vec<FilterExprKind>);
+
+impl SwcCodeFilter {
+  fn new(filter: BindingHookFilter) -> anyhow::Result<Self> {
+    fn is_code_filter(expr: &FilterExpr) -> bool {
+      match expr {
+        FilterExpr::Code(_) => true,
+        FilterExpr::And(exprs) | FilterExpr::Or(exprs) => exprs.iter().all(is_code_filter),
+        FilterExpr::Not(expr) => is_code_filter(expr),
+        _ => false,
+      }
+    }
+
+    let exprs = filter
+      .value
+      .unwrap_or_default()
+      .into_iter()
+      .map(|tokens| {
+        let expr = filter_expression::parse(normalized_tokens(tokens)?)?;
+        let (FilterExprKind::Include(inner) | FilterExprKind::Exclude(inner)) = &expr;
+        anyhow::ensure!(is_code_filter(inner), "SWC WASM plugins support only code filters");
+        Ok(expr)
+      })
+      .collect::<anyhow::Result<Vec<_>>>()?;
+    Ok(Self(exprs))
+  }
+}
+
+impl SwcWasmPluginFilter for SwcCodeFilter {
+  fn matches(&self, code: &str) -> bool {
+    filter_expression::filter_exprs_interpreter(&self.0, None, Some(code), None, None, "")
+  }
 }
 
 #[napi_derive::napi(string_enum)]
@@ -254,7 +297,12 @@ impl TryFrom<BindingRollipopReactNativeSwcConfig> for SwcConfig {
       .map(|p| -> Result<SwcWasmPlugin, anyhow::Error> {
         let config = serde_json::from_str(&p.config)
           .map_err(|e| anyhow::anyhow!("Failed to parse plugin config for '{}': {e}", p.path))?;
-        Ok(SwcWasmPlugin { path: p.path, config })
+        let filter = p
+          .filter
+          .map(SwcCodeFilter::new)
+          .transpose()?
+          .map(|filter| Arc::new(filter) as Arc<dyn SwcWasmPluginFilter>);
+        Ok(SwcWasmPlugin { path: p.path, config, filter })
       })
       .collect::<Result<Vec<_>, _>>()?;
 

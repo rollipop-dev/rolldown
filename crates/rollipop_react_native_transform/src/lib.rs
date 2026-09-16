@@ -68,6 +68,12 @@ pub use swc_react_native::WorkletsOptions as SwcWorkletsOptions;
 pub struct SwcWasmPlugin {
   pub path: String,
   pub config: serde_json::Value,
+  pub filter: Option<Arc<dyn SwcWasmPluginFilter>>,
+}
+
+/// Host-side predicate evaluated against the original transform input, before WASM execution.
+pub trait SwcWasmPluginFilter: std::fmt::Debug + Send + Sync {
+  fn matches(&self, code: &str) -> bool;
 }
 
 /// JSX runtime selection for the React transform pass.
@@ -374,7 +380,7 @@ impl Transformer {
 
           #[cfg(feature = "wasm_plugins")]
           if run_plugin_first {
-            self.wasm_plugins.run(&cm, unresolved_mark, &comments, input.filename, &mut program)?;
+            self.wasm_plugins.run(&cm, unresolved_mark, &comments, &input, &mut program)?;
           }
 
           // Codegen must run before TS strip — it relies on the type annotations.
@@ -407,7 +413,7 @@ impl Transformer {
 
           #[cfg(feature = "wasm_plugins")]
           if !run_plugin_first {
-            self.wasm_plugins.run(&cm, unresolved_mark, &comments, input.filename, &mut program)?;
+            self.wasm_plugins.run(&cm, unresolved_mark, &comments, &input, &mut program)?;
           }
 
           // Run the JSX pass before downstream class/worklet passes so they see the desugared call shape.

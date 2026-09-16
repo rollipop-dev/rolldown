@@ -3,6 +3,7 @@ import {
   type BindingRollipopReactNativeTransformResult,
 } from '../binding.cjs';
 import type { RollipopReactNativePluginConfig } from '../builtin-plugin/rollipop-react-native-plugin';
+import { bindingifyFilterExpr } from '../plugin/bindingify-hook-filter';
 
 export type RollipopReactNativeTransformerConfig = RollipopReactNativePluginConfig;
 export type RollipopReactNativeTransformResult = BindingRollipopReactNativeTransformResult;
@@ -26,9 +27,10 @@ export class RollipopReactNativeTransformer {
 
   constructor(config?: RollipopReactNativeTransformerConfig) {
     const swc = config?.swc;
-    const plugins = swc?.plugins?.map(([path, pluginConfig]) => ({
+    const plugins = swc?.plugins?.map(([path, pluginConfig, options]) => ({
       path,
       config: JSON.stringify(pluginConfig ?? {}),
+      filter: options?.filter && { value: options.filter.map(bindingifyFilterExpr) },
     }));
     this.inner = new BindingRollipopReactNativeTransformer({
       runtimeTarget: config?.runtimeTarget,

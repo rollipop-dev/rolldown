@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { rolldown } from '@rollipop/rolldown';
+import { and, code, exclude, id, include, not, or } from '@rollipop/rolldown/filter';
 import {
   rollipopReactNativePlugin,
   RollipopReactNativeTransformer,
@@ -97,6 +98,121 @@ describe.skipIf(unsupportedWasmPlugins)('native SWC compiled module cache', () =
       ['warn:warn'],
       ['error:error'],
     ]);
+  });
+});
+
+describe.skipIf(unsupportedWasmPlugins)('native SWC code filters', () => {
+  test.each([false, true])(
+    'filters WASM only, preserving TS transforms: runPluginFirst=%s',
+    async (runPluginFirst) => {
+      const transformer = new RollipopReactNativeTransformer({
+        swc: {
+          runPluginFirst,
+          plugins: [
+            [plugins[0][0], { exclude: ['error'] }, { filter: [include(code(/obfuscate-me/))] }],
+          ],
+        },
+      });
+      const skipped = transformer.transformSync(
+        'miss.ts',
+        `const value: string = 'keep'; console.log(value);`,
+      );
+      expect(evaluate(skipped.code)).toEqual(['log:keep']);
+      expect(skipped.code).not.toContain(': string');
+      const matched = await transformer.transform(
+        'hit.ts',
+        `const value: string = 'obfuscate-me'; console.log(value); console.error('keep');`,
+      );
+      expect(evaluate(matched.code)).toEqual(['error:keep']);
+    },
+  );
+
+  test('does not skip an unfiltered plugin when another plugin misses', () => {
+    const transformer = new RollipopReactNativeTransformer({
+      swc: {
+        plugins: [
+          [plugins[0][0], { exclude: ['error'] }, { filter: [include(code(/never-present/))] }],
+          [plugins[0][0], { exclude: ['warn'] }],
+        ],
+      },
+    });
+    expect(
+      evaluate(
+        transformer.transformSync('input.js', `console.error('error'); console.warn('warn');`).code,
+      ),
+    ).toEqual(['warn:warn']);
+  });
+
+  test('uses Rolldown expression ordering and boolean combinators', () => {
+    const transformer = new RollipopReactNativeTransformer({
+      swc: {
+        plugins: [
+          [
+            plugins[0][0],
+            {},
+            {
+              filter: [
+                exclude(code('keep-first')),
+                include(and(or(code('target-a'), code('target-b')), not(code('keep-last')))),
+              ],
+            },
+          ],
+        ],
+      },
+    });
+    for (const [message, removed] of [
+      ['target-a', true],
+      ['target-b', true],
+      ['unrelated', false],
+      ['target-a keep-first', false],
+      ['target-b keep-last', false],
+    ] as const) {
+      const result = transformer.transformSync(
+        'input.js',
+        `console.log(${JSON.stringify(message)});`,
+      );
+      expect(evaluate(result.code)).toEqual(removed ? [] : [`log:${message}`]);
+    }
+  });
+
+  test('an empty expression array preserves unfiltered behavior', () => {
+    const transformer = new RollipopReactNativeTransformer({
+      swc: { plugins: [[plugins[0][0], {}, { filter: [] }]] },
+    });
+    expect(evaluate(transformer.transformSync('input.js', `console.log('removed');`).code)).toEqual(
+      [],
+    );
+  });
+
+  test('passes the filter through the builtin plugin without skipping RN transforms', async () => {
+    const bundle = await rolldown({
+      input: 'entry.ts',
+      plugins: [
+        {
+          name: 'fixture',
+          resolveId: (id) => id,
+          load: () => `const value: string = 'keep'; console.log(value);`,
+        },
+        rollipopReactNativePlugin({
+          swc: { plugins: [[plugins[0][0], {}, { filter: [include(code(/never-present/))] }]] },
+        }),
+      ],
+    });
+    try {
+      const result = await bundle.generate({ format: 'cjs' });
+      expect(evaluate(result.output[0].code)).toEqual(['log:keep']);
+    } finally {
+      await bundle.close();
+    }
+  });
+
+  test('rejects non-code filter expressions instead of silently skipping plugins', () => {
+    expect(
+      () =>
+        new RollipopReactNativeTransformer({
+          swc: { plugins: [[plugins[0][0], {}, { filter: [include(id(/input/))] }]] },
+        }),
+    ).toThrow(/only code filters/);
   });
 });
 

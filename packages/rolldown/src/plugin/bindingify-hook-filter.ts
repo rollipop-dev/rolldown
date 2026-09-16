@@ -104,7 +104,7 @@ function bindingifyGeneralHookFilter<T extends StringOrRegExp, F extends General
     : undefined;
 }
 
-function bindingifyFilterExpr(
+export function bindingifyFilterExpr(
   expr: FilterExpression | TopLevelFilterExpression,
 ): BindingFilterToken[] {
   let list: BindingFilterToken[] = [];
