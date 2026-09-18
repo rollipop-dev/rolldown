@@ -224,6 +224,7 @@ export var DevRuntime = /*#__PURE__*/ function() {
    * no HMR decisions; accepting, disposing, and reloading live behind these hooks.
    * @type {DevRuntimeHooks | null}
    */ this.hooks = null;
+        /** @type {Map<string, Promise<any>>} */ this.lazyRequests = new Map();
         /** @internal */ // @ts-expect-error The variable will be injected at build time.
         this.__toESM = __toESM;
         /** @internal */ // @ts-expect-error The variable will be injected at build time.
@@ -433,6 +434,9 @@ export var DevRuntime = /*#__PURE__*/ function() {
             value: function removeModuleCache(id) {
                 var _this_hooks;
                 this.moduleCache.delete(id);
+                // `registerModule` installs a fresh namespace on every run, so a kept memo would hand a
+                // later `import()` the pre-edit exports forever.
+                this.lazyRequests.delete(id);
                 (_this_hooks = this.hooks) === null || _this_hooks === void 0 ? void 0 : _this_hooks.onModuleCacheRemoval(id);
             }
         },
@@ -466,6 +470,42 @@ export var DevRuntime = /*#__PURE__*/ function() {
                     console.warn("Module ".concat(id, " not found"));
                     return {};
                 }
+            }
+        },
+        {
+            /**
+   * The entry point for a lazy `import()`. `id` is the module the boundary stands for; the
+   * boundary's own id appears only inside `fetchChunk`'s URL.
+   *
+   * Nothing is registered under the boundary id, deliberately. A cache entry with no factory
+   * behind it reads as "executed" to the HMR boundary walk, and `applyUpdate` turns an
+   * updated-but-factory-less module into a full page reload.
+   *
+   * A rejection is memoized like any other outcome, matching `import()` of a module that
+   * threw. Retrying could not work anyway: a factory registers its module before running its
+   * body, so re-running `initModule` would return half-initialized exports as success.
+   *
+   * @param {string} id
+   * @param {() => Promise<unknown>} fetchChunk
+   * @returns {Promise<any>}
+   */ key: "requestLazy",
+            value: function requestLazy(id, fetchChunk) {
+                var _this = this;
+                var pending = this.lazyRequests.get(id);
+                if (pending) {
+                    return pending;
+                }
+                // Factories outlive `removeModuleCache`, so an evicted module can be re-run without the
+                // server — and must be, since the memo went with the cache entry. `Promise.resolve` keeps
+                // a synchronous `initModule` throw from escaping the call site.
+                var runnableHere = this.moduleCache.has(id) || this.factories.has(id);
+                var promise = runnableHere ? Promise.resolve().then(function() {
+                    return _this.initModule(id);
+                }) : Promise.resolve().then(fetchChunk).then(function() {
+                    return _this.initModule(id);
+                });
+                this.lazyRequests.set(id, promise);
+                return promise;
             }
         },
         {

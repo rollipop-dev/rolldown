@@ -98,8 +98,8 @@ source: crates/rolldown_testing/src/integration_test.rs
 			//#region main.js
 			__rollipop_require__.r(__rollipop_exports__);
 			__rolldown_runtime__.registerModule("main.js", { exports: __rollipop_exports__ });
-			var import_dep_10 = __rollipop_require__(2);
-			globalThis.__rollipop_hmr_message = import_dep_10.message;
+			var import_dep_1_0_2 = __rollipop_require__(2);
+			globalThis.__rollipop_hmr_message = import_dep_1_0_2.message;
 			//#endregion
 		}
 	};

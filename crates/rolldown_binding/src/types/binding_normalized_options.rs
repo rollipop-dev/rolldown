@@ -285,6 +285,7 @@ impl BindingNormalizedOptions {
           .map(|mangle| Either::B(mangle_options_to_napi_mangle_options(mangle))),
         codegen: Some(Either::B(codegen_options_to_napi_codegen_options(
           minify_options.remove_whitespace,
+          minify_options.ascii_only,
         ))),
         ..Default::default()
       }),
