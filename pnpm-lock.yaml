@@ -689,6 +689,9 @@ importers:
       source-map-js:
         specifier: ^1.2.1
         version: 1.2.1
+      swc-plugin-coverage-instrument:
+        specifier: 0.0.33
+        version: 0.0.33
       tsx:
         specifier: 'catalog:'
         version: 4.23.13
@@ -8439,6 +8442,9 @@ packages:
     resolution: {integrity: sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w==}
     engines: {node: '>= 0.4'}
 
+  swc-plugin-coverage-instrument@0.0.33:
+    resolution: {integrity: sha512-zM17DgG3jURPNOrEHye0MtrkrsZ9BtCMf3W5osQTHAtlNolfDUtZl7740wdx7XhUSL322qdph//DgHzZe62wHg==}
+
   tabbable@6.5.0:
     resolution: {integrity: sha512-wieBHXygIm7OyQOu5hQlkk62/WyCFYGlWg7L6/ZCUZwx0o398Zkn4pVmMyfYhfMG8kGrj/Krt8eIk6UKC6VzwA==}
 
@@ -15530,6 +15536,8 @@ snapshots:
       has-flag: 4.0.0
 
   supports-preserve-symlinks-flag@1.0.0: {}
+
+  swc-plugin-coverage-instrument@0.0.33: {}
 
   tabbable@6.5.0: {}
 

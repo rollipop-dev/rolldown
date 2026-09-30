@@ -38,6 +38,7 @@
     "@swc/plugin-remove-console": "14.0.0",
     "@types/node": "catalog:",
     "source-map-js": "^1.2.1",
+    "swc-plugin-coverage-instrument": "0.0.33",
     "tsx": "catalog:"
   }
 }

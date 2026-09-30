@@ -40,6 +40,7 @@ export class RollipopReactNativeTransformer {
       swc: {
         plugins,
         runPluginFirst: swc?.runPluginFirst,
+        jest: swc?.jest,
         externalHelpers: swc?.externalHelpers,
         react: swc?.react,
         module: swc?.module,

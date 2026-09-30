@@ -4911,6 +4911,7 @@ dependencies = [
  "swc_ecma_compat_es2017",
  "swc_ecma_compat_es2018",
  "swc_ecma_compat_es2022",
+ "swc_ecma_ext_transforms",
  "swc_ecma_parser",
  "swc_ecma_transforms_base",
  "swc_ecma_transforms_module",
@@ -5724,6 +5725,19 @@ dependencies = [
  "icu_properties",
  "swc_ecma_regexp_ast",
  "swc_ecma_regexp_visit",
+]
+
+[[package]]
+name = "swc_ecma_ext_transforms"
+version = "35.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6fb95691978e1d3d100fca45dd3a1fcfab8d90d0554e796472023b3fd17bb1cf"
+dependencies = [
+ "phf 0.11.3",
+ "swc_common",
+ "swc_ecma_ast",
+ "swc_ecma_utils",
+ "swc_ecma_visit",
 ]
 
 [[package]]

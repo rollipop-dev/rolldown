@@ -2972,6 +2972,11 @@ export interface BindingRollipopReactNativeSwcConfig {
    */
   runPluginFirst?: boolean
   /**
+   * Apply SWC's Jest hoisting pass.
+   * Defaults to `false`.
+   */
+  jest?: boolean
+  /**
    * When `true`, runtime helpers are emitted as imports of `@swc/helpers`
    * so a downstream bundler can deduplicate them. When `false` (default),
    * helpers are inlined into each transformed file.

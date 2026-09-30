@@ -106,6 +106,11 @@ export interface RollipopReactNativeSwcConfig {
    */
   runPluginFirst?: boolean;
   /**
+   * Apply SWC's Jest hoisting pass.
+   * Defaults to `false`.
+   */
+  jest?: boolean;
+  /**
    * When `true`, runtime helpers are emitted as imports of `@swc/helpers` so
    * a downstream bundler can deduplicate them. When `false` (default), helpers
    * are inlined into each transformed file — preferred when feeding the
@@ -144,6 +149,7 @@ function lowerSwc(swc: RollipopReactNativeSwcConfig | undefined) {
       filter: options?.filter && { value: options.filter.map(bindingifyFilterExpr) },
     })),
     runPluginFirst: swc.runPluginFirst,
+    jest: swc.jest,
     externalHelpers: swc.externalHelpers,
     react: swc.react,
     module: swc.module,

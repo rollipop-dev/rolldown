@@ -35,6 +35,7 @@ use swc_ecma_compat_es2022::{
   class_properties::{self, class_properties},
   private_in_object, static_blocks,
 };
+use swc_ecma_ext_transforms::jest::jest;
 use swc_ecma_parser::{
   EsSyntax, FlowSyntax, Syntax, TsSyntax, parse_file_as_expr, parse_file_as_program,
 };
@@ -138,6 +139,9 @@ pub struct SwcConfig {
   /// Run plugins before TS/Flow stripping instead of after it. Defaults to `false`,
   /// matching SWC's `jsc.experimental.runPluginFirst`.
   pub run_plugin_first: bool,
+  /// Apply SWC's Jest hoisting pass.
+  /// Defaults to `false`.
+  pub jest: bool,
   /// When `true`, runtime helpers are emitted as `import` / `require` calls
   /// to `@swc/helpers` so a downstream bundler can deduplicate them. When
   /// `false` (default), helpers are inlined into each transformed file —
@@ -470,6 +474,10 @@ impl Transformer {
           }
 
           finalize_program(&mut program, self.module_type, unresolved_mark, &comments);
+
+          if self.options.swc.as_ref().is_some_and(|swc| swc.jest) {
+            jest().process(&mut program);
+          }
 
           Ok(())
         },
