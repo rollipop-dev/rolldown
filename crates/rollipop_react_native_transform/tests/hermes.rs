@@ -28,6 +28,26 @@ fn lowers_class_static_blocks_for_hermes() {
 }
 
 #[test]
+fn lowers_constructor_rest_parameters() {
+  let code = transform(
+    RuntimeTarget::Hermes,
+    r"class Class {
+  constructor(...args) {}
+}
+",
+  );
+
+  assert!(
+    !code.contains("constructor(...args)"),
+    "constructor rest parameters were not lowered: {code}"
+  );
+  assert!(
+    code.contains("arguments.length"),
+    "constructor rest parameters were not lowered: {code}"
+  );
+}
+
+#[test]
 fn applies_regexp_compat_for_legacy_hermes() {
   let code = transform(
     RuntimeTarget::Hermes,

@@ -461,9 +461,9 @@ impl Transformer {
               private_in_object(),
               async_to_generator(async_to_generator::Config::default(), unresolved_mark),
               object_rest_spread(object_rest_spread::Config::default()),
+              classes(classes::Config::default()),
               parameters(parameters::Config::default(), unresolved_mark),
               destructuring(destructuring::Config::default()),
-              classes(classes::Config::default()),
               block_scoping(unresolved_mark),
             )
               .process(&mut program),
