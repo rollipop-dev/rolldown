@@ -126,6 +126,14 @@ Rollipop-specific implementations should be easy to identify during future upstr
 - Do not bury fork behavior in unrelated refactors.
 - When a Rollipop custom dependency conflicts with an upstream upgrade, either update/remove the custom feature intentionally or document why the upstream change is being held back.
 
+### Rollipop finalizer parity
+
+When the upstream changes being synced modify finalizer implementations, analyze those changes and port the applicable behavior to the Rollipop finalizer in `crates/rolldown/src/module_finalizers/rollipop.rs` and any related Rollipop finalizer code. This review is required even when the merge has no conflicts: isolated fork code may not receive upstream fixes automatically.
+
+- Identify the upstream finalizer changes and their effect on generated code.
+- Adapt and port the relevant changes while preserving Rollipop-specific behavior. Explain any changes that do not apply to the Rollipop finalizer.
+- Verify the port with relevant finalizer tests before the normal `just roll` gate.
+
 ### Version alignment
 
 Upstream and fork package versions are intentionally managed differently during a sync.
