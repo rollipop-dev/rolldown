@@ -2972,7 +2972,7 @@ export interface BindingRollipopReactNativeSwcConfig {
    */
   runPluginFirst?: boolean
   /**
-   * Apply SWC's Jest hoisting pass.
+   * Apply SWC's Jest hoisting pass, matching `@swc/core`'s hidden Jest transform.
    * Defaults to `false`.
    */
   jest?: boolean

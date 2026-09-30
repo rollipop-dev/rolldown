@@ -201,6 +201,8 @@ nul
 # vitejs/vite created by `just setup-vite`, never tracked, and repo tools
 # must not lint/format its contents.
 /vite/
+# Legacy checkout location; keep local clones out of the index.
+/packages/test-dev-server/vite/
 
 # SWC compiled plugin cache
 .swc/
