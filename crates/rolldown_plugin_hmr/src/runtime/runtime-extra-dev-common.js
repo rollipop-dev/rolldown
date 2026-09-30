@@ -7,9 +7,7 @@ function _array_without_holes(arr) {
     if (Array.isArray(arr)) return _array_like_to_array(arr);
 }
 function _assert_this_initialized(self) {
-    if (self === void 0) {
-        throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
-    }
+    if (self === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
     return self;
 }
 function _call_super(_this, derived, args) {
@@ -17,14 +15,11 @@ function _call_super(_this, derived, args) {
     return _possible_constructor_return(_this, _is_native_reflect_construct() ? Reflect.construct(derived, args || [], _get_prototype_of(_this).constructor) : derived.apply(_this, args));
 }
 function _class_call_check(instance, Constructor) {
-    if (!(instance instanceof Constructor)) {
-        throw new TypeError("Cannot call a class as a function");
-    }
+    if (!(instance instanceof Constructor)) throw new TypeError("Cannot call a class as a function");
 }
 function _construct(Parent, args, Class) {
-    if (_is_native_reflect_construct()) {
-        _construct = Reflect.construct;
-    } else {
+    if (_is_native_reflect_construct()) _construct = Reflect.construct;
+    else {
         _construct = function construct(Parent, args, Class) {
             var a = [
                 null
@@ -74,16 +69,24 @@ function _inherits(subClass, superClass) {
 function _is_native_function(fn) {
     return Function.toString.call(fn).indexOf("[native code]") !== -1;
 }
+function _is_native_reflect_construct() {
+    try {
+        var result = !Boolean.prototype.valueOf.call(Reflect.construct(Boolean, [], function() {}));
+    } catch (_) {}
+    return (_is_native_reflect_construct = function() {
+        return !!result;
+    })();
+}
 function _iterable_to_array(iter) {
-    if (typeof Symbol !== "undefined" && iter[Symbol.iterator] != null || iter["@@iterator"] != null) return Array.from(iter);
+    if (typeof Symbol !== "undefined" && iter[Symbol.iterator] != null || iter["@@iterator"] != null) {
+        return Array.from(iter);
+    }
 }
 function _non_iterable_spread() {
-    throw new TypeError("Invalid attempt to spread non-iterable instance.\\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+    throw new TypeError("Invalid attempt to spread non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
 }
 function _possible_constructor_return(self, call) {
-    if (call && (_type_of(call) === "object" || typeof call === "function")) {
-        return call;
-    }
+    if (call && (_type_of(call) === "object" || typeof call === "function")) return call;
     return _assert_this_initialized(self);
 }
 function _set_prototype_of(o, p) {
@@ -110,11 +113,9 @@ function _unsupported_iterable_to_array(o, minLen) {
 }
 function _wrap_native_super(Class) {
     var _cache = typeof Map === "function" ? new Map() : undefined;
-    _wrap_native_super = function wrapNativeSuper(Class) {
+    _wrap_native_super = function(Class) {
         if (Class === null || !_is_native_function(Class)) return Class;
-        if (typeof Class !== "function") {
-            throw new TypeError("Super expression must either be null or a function");
-        }
+        if (typeof Class !== "function") throw new TypeError("Super expression must either be null or a function");
         if (typeof _cache !== "undefined") {
             if (_cache.has(Class)) return _cache.get(Class);
             _cache.set(Class, Wrapper);
@@ -133,14 +134,6 @@ function _wrap_native_super(Class) {
         return _set_prototype_of(Wrapper, Class);
     };
     return _wrap_native_super(Class);
-}
-function _is_native_reflect_construct() {
-    try {
-        var result = !Boolean.prototype.valueOf.call(Reflect.construct(Boolean, [], function() {}));
-    } catch (_) {}
-    return (_is_native_reflect_construct = function() {
-        return !!result;
-    })();
 }
 // @ts-check
 var Module = /*#__PURE__*/ function() {
@@ -165,10 +158,13 @@ var Module = /*#__PURE__*/ function() {
     return Module;
 }();
 /**
- * Compiler-emitted module-graph delta — pure topology (static + dynamic edges).
+ * Compiler-emitted module-graph delta — topology (static + dynamic edges).
  * `ids[0, localCount)` are the modules this payload carries; `ids[localCount, …)` are foreign edge targets.
  * `edges[i]` / `dynamicEdges[i]` are the static / dynamic-`import()` out-edges of `ids[i]`.
- * @typedef {{ ids: string[], localCount: number, edges: number[][], dynamicEdges?: number[][] }} ModuleGraphDelta
+ * `bindings[i][j]` are the export names `ids[i]` imports through `edges[i][j]`. `bindings` holds
+ * only some rows; a missing row, or a missing or `null` entry, means the whole namespace.
+ * `dynamicEdges` also holds only some rows; a missing row means no dynamic edges.
+ * @typedef {{ ids: string[], localCount: number, edges: number[][], bindings?: Record<number, (string[] | null)[]>, dynamicEdges?: Record<number, number[]> }} ModuleGraphDelta
  * @typedef {{ createModuleHotContext(moduleId: string): any, onModuleCacheRemoval(moduleId: string): void }} DevRuntimeHooks
  */ export var MissingFactoryError = /*#__PURE__*/ function(Error1) {
     "use strict";
@@ -191,7 +187,8 @@ export var DevRuntime = /*#__PURE__*/ function() {
         /**
    * Static import edges from `registerGraph` — entries persist across `removeModuleCache`
    * and change only by replacement from a newer payload (last write wins).
-   * @type {Map<string, { edges: string[] }>}
+   * `bindings` is the payload row as sent; `getImportedBindings` resolves a missing entry.
+   * @type {Map<string, { edges: string[], bindings: (string[] | null)[] | undefined }>}
    */ this.staticImports = new Map();
         /**
    * Reverse index over the static imports.
@@ -217,14 +214,13 @@ export var DevRuntime = /*#__PURE__*/ function() {
         /**
    * Re-runnable factories from HMR patches and lazy chunks. The initial bundle stays
    * scope-hoisted and contributes none.
-   * @type {Map<string, { kind: 'esm' | 'cjs', fn: (id: string) => void }>}
+   * @type {Map<string, (id: string) => void>}
    */ this.factories = new Map();
         /**
    * Installed by the dev client at boot. The runtime is a store + executor and makes
    * no HMR decisions; accepting, disposing, and reloading live behind these hooks.
    * @type {DevRuntimeHooks | null}
    */ this.hooks = null;
-        /** @type {Map<string, Promise<any>>} */ this.lazyRequests = new Map();
         /** @internal */ // @ts-expect-error The variable will be injected at build time.
         this.__toESM = __toESM;
         /** @internal */ // @ts-expect-error The variable will be injected at build time.
@@ -253,7 +249,7 @@ export var DevRuntime = /*#__PURE__*/ function() {
             value: function registerGraph(delta) {
                 for(var i = 0; i < delta.localCount; i++){
                     var _ref, _ref1, _ref2;
-                    var _this_staticImports_get, _delta_dynamicEdges, _this_dynamicImports_get;
+                    var _this_staticImports_get, _delta_bindings, _delta_dynamicEdges, _this_dynamicImports_get;
                     var id = delta.ids[i];
                     var edges = delta.edges[i].map(function(j) {
                         return delta.ids[j];
@@ -305,7 +301,8 @@ export var DevRuntime = /*#__PURE__*/ function() {
                         }
                     }
                     this.staticImports.set(id, {
-                        edges: edges
+                        edges: edges,
+                        bindings: (_delta_bindings = delta.bindings) === null || _delta_bindings === void 0 ? void 0 : _delta_bindings[i]
                     });
                     // Dynamic `import()` edges are maintained in a parallel reverse index with the same
                     // last-write-wins bookkeeping; `getImporters` unions the two.
@@ -367,14 +364,10 @@ export var DevRuntime = /*#__PURE__*/ function() {
         {
             /**
    * @param {string} id
-   * @param {'esm' | 'cjs'} kind
    * @param {(id: string) => void} fn
    */ key: "registerFactory",
-            value: function registerFactory(id, kind, fn) {
-                this.factories.set(id, {
-                    kind: kind,
-                    fn: fn
-                });
+            value: function registerFactory(id, fn) {
+                this.factories.set(id, fn);
             }
         },
         {
@@ -411,6 +404,32 @@ export var DevRuntime = /*#__PURE__*/ function() {
         },
         {
             /**
+   * `"*"` means the whole namespace, an empty list a side-effect-only import, `undefined` no edge.
+   * @param {string} importer
+   * @param {string} id
+   * @returns {string[] | undefined}
+   */ key: "getImportedBindings",
+            value: function getImportedBindings(importer, id) {
+                var _ref;
+                var _record_bindings, _this_dynamicImports_get;
+                var record = this.staticImports.get(importer);
+                var j = record ? record.edges.indexOf(id) : -1;
+                var names = j === -1 ? undefined : (_ref = record === null || record === void 0 ? void 0 : (_record_bindings = record.bindings) === null || _record_bindings === void 0 ? void 0 : _record_bindings[j]) !== null && _ref !== void 0 ? _ref : [
+                    '*'
+                ];
+                if (!((_this_dynamicImports_get = this.dynamicImports.get(importer)) === null || _this_dynamicImports_get === void 0 ? void 0 : _this_dynamicImports_get.edges.includes(id))) {
+                    return names;
+                }
+                if (!names) return [
+                    '*'
+                ];
+                return names.includes('*') ? names : _to_consumable_array(names).concat([
+                    '*'
+                ]);
+            }
+        },
+        {
+            /**
    * @param {string} id
    */ key: "isExecuted",
             value: function isExecuted(id) {
@@ -434,9 +453,6 @@ export var DevRuntime = /*#__PURE__*/ function() {
             value: function removeModuleCache(id) {
                 var _this_hooks;
                 this.moduleCache.delete(id);
-                // `registerModule` installs a fresh namespace on every run, so a kept memo would hand a
-                // later `import()` the pre-edit exports forever.
-                this.lazyRequests.delete(id);
                 (_this_hooks = this.hooks) === null || _this_hooks === void 0 ? void 0 : _this_hooks.onModuleCacheRemoval(id);
             }
         },
@@ -454,7 +470,7 @@ export var DevRuntime = /*#__PURE__*/ function() {
                 if (!factory) {
                     throw new MissingFactoryError(id);
                 }
-                factory.fn(id);
+                factory(id);
                 return this.loadExports(id);
             }
         },
@@ -470,42 +486,6 @@ export var DevRuntime = /*#__PURE__*/ function() {
                     console.warn("Module ".concat(id, " not found"));
                     return {};
                 }
-            }
-        },
-        {
-            /**
-   * The entry point for a lazy `import()`. `id` is the module the boundary stands for; the
-   * boundary's own id appears only inside `fetchChunk`'s URL.
-   *
-   * Nothing is registered under the boundary id, deliberately. A cache entry with no factory
-   * behind it reads as "executed" to the HMR boundary walk, and `applyUpdate` turns an
-   * updated-but-factory-less module into a full page reload.
-   *
-   * A rejection is memoized like any other outcome, matching `import()` of a module that
-   * threw. Retrying could not work anyway: a factory registers its module before running its
-   * body, so re-running `initModule` would return half-initialized exports as success.
-   *
-   * @param {string} id
-   * @param {() => Promise<unknown>} fetchChunk
-   * @returns {Promise<any>}
-   */ key: "requestLazy",
-            value: function requestLazy(id, fetchChunk) {
-                var _this = this;
-                var pending = this.lazyRequests.get(id);
-                if (pending) {
-                    return pending;
-                }
-                // Factories outlive `removeModuleCache`, so an evicted module can be re-run without the
-                // server — and must be, since the memo went with the cache entry. `Promise.resolve` keeps
-                // a synchronous `initModule` throw from escaping the call site.
-                var runnableHere = this.moduleCache.has(id) || this.factories.has(id);
-                var promise = runnableHere ? Promise.resolve().then(function() {
-                    return _this.initModule(id);
-                }) : Promise.resolve().then(fetchChunk).then(function() {
-                    return _this.initModule(id);
-                });
-                this.lazyRequests.set(id, promise);
-                return promise;
             }
         },
         {

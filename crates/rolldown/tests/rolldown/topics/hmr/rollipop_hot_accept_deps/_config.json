@@ -1,0 +1,10 @@
+{
+  "config": {
+    "id": "host",
+    "format": "rollipop",
+    "experimental": {
+      "devMode": {}
+    }
+  },
+  "expectExecuted": false
+}

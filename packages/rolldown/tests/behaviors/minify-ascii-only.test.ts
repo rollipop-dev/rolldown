@@ -1,5 +1,5 @@
-import type { OutputChunk, Plugin } from 'rolldown';
-import { rolldown } from 'rolldown';
+import type { OutputChunk, Plugin } from '@rollipop/rolldown';
+import { rolldown } from '@rollipop/rolldown';
 import { expect, test } from 'vitest';
 
 const source = 'console.log("π 😀");';

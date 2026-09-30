@@ -879,6 +879,39 @@ export interface TsconfigOptions {
   references?: 'auto'
 }
 
+/** See <https://tc39.es/ecma426/#sec-source-map-format>. */
+export interface JSONSourceMap {
+  /** The version field, must be 3. */
+  version: number
+  /** An optional name of the generated code that this source map is associated with. */
+  file?: string
+  /** A string with the encoded mapping data. */
+  mappings: string
+  /**
+   * An optional source root, useful for relocating source files on a server or removing repeated values in the "sources" entry.
+   * This value is prepended to the individual entries in the "source" field.
+   */
+  sourceRoot?: string
+  /** A list of original sources used by the "mappings" entry. */
+  sources: Array<string>
+  /**
+   * An optional list of source content, useful when the "source" can't be hosted.
+   * The contents are listed in the same order as the sources in line 5. "null" may be used if some original sources should be retrieved by name.
+   */
+  sourcesContent?: Array<string | undefined | null>
+  /** A list of symbol names used by the "mappings" entry. */
+  names: Array<string>
+  /** An optional field containing the debugId for this sourcemap. */
+  debugId?: string
+  /**
+   * Identifies third-party sources (such as framework code or bundler-generated code), allowing developers to avoid code that they don't want to see or step through, without having to configure this beforehand.
+   * The `ignoreList` field refers to the `sources` array, and lists the indices of all the known third-party sources in that source map.
+   * When parsing the source map, developer tools can use this to determine sections of the code that the browser loads and runs that could be automatically ignore-listed.
+   * JSON input falls back to the deprecated `x_google_ignoreList` when `ignoreList` is missing or null.
+   */
+  ignoreList?: Array<number>
+}
+
 export interface SourceMap {
   file?: string
   mappings: string
@@ -887,7 +920,7 @@ export interface SourceMap {
   sources: Array<string>
   sourcesContent?: Array<string>
   version: number
-  x_google_ignoreList?: Array<number>
+  ignoreList?: Array<number>
 }
 
 export interface ArrowFunctionsOptions {
@@ -1588,8 +1621,9 @@ export declare class BindingDevEngine {
    */
   registerClient(clientId: string): Promise<void>
   /**
-   * Delivery notification from the serving middleware: the response for
-   * `filename` completed, so record its modules as shipped to that client.
+   * Delivery notification for the payload `filename`: the client reported that it
+   * ran the payload, so record its modules as shipped to that client. See
+   * `DevEngine::notify_payload_delivered`.
    */
   notifyPayloadDelivered(filename: string): Promise<void>
   removeClient(clientId: string): Promise<void>
@@ -1922,13 +1956,6 @@ export declare class TsconfigCache {
   size(): number
 }
 
-/**
- * Panics on purpose. CI calls this to check that a published binding can produce a
- * symbolicated backtrace from its separately published debug info.
- * See `scripts/misc/verify-debuginfo.mjs` and internal-docs/panic-symbolication/implementation.md
- */
-export declare function __internalForcePanic(): void
-
 export interface AliasItem {
   find: string
   replacements: Array<string | undefined | null>
@@ -1997,6 +2024,8 @@ export interface BindingChecksOptions {
   configurationFieldConflict?: boolean
   preferBuiltinFeature?: boolean
   couldNotCleanDirectory?: boolean
+  bundlerTimings?: boolean
+  /** Deprecated alias for `bundlerTimings`. Rolldown uses `bundlerTimings` if both options have values. */
   pluginTimings?: boolean
   duplicateShebang?: boolean
   unsupportedTsconfigOption?: boolean
@@ -2500,6 +2529,7 @@ export interface BindingJsonSourcemap {
   sourcesContent?: Array<string | undefined | null>
   names?: Array<string>
   debugId?: string
+  ignoreList?: Array<number>
   x_google_ignoreList?: Array<number>
 }
 
@@ -2676,9 +2706,13 @@ export interface BindingOutputOptions {
   sourcemap?: 'file' | 'inline' | 'hidden'
   sourcemapFileNames?: string | ((chunk: PreRenderedChunk) => string)
   sourcemapBaseUrl?: string
-  sourcemapIgnoreList?: boolean | string | RegExp | ((source: string, sourcemapPath: string) => boolean)
+  sourcemapIgnoreList?: boolean | string | RegExp | ((sources: Array<string>, sourcemapPath: string) => Uint8Array)
   sourcemapDebugIds?: boolean
-  sourcemapPathTransform?: (source: string, sourcemapPath: string) => string
+  /**
+   * Batched like `sourcemapIgnoreList` above. One call rewrites every source of a sourcemap,
+   * and the returned array matches the source array by index.
+   */
+  sourcemapPathTransform?: (sources: Array<string>, sourcemapPath: string) => Array<string>
   sourcemapExcludeSources?: boolean
   strict?: boolean | 'auto'
   minify?: boolean | 'dce-only' | MinifyOptions

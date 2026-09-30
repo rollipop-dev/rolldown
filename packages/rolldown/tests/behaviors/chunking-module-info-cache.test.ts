@@ -1,5 +1,5 @@
-import type { ChunkingContext, ModuleInfo, OutputOptions, PluginContext } from 'rolldown';
-import { rolldown } from 'rolldown';
+import type { ChunkingContext, ModuleInfo, OutputOptions, PluginContext } from '@rollipop/rolldown';
+import { rolldown } from '@rollipop/rolldown';
 import { expect, test } from 'vitest';
 
 const modules: Record<string, string> = {

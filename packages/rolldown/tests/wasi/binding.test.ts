@@ -8,7 +8,7 @@ const WASM_GLUE = ['@napi-rs/wasm-runtime', '@tybys/wasm-util', '@emnapi/'];
 const NATIVE_BINDING = /\/rolldown-binding\.[^/]+\.node$/;
 
 test('loads the binding the suite is configured for', async () => {
-  await import('rolldown');
+  await import('@rollipop/rolldown');
 
   const cached = Object.keys(createRequire(import.meta.url).cache).map((id) =>
     id.replaceAll('\\', '/'),

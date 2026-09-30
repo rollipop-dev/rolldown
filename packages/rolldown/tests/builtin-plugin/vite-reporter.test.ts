@@ -2,8 +2,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
-import { rolldown, type OutputOptions, type Plugin } from 'rolldown';
-import { viteReporterPlugin } from 'rolldown/experimental';
+import { rolldown, type OutputOptions, type Plugin } from '@rollipop/rolldown';
+import { viteReporterPlugin } from '@rollipop/rolldown/experimental';
 import { expect, onTestFinished, test } from 'vitest';
 
 test.each<{

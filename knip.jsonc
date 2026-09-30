@@ -61,6 +61,7 @@
         "duplicate-a", // fixture dependency in packages/rolldown/tests/behaviors/emit-debug-data
         "duplicate-b", // fixture dependency in packages/rolldown/tests/behaviors/emit-debug-data
         "meta-info-lib", // fixture dependency in packages/rolldown/tests/behaviors/emit-debug-data
+        "swc-plugin-coverage-instrument", // loaded by path in rollipop-react-native-jest.test.ts
         "unused-lib", // fixture dependency in packages/rolldown/tests/behaviors/emit-debug-data
       ],
     },
@@ -94,7 +95,7 @@
       ],
     },
     "scripts": {
-      "entry": ["misc/**", "lint/index.ts"],
+      "entry": ["misc/**"],
     },
     "packages/test-dev-server/tests/fixtures/*": {
       "entry": ["dev.config.mjs", "src/*.js"], // no @rolldown/test-dev-server plugin

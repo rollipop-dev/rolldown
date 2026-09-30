@@ -106,15 +106,6 @@ pub fn start_async_runtime() {
   }
 }
 
-/// Panics on purpose. CI calls this to check that a published binding can produce a
-/// symbolicated backtrace from its separately published debug info.
-/// See `scripts/misc/verify-debuginfo.mjs` and internal-docs/panic-symbolication/implementation.md
-#[napi(js_name = "__internalForcePanic", catch_unwind)]
-#[inline(never)]
-pub fn internal_force_panic() {
-  panic!("forced panic for debug info verification");
-}
-
 #[napi(ts_return_type = "Promise<void>")]
 pub fn clear_cache(env: &Env) -> napi::Result<PromiseRaw<'_, ()>> {
   run_clear_cache_task(env, rolldown_plugin::clear_transform_cache)

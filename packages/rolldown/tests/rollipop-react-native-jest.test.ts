@@ -8,7 +8,7 @@ import {
 } from '@rollipop/rolldown/experimental';
 import type { TransformConfig } from '@swc/core';
 import { isWasiTest } from 'rolldown-tests/utils';
-import { describe, expect, test } from 'vitest';
+import { beforeAll, describe, expect, test } from 'vitest';
 
 const importCode = `
   import { value } from './dependency';
@@ -301,6 +301,23 @@ describe.skipIf(unsupportedWasmPlugins)('SWC Jest compatibility', () => {
 });
 
 describe.skipIf(unsupportedWasmPlugins)('native Jest coverage instrumentation', () => {
+  let transformer: RollipopReactNativeTransformer;
+
+  beforeAll(() => {
+    transformer = new RollipopReactNativeTransformer({
+      swc: {
+        jest: true,
+        module: { type: 'commonjs' },
+        plugins: [
+          [
+            createRequire(import.meta.url).resolve('swc-plugin-coverage-instrument'),
+            { coverageVariable: '__nativeCoverage__' },
+          ],
+        ],
+      },
+    });
+  }, 120_000);
+
   test.each(['sync', 'async'] as const)(
     'preserves hoisting, counters, and source locations through %s NAPI',
     async (mode) => {
@@ -317,18 +334,6 @@ describe.skipIf(unsupportedWasmPlugins)('native Jest coverage instrumentation', 
         `  throw new Error('coverage-source');`,
         `}`,
       ].join('\n');
-      const transformer = new RollipopReactNativeTransformer({
-        swc: {
-          jest: true,
-          module: { type: 'commonjs' },
-          plugins: [
-            [
-              createRequire(import.meta.url).resolve('swc-plugin-coverage-instrument'),
-              { coverageVariable: '__nativeCoverage__' },
-            ],
-          ],
-        },
-      });
       const result =
         mode === 'sync'
           ? transformer.transformSync(filename, source)

@@ -975,40 +975,12 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
   }
 
   fn rewrite_hot_accept_call_deps(&self, call_expr: &mut ast::CallExpression<'ast>) {
-    if !call_expr.callee.is_import_meta_hot_accept() || call_expr.arguments.is_empty() {
-      return;
-    }
-    match &mut call_expr.arguments[0] {
-      ast::Argument::StringLiteral(lit) => {
-        let Some(rec_idx) =
-          self.ctx.module.hmr_info.module_request_to_import_record_idx.get(lit.value.as_str())
-        else {
-          return;
-        };
-        let Some(module_idx) = self.ctx.module.import_records[*rec_idx].resolved_module else {
-          return;
-        };
-        lit.value =
-          ast::Str::from_str_in(self.modules()[module_idx].stable_id(), &self.ast_factory);
-      }
-      ast::Argument::ArrayExpression(array) => {
-        for element in &mut array.elements {
-          if let ast::ArrayExpressionElement::StringLiteral(lit) = element {
-            let Some(rec_idx) =
-              self.ctx.module.hmr_info.module_request_to_import_record_idx.get(lit.value.as_str())
-            else {
-              continue;
-            };
-            let Some(module_idx) = self.ctx.module.import_records[*rec_idx].resolved_module else {
-              continue;
-            };
-            lit.value =
-              ast::Str::from_str_in(self.modules()[module_idx].stable_id(), &self.ast_factory);
-          }
-        }
-      }
-      _ => {}
-    }
+    crate::hmr::utils::rewrite_hot_accept_deps(
+      call_expr,
+      self.ctx.module,
+      self.modules(),
+      &self.ast_factory.ast_builder,
+    );
   }
 
   fn rewrite_dynamic_import(&self, node: &mut Expression<'ast>) {

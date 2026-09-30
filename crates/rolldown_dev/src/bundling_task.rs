@@ -7,7 +7,7 @@ use std::{
 };
 
 use arcstr::ArcStr;
-use rolldown_common::{ClientHmrInput, ClientHmrUpdate, HmrUpdate, ScanMode};
+use rolldown_common::{ClientHmrInput, ClientHmrUpdate, HmrUpdate, ScanMode, WatcherChangeKind};
 use rolldown_utils::indexmap::FxIndexMap;
 use rustc_hash::FxHashMap;
 use tokio::sync::Mutex;
@@ -68,9 +68,10 @@ impl BundlingTask {
     }
   }
 
-  /// Rebuild precedes Hmr: if both stages errored in the same task (only
-  /// possible after the auto-upgrade rewrite), `Rebuild` is reported so
-  /// recovery forces a fresh rebuild on the next file change.
+  /// Rebuild precedes Hmr: if both stages errored in the same task (an
+  /// `HmrRebuild` whose HMR error went to a callback and whose rebuild then
+  /// failed too), `Rebuild` is reported so recovery forces a fresh rebuild on
+  /// the next file change.
   fn final_error_stage(&self) -> Option<ErrorStage> {
     if self.rebuild_errored {
       Some(ErrorStage::Rebuild)
@@ -81,13 +82,29 @@ impl BundlingTask {
     }
   }
 
+  /// The resolver caches misses as well as hits, and `clear_resolver_cache`
+  /// is its only invalidation. Clear it when this task could resolve a path
+  /// differently than the last one did. See
+  /// `internal-docs/dev-engine/implementation.md` §9c.
+  fn should_clear_resolver_cache(&self) -> bool {
+    // A failed task may have cached the miss that made it fail. The file
+    // can be back without a create event: a missing file the watcher never
+    // saw, followed by an importer edit, or a recreate reported as an update.
+    self.dev_context.last_task_errored.load(Ordering::Relaxed)
+      || self.input.changed_files().iter().any(|(path, event)| {
+        matches!(event, WatcherChangeKind::Create | WatcherChangeKind::Delete)
+          || path.file_name().is_some_and(|name| name == "package.json")
+      })
+  }
+
   pub async fn run(mut self) {
     tracing::trace!("[BundlingTask] starts to run.\n - Task Input: {:#?}", self.input);
     self.run_inner().await;
 
     let has_generated_bundle_output = self.has_rebuild_happen;
     let error_stage = self.final_error_stage();
-    // Feeds the next task's noop-upgrade check — see `DevContext::last_task_errored`.
+    // Feeds the next task's noop-upgrade check and resolver cache clear — see
+    // `DevContext::last_task_errored`.
     self.dev_context.last_task_errored.store(error_stage.is_some(), Ordering::Relaxed);
 
     tracing::trace!(
@@ -144,6 +161,8 @@ impl BundlingTask {
       if changed_tsconfig || self.input.requires_full_rebuild() {
         bundler.clear_resolver_cache();
         bundler.clear_transform_tsconfig_cache();
+      } else if self.should_clear_resolver_cache() {
+        bundler.clear_resolver_cache();
       }
       changed_tsconfig
     };
@@ -241,8 +260,9 @@ impl BundlingTask {
     // `HmrUpdate::Patch`. A `HmrUpdate::Noop` sends nothing, so it never advances the
     // counter. The client enforces a strict `seq === lastSeq + 1`, so consuming a seq
     // without delivering an envelope would leave a gap and trigger a spurious full reload.
-    // A client that disconnected during compute is simply absent here; its update is
-    // dropped unstamped.
+    // A client that disconnected during compute has no session here, so its patch keeps
+    // `seq: 0`. It is not filtered out: the loop below still records it as a pending
+    // payload and `on_hmr_updates` still receives it; the consumer finds no client for it.
     if let Ok(client_updates) = &mut hmr_result {
       let mut client_sessions = self.dev_context.clients.lock().await;
       for update in client_updates.iter_mut() {
@@ -256,9 +276,8 @@ impl BundlingTask {
     }
 
     // Record each rendered patch as pending (only if successful): the delivery
-    // notification max-merges its stamps into `shipped[C]` when the serving
-    // middleware sees the response for `patch.filename` complete. `carried` is
-    // handed over instead of cloned — the binding layer drops it (it stays
+    // notification for `patch.filename` max-merges its stamps into `shipped[C]`.
+    // `carried` is handed over instead of cloned — the binding layer drops it (it stays
     // server-side), so the pending entry is its only consumer from here on.
     if let Ok(client_updates) = &mut hmr_result {
       for update in client_updates.iter_mut() {
