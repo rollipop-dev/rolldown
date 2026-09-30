@@ -1,4 +1,27 @@
 
+## [1.0.32] - 2026-09-30
+
+### 🚀 Features
+
+- add native jest transform support by `@leegeunhyeok`
+- support code filters for native SWC plugins by `@leegeunhyeok`
+- integrate swc wasm cache by `@leegeunhyeok`
+
+### 🐛 Bug Fixes
+
+- restore main CI checkout and binding consistency by `@leegeunhyeok`
+- re-order transform pipeline by `@leegeunhyeok`
+- disambiguate rollipop barrel import bindings by `@leegeunhyeok`
+- preserve nonfatal react compiler bailouts by `@leegeunhyeok`
+
+### ⚙️ Miscellaneous Tasks
+
+- bump swc_react_native by `@leegeunhyeok`
+- sync upstream rolldown v1.2.11 by `@leegeunhyeok`
+- update sync skill by `@leegeunhyeok`
+- sync upstream rolldown v1.2.9 by `@leegeunhyeok`
+
+
 ## [1.0.31] - 2026-09-16
 
 ### 🚀 Features
