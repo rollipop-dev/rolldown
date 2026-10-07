@@ -41,7 +41,7 @@ overrides:
 
 catalog:
   # upstream rolldown
-  rolldown: 1.2.11
+  rolldown: 1.2.12
   # =================
   '@babel/core': ^7.29.7
   '@babel/preset-env': ^7.29.7
