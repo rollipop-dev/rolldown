@@ -51,6 +51,24 @@ const orderingCode = `
   record('retained-side-effect');
 `;
 
+describe('native Worklets errors', () => {
+  test('reports missing Bundle Mode packages through sync and async transforms', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'rolldown-worklets-'));
+    try {
+      const transformer = new RollipopReactNativeTransformer({
+        worklets: { bundleMode: true, pluginVersion: '0.13.0' },
+      });
+      const filename = join(root, 'input.js');
+      const code = `const callback = () => { 'worklet'; return 42; };`;
+      const error = /could not resolve react-native-worklets package directory for Bundle Mode/;
+      expect(() => transformer.transformSync(filename, code)).toThrow(error);
+      await expect(transformer.transform(filename, code)).rejects.toThrow(error);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
 describe.skipIf(unsupportedWasmPlugins)('native SWC compiled module cache', () => {
   test('reuses loaded modules across transformers for the process lifetime, like SWC', () => {
     const path = join(cacheRoot!, 'replaceable.wasm');

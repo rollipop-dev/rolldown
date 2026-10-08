@@ -439,6 +439,7 @@ impl Transformer {
             options.filename = Some(input.filename.to_string());
             let mut visitor = WorkletsVisitor::new(options).with_source_map(Arc::clone(&cm));
             program.visit_mut_with(&mut visitor);
+            visitor.into_result().map_err(anyhow::Error::msg)?;
           }
 
           // SWC applies optimizer globals after plugin transforms and before compat/module passes.
