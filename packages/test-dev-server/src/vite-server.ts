@@ -16,8 +16,8 @@ import { getDevWatchOptionsForCi } from './utils/get-dev-watch-options-for-ci.js
  *
  * In-memory serving, HMR fan-out, the lazy-bundling endpoint, the error
  * overlay, and the fallback spinner all come from Vite itself. The Vite
- * checkout at `vite/` (repo root, vitejs/vite `rolldown-canary` rebased onto
- * `main`) resolves `rolldown` to the workspace's `packages/rolldown` via a
+ * checkout at `vite/` (repo root, vitejs/vite `main`)
+ * resolves `rolldown` to the workspace's `packages/rolldown` via a
  * node_modules symlink swap (see `just setup-vite`; the checkout itself
  * stays unpatched), so running these tests exercises the local rolldown
  * binding through the real Vite integration.
@@ -205,8 +205,8 @@ function createHarnessPlugin(counters: HarnessCounters): VitePluginLike {
   // `error` payloads. Backs the two error-recovery workarounds below — see
   // the `configureServer`/`generateBundle` comments. Vite's own bundled-dev
   // state (`BundledDev.lastBuildError`) is `private`, so the workarounds
-  // reach it with a cast; the checkout tracks vitejs/vite `rolldown-canary`,
-  // so a canary update can move these internals.
+  // reach it with a cast; the checkout tracks vitejs/vite `main`,
+  // so an upstream update can move these internals.
   let sawBroadcastError = false;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let getBundledDev: () => any = () => undefined;

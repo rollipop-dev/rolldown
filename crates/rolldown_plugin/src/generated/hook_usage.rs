@@ -21,13 +21,13 @@ bitflags! {
     const CloseBundle = 1 << 13;
     const WatchChange = 1 << 14;
     const CloseWatcher = 1 << 15;
-    const TransformAst = 1 << 16;
-    const Banner = 1 << 17;
-    const Footer = 1 << 18;
-    const Intro = 1 << 19;
-    const Outro = 1 << 20;
-    const ResolveFileUrl = 1 << 21;
-    const HotUpdate = 1 << 22;
-    const TransformCacheHit = 1 << 23;
+    const Banner = 1 << 16;
+    const Footer = 1 << 17;
+    const Intro = 1 << 18;
+    const Outro = 1 << 19;
+    const ResolveFileUrl = 1 << 20;
+    const HotUpdate = 1 << 21;
+    const TransformCacheHit = 1 << 22;
+    const TransformAst = 1 << 23;
   }
 }

@@ -125,7 +125,7 @@ source: crates/rolldown_testing/src/integration_test.rs
 
 ```js
 (function (__rolldown_runtime__) {
-__rolldown_runtime__.registerGraph({ids:["dep.js"],localCount:1,edges:[[]]});
+__rolldown_runtime__.registerGraph({ids:["dep.js"],localCount:1,edges:[[]],stamps:{0:1}});
 //#region dep.js
 __rolldown_runtime__.registerFactory("dep.js", (function(__rolldown_module_id__) {
 	try {
@@ -134,7 +134,7 @@ __rolldown_runtime__.registerFactory("dep.js", (function(__rolldown_module_id__)
 		const hot_dep = __rolldown_runtime__.createModuleHotContext(__rolldown_module_id__);
 		const message = "after";
 	} finally {}
-}));
+}), 1);
 
 //#endregion
 })(globalThis.__rollipop_runtime__.graphs.get("host").runtime);

@@ -52,6 +52,7 @@ pub fn render_rollipop<'code>(
     && let Some(prelude) = crate::hmr::module_graph_delta::render_register_graph_source(
       &ctx.link_output.module_table,
       ctx.chunk.modules.iter().copied(),
+      None,
     )
   {
     source_joiner.append_source(prelude);

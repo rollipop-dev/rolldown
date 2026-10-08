@@ -24,14 +24,9 @@ jobs:
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
-      # pnpm v11 requires Node >=22.13, so fall back to pnpm 10 when testing on Node 20.
-      - name: Pin pnpm 10 for Node 20
-        if: ${{ inputs.node-version == 20 }}
-        run: npm pkg set packageManager=pnpm@10.33.4
-
       - uses: voidzero-dev/setup-vp@3754dd7dbdb32bd8f6d28b6043de13ad3a75f21f # v1.21.1
         with:
-          version: '0.1.24'
+          version: '1.0.0'
           node-version: ${{ inputs.node-version }}
           cache: true
 
@@ -44,15 +39,9 @@ jobs:
       - name: Build `@rolldown/test-dev-server`
         run: vp run --filter '@rolldown/test-dev-server' build
 
-      # The rebase in setup-vite needs a committer identity.
-      - name: Configure Git
-        run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-
       # The browser-platform tests run on Vite's full bundle mode, served from
-      # a clone of vitejs/vite at the latest rolldown-canary rebased onto the
-      # latest main (kept unpatched, no rolldown-side edits). setup-vite
+      # a clone of vitejs/vite at the latest main
+      # (kept unpatched, no rolldown-side edits). setup-vite
       # creates the checkout, installs its pinned deps, builds vite, and
       # points its runtime `rolldown` resolution at packages/rolldown.
       - name: Setup Vite checkout (browser-platform backend)

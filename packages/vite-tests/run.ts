@@ -2,12 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { styleText } from 'node:util';
 import { x } from 'tinyexec';
+import { parseDocument } from 'yaml';
 
 const VITE_DIR = path.resolve(import.meta.dirname, '../../vite');
 const REPO_PATH = path.resolve(import.meta.dirname, './repo');
-const OVERRIDES = [
-  `  rolldown: ${path.resolve(import.meta.dirname, '../rolldown')}`
-];
+const ROLLDOWN_DIR = path.resolve(import.meta.dirname, '../rolldown');
+const ROLLDOWN_OVERRIDE = `link:${ROLLDOWN_DIR}`;
 
 function printTitle(title: string) {
   console.info(styleText(['cyan', 'bold'], title));
@@ -45,8 +45,8 @@ async function runCmdAndPipeOrExit(title: string, cmdOptions: Parameters<typeof 
 fs.rmSync(REPO_PATH, { recursive: true, force: true });
 
 // Reuse the shared `vite/` checkout at the repo root, prepared by
-// `just setup-vite` (the latest `rolldown-canary` rebased onto the latest
-// `main`), the same code the dev-server tests run on. Setup happens only
+// `just setup-vite` (the latest Vite `main`), the same
+// code the dev-server tests run on. Setup happens only
 // there, never here, so the checkout and the dev-server's built vite dist
 // cannot drift apart. The tests run on a throwaway LOCAL clone of the
 // checkout, never on the checkout itself: this suite edits tracked files
@@ -63,19 +63,49 @@ await runCmdAndPipeOrExit(
   ['git', ['clone', VITE_DIR, REPO_PATH]],
 );
 
+// Write the `rolldown` override ourselves: Vite no longer carries a
+// `rolldown: $rolldown` line for us to rewrite. A document edit keeps
+// comments and survives any YAML formatting Vite picks.
 printTitle('# Updating pnpm-workspace.yaml to link to local rolldown...');
 const pnpmWorkspace = path.resolve(REPO_PATH, 'pnpm-workspace.yaml');
-const pnpmWorkspaceYaml = fs.readFileSync(pnpmWorkspace, 'utf-8');
-const newPnpmWorkspaceYaml = pnpmWorkspaceYaml.replace(
-  /overrides:\n\s*rolldown:\s*\$rolldown\n/,
-  `overrides:\n${OVERRIDES.join('\n')}\n`
-);
+const workspaceDoc = parseDocument(fs.readFileSync(pnpmWorkspace, 'utf-8'));
+workspaceDoc.setIn(['overrides', 'rolldown'], ROLLDOWN_OVERRIDE);
+const newPnpmWorkspaceYaml = workspaceDoc.toString();
+if (parseDocument(newPnpmWorkspaceYaml).getIn(['overrides', 'rolldown']) !== ROLLDOWN_OVERRIDE) {
+  console.error(
+    styleText(['red', 'bold'], `Failed to set \`overrides.rolldown: ${ROLLDOWN_OVERRIDE}\` in ${pnpmWorkspace}`),
+  );
+  process.exit(1);
+}
 fs.writeFileSync(pnpmWorkspace, newPnpmWorkspaceYaml, 'utf-8');
 
 await runCmdAndPipeOrExit(
   '# Running `pnpm install`...',
   ['pnpm', ['install', '--no-frozen-lockfile'], { nodeOptions: { cwd: REPO_PATH } }],
 );
+
+// Fail when the clone does not resolve the workspace rolldown, so the suites
+// never silently test an npm release again.
+printTitle('# Checking that vite resolves the workspace rolldown...');
+const resolveResult = await x(
+  process.execPath,
+  ['-e', "console.log(require('fs').realpathSync(require.resolve('rolldown/package.json')))"],
+  { nodeOptions: { cwd: path.join(REPO_PATH, 'packages/vite') } },
+);
+const resolvedRolldownPkg = resolveResult.stdout.trim();
+const expectedRolldownPkg = fs.realpathSync(path.join(ROLLDOWN_DIR, 'package.json'));
+if (resolveResult.exitCode !== 0 || resolvedRolldownPkg !== expectedRolldownPkg) {
+  console.error(
+    styleText(
+      ['red', 'bold'],
+      `vite resolves rolldown to ${resolvedRolldownPkg || resolveResult.stderr.trim()}, expected ${expectedRolldownPkg}`,
+    ),
+  );
+  process.exit(1);
+}
+const { version: rolldownVersion } = JSON.parse(fs.readFileSync(resolvedRolldownPkg, 'utf-8'));
+console.info(`vite resolves rolldown ${rolldownVersion} at ${resolvedRolldownPkg}`);
+
 await runCmdAndPipeOrExit(
   '# Running `pnpm exec playwright install chromium`...',
   ['pnpm', ['exec', 'playwright', 'install', 'chromium'], { nodeOptions: { cwd: REPO_PATH } }],
@@ -100,9 +130,59 @@ const legacyStylesWatchSpecPath = path.resolve(
 );
 const legacyStylesWatchSpec = fs.readFileSync(legacyStylesWatchSpecPath, 'utf-8');
 fs.writeFileSync(legacyStylesWatchSpecPath, legacyStylesWatchSpec.replace(
-  "test('rebuilds styles only entry on change'",
+  "test.runIf(isBuild)('rebuilds styles only entry on change'",
   "test.skip('rebuilds styles only entry on change'",
 ), 'utf-8');
+
+// Preserve vitejs/vite@08a70f0a9's canary-only test stabilization on the
+// throwaway clone, without rebasing its stale source tree onto main.
+const reactSsrSpecPath = path.resolve(
+  REPO_PATH,
+  'playground/environment-react-ssr/__tests__/environment-react-ssr.spec.ts',
+);
+const reactSsrSpec = fs.readFileSync(reactSsrSpecPath, 'utf-8');
+fs.writeFileSync(reactSsrSpecPath, reactSsrSpec.replace(
+  `          .filter(Boolean),
+      )
+      .toStrictEqual(['react-fake-server', 'react-fake-client'])`,
+  `          .filter(Boolean)
+          .sort(),
+        { timeout: process.env.CI ? 20000 : 5000 },
+      )
+      .toStrictEqual(['react-fake-client', 'react-fake-server'])`,
+), 'utf-8');
+
+for (const relativePath of [
+  'playground/test-utils.ts',
+  'playground/hmr-ssr/__tests__/hmr-ssr.spec.ts',
+]) {
+  const filePath = path.resolve(REPO_PATH, relativePath);
+  const source = fs.readFileSync(filePath, 'utf-8');
+  fs.writeFileSync(filePath, source.replace(
+    '    }, 5000)',
+    '    }, process.env.CI ? 20000 : 5000)',
+  ), 'utf-8');
+}
+
+const e2eConfigPath = path.resolve(REPO_PATH, 'vitest.config.e2e.ts');
+const e2eConfig = fs.readFileSync(e2eConfigPath, 'utf-8');
+fs.writeFileSync(e2eConfigPath, e2eConfig.replace(
+  'timeout: 50 * (process.env.CI ? 200 : 50)',
+  'timeout: 50 * (process.env.CI ? 400 : 50)',
+), 'utf-8');
+
+// Dynamic CSS imports are not awaited by the entry module. Bundled dev can
+// still be compiling them when page.goto() resolves, so wait for their effects.
+const cssSpecPath = path.resolve(REPO_PATH, 'playground/css-codesplit/__tests__/css-codesplit.spec.ts');
+const cssSpec = fs.readFileSync(cssSpecPath, 'utf-8');
+fs.writeFileSync(cssSpecPath, cssSpec
+  .replace("expect(await getColor('.dynamic'))", "await expect.poll(() => getColor('.dynamic'))")
+  .replace("expect(await getColor('.async-js'))", "await expect.poll(() => getColor('.async-js'))")
+  .replace(`  const css = await page.textContent('.dynamic-inline')
+  expect(css).toMatch('.inline')`, `  await expect.poll(() => page.textContent('.dynamic-inline')).toMatch('.inline')`)
+  .replace(`  const css = await page.textContent('.dynamic-module')
+  expect(css).toMatch('_mod_')`, `  await expect.poll(() => page.textContent('.dynamic-module')).toMatch('_mod_')`),
+'utf-8');
 
 // Rolldown keeps the deduplicated CSS file under the `style2-*` name, not
 // `style-*` (same adjustment as vitejs/vite@d716106b5 on the old rolldown-canary branch).

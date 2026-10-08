@@ -2,7 +2,7 @@ import * as esbuild from 'esbuild';
 import nodePath from 'node:path';
 import { defineParallelPluginImplementation } from '@rollipop/rolldown/parallelPlugin';
 
-/** @returns {import('rolldown').Plugin} */
+/** @returns {import('@rollipop/rolldown').Plugin} */
 export const plugin = () => {
   return {
     name: '@rolldown/plugin-esbuild',
@@ -31,7 +31,7 @@ export const plugin = () => {
   };
 };
 
-/** @returns {import('rolldown').Plugin} */
+/** @returns {import('@rollipop/rolldown').Plugin} */
 export const pluginAsync = () => {
   return {
     name: '@rolldown/plugin-esbuild',

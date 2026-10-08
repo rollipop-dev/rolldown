@@ -21,7 +21,7 @@ We store all the Node.js packages in this directory.
 
 # `/vite`
 
-The single Vite checkout shared by the dev-server test harness (`packages/test-dev-server`) and `packages/vite-tests`: a gitignored clone of [vitejs/vite](https://github.com/vitejs/vite) at the latest `rolldown-canary` rebased onto the latest `main`, created by `just setup-vite`. It must stay unpatched: never edit Vite source files inside it.
+The single Vite checkout shared by the dev-server test harness (`packages/test-dev-server`) and `packages/vite-tests`: a gitignored clone of [vitejs/vite](https://github.com/vitejs/vite) at the latest `main`, created by `just setup-vite`. It must stay unpatched: never edit Vite source files inside it.
 
 # `/examples`
 

@@ -9,8 +9,8 @@ use oxc::{
 };
 use oxc_traverse::{Ancestor, Traverse};
 use rolldown_common::{
-  ExternalModule, ImportRecordIdx, IndexModules, Interop, Module, ModuleIdx, ModuleType,
-  NormalModule, Specifier, StmtInfoIdx, StmtInfos, StrictMode, SymbolRef, SymbolRefDb,
+  ExternalModule, ImportKind, ImportRecordIdx, IndexModules, Interop, Module, ModuleIdx,
+  ModuleType, NormalModule, Specifier, StmtInfoIdx, StmtInfos, StrictMode, SymbolRef, SymbolRefDb,
   ThisExprReplaceKind,
 };
 use rolldown_ecmascript::CJS_REQUIRE_REF_STR;
@@ -165,6 +165,7 @@ pub struct RollipopAstFinalizer<'me, 'ast> {
   is_dev_mode: bool,
   is_runtime_module: bool,
   renamed_factory_param_bindings: FxHashMap<SymbolId, String>,
+  used_binding_names: FxHashSet<String>,
 }
 
 impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
@@ -191,6 +192,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
       is_dev_mode,
       is_runtime_module,
       renamed_factory_param_bindings: FxHashMap::default(),
+      used_binding_names: FxHashSet::default(),
     }
   }
 
@@ -236,16 +238,28 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
   fn binding_name_for_import(&mut self, target_idx: ModuleIdx, rec_id: ImportRecordIdx) -> &str {
     let modules = self.modules();
     let unique_index = self.ctx.unique_index;
+    let used_names = &mut self.used_binding_names;
     self.generated_static_import_infos.entry(target_idx).or_insert_with(|| {
       let importee = &modules[target_idx];
       // A removed barrel can resolve one import record to multiple same-named modules.
-      format!(
+      let base = format!(
         "import_{}_{}_{}_{}",
         importee.repr_name(),
         unique_index,
         rec_id.raw(),
         target_idx.raw()
-      )
+      );
+      // Generated namespace references can appear in any nested source scope.
+      if used_names.insert(base.clone()) {
+        return base;
+      }
+      for count in 1u32.. {
+        let candidate = format!("{base}${count}");
+        if used_names.insert(candidate.clone()) {
+          return candidate;
+        }
+      }
+      unreachable!("generated import binding should always find a free suffix");
     })
   }
 
@@ -477,11 +491,15 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
       used_names.insert(name.to_string());
     }
 
+    let has_dynamic_import =
+      self.ctx.module.import_records.iter().any(|record| record.kind == ImportKind::DynamicImport);
+
     for (name, symbol_id) in scoping.iter_bindings().flat_map(|(_, bindings)| bindings) {
       if self.is_runtime_module && name == HMR_RUNTIME_NAME {
         continue;
       }
-      if !FACTORY_PARAM_NAMES.contains(&name.as_str()) {
+      if !(FACTORY_PARAM_NAMES.contains(&name.as_str()) || has_dynamic_import && name == "Promise")
+      {
         continue;
       }
 
@@ -493,6 +511,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
         }
       }
     }
+    self.used_binding_names = used_names;
   }
 
   fn local_binding_name(&self, symbol_id: SymbolId, original_name: &str) -> String {
@@ -510,6 +529,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
       used_names.insert(name.to_string());
     }
     used_names.extend(self.renamed_factory_param_bindings.values().cloned());
+    used_names.extend(self.used_binding_names.iter().cloned());
 
     if !used_names.contains(base) {
       return base.to_string();
@@ -1207,10 +1227,12 @@ impl<'ast> Traverse<'ast, ()> for RollipopAstFinalizer<'_, 'ast> {
       }
       Expression::ThisExpression(expr) => {
         if let Some(kind) = self.ctx.module.this_expr_replace_map.get(&expr.node_id()) {
+          // The factory is called with its initial exports object as `this`; exports can be reassigned.
+          if matches!(kind, ThisExprReplaceKind::Exports) {
+            return;
+          }
           *node = match kind {
-            ThisExprReplaceKind::Exports => {
-              self.ast_factory.make_id_ref_expr(SPAN, ROLLIPOP_EXPORTS_NAME)
-            }
+            ThisExprReplaceKind::Exports => unreachable!(),
             ThisExprReplaceKind::Context if self.ctx.options.context.is_empty() => {
               Expression::new_void_0(SPAN, &self.ast_factory)
             }

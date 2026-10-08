@@ -711,11 +711,12 @@ test.concurrent(
   async ({ task, expect, onTestFinished }) => {
     const retryCount = task.result?.retryCount ?? 0;
     const { input, output, dir } = createTestInputAndOutput('watch-buildDelay', retryCount);
+    const buildDelay = 500;
     const watcher = watch({
       input,
       output: { file: output },
       watch: {
-        buildDelay: 50,
+        buildDelay,
       },
     });
     onTestFinished(async () => {
@@ -731,12 +732,13 @@ test.concurrent(
 
     // Sleep to ensure mtime crosses second boundary from initial creation
     await sleep(1000);
+    const buildFinished = waitBuildFinished(watcher);
     fs.writeFileSync(input, 'console.log(4)');
     await sleep(20);
     fs.writeFileSync(input, 'console.log(5)');
 
-    // sleep 200ms to wait the build finished, if the buildDelay is working, the restartFn should be called once
-    await sleep(200);
+    // Allow for Windows poll delivery and scheduling jitter, then wait for the actual rebuild.
+    await buildFinished;
     await expect.poll(() => fs.readFileSync(output, 'utf-8')).toContain('console.log(5)');
     expect(restartFn).toBeCalledTimes(1);
   },

@@ -3,7 +3,7 @@ import { defineParallelPluginImplementation } from '@rollipop/rolldown/parallelP
 import babel from '@babel/core';
 import nodePath from 'node:path';
 
-/** @returns {import('rolldown').Plugin} */
+/** @returns {import('@rollipop/rolldown').Plugin} */
 export const babelPlugin = () => {
   const partialConfig = babel.loadPartialConfig({
     presets: [['@babel/preset-env', { bugfixes: true }], '@babel/preset-typescript'],

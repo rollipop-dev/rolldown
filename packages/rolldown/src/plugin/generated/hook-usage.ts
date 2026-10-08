@@ -18,14 +18,13 @@ export enum HookUsageKind {
   closeBundle = 1 << 13,
   watchChange = 1 << 14,
   closeWatcher = 1 << 15,
-  transformAst = 1 << 16,
-  banner = 1 << 17,
-  footer = 1 << 18,
-  intro = 1 << 19,
-  outro = 1 << 20,
-  resolveFileUrl = 1 << 21,
-  hotUpdate = 1 << 22,
-  transformCacheHit = 1 << 23,
+  banner = 1 << 16,
+  footer = 1 << 17,
+  intro = 1 << 18,
+  outro = 1 << 19,
+  resolveFileUrl = 1 << 20,
+  hotUpdate = 1 << 21,
+  transformCacheHit = 1 << 22,
 }
 
 export class HookUsage {

@@ -164,7 +164,8 @@ var Module = /*#__PURE__*/ function() {
  * `bindings[i][j]` are the export names `ids[i]` imports through `edges[i][j]`. `bindings` holds
  * only some rows; a missing row, or a missing or `null` entry, means the whole namespace.
  * `dynamicEdges` also holds only some rows; a missing row means no dynamic edges.
- * @typedef {{ ids: string[], localCount: number, edges: number[][], bindings?: Record<number, (string[] | null)[]>, dynamicEdges?: Record<number, number[]> }} ModuleGraphDelta
+ * `stamps[i]` is the rebuild stamp of `ids[i]`; a missing row means 0.
+ * @typedef {{ ids: string[], localCount: number, edges: number[][], bindings?: Record<number, (string[] | null)[]>, dynamicEdges?: Record<number, number[]>, stamps?: Record<number, number> }} ModuleGraphDelta
  * @typedef {{ createModuleHotContext(moduleId: string): any, onModuleCacheRemoval(moduleId: string): void }} DevRuntimeHooks
  */ export var MissingFactoryError = /*#__PURE__*/ function(Error1) {
     "use strict";
@@ -217,6 +218,12 @@ export var DevRuntime = /*#__PURE__*/ function() {
    * @type {Map<string, (id: string) => void>}
    */ this.factories = new Map();
         /**
+   * A late payload (a slow lazy chunk after an HMR patch) must not replace newer rows or
+   * factories.
+   * @type {Map<string, number>}
+   */ this.rowStamps = new Map();
+        /** @type {Map<string, number>} */ this.factoryStamps = new Map();
+        /**
    * Installed by the dev client at boot. The runtime is a store + executor and makes
    * no HMR decisions; accepting, disposing, and reloading live behind these hooks.
    * @type {DevRuntimeHooks | null}
@@ -251,6 +258,16 @@ export var DevRuntime = /*#__PURE__*/ function() {
                     var _ref, _ref1, _ref2;
                     var _this_staticImports_get, _delta_bindings, _delta_dynamicEdges, _this_dynamicImports_get;
                     var id = delta.ids[i];
+                    if (delta.stamps) {
+                        var _delta_stamps_i, _this_rowStamps_get;
+                        var stamp = (_delta_stamps_i = delta.stamps[i]) !== null && _delta_stamps_i !== void 0 ? _delta_stamps_i : 0;
+                        if (stamp < ((_this_rowStamps_get = this.rowStamps.get(id)) !== null && _this_rowStamps_get !== void 0 ? _this_rowStamps_get : 0)) continue;
+                        this.rowStamps.set(id, stamp);
+                    } else {
+                        // A full-build chunk has no stamps. It runs its code right away, so its row always
+                        // replaces the old one.
+                        this.rowStamps.delete(id);
+                    }
                     var edges = delta.edges[i].map(function(j) {
                         return delta.ids[j];
                     });
@@ -365,8 +382,13 @@ export var DevRuntime = /*#__PURE__*/ function() {
             /**
    * @param {string} id
    * @param {(id: string) => void} fn
+   * @param {number} [stamp]
    */ key: "registerFactory",
             value: function registerFactory(id, fn) {
+                var stamp = arguments.length > 2 && arguments[2] !== void 0 ? arguments[2] : 0;
+                var _this_factoryStamps_get;
+                if (stamp < ((_this_factoryStamps_get = this.factoryStamps.get(id)) !== null && _this_factoryStamps_get !== void 0 ? _this_factoryStamps_get : 0)) return;
+                this.factoryStamps.set(id, stamp);
                 this.factories.set(id, fn);
             }
         },

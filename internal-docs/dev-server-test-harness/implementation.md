@@ -6,7 +6,7 @@ The `@rolldown/test-dev-server` browser suite drives a real Chromium page agains
 the rolldown dev engine (HMR, lazy compilation, error overlay). The server is
 **Vite's full bundle mode** (`experimental.bundledDev`), loaded at runtime from
 the Vite checkout at `vite/` (repo root, a gitignored clone of vitejs/vite
-`rolldown-canary` rebased onto `main`) with its `rolldown`
+`main`) with its `rolldown`
 resolution linked to the workspace's `packages/rolldown` — the harness adds only
 test instrumentation on top (see [The Vite backend](#the-vite-backend)). It runs
 **in-process**: each spec file starts the dev server inside its own vitest worker
@@ -146,7 +146,7 @@ serving. What the harness does own lives in `src/vite-server.ts`:
     listener) drops the stale error when the tracked build state is healthy.
 
 **The checkout stays unpatched.** No Vite source edits on the rolldown side.
-Fixes and test adjustments belong on the vitejs/vite `rolldown-canary` branch,
+Fixes and test adjustments belong on the vitejs/vite `main` branch,
 which both this harness and `packages/vite-tests` track. Everything
 environment-specific happens in untracked files, via the
 `scripts/src/setup-vite/` script (`just setup-vite`, idempotent).
@@ -154,9 +154,10 @@ It is the only entry point that touches `vite/`: the command that moves the
 commit also rebuilds everything right after, so the checkout and the built
 dist never drift apart. The steps:
 
-1. ensure `vite/` is at the latest `rolldown-canary` rebased onto `main`
+1. ensure `vite/` is at the latest Vite `main`
    (clone if missing, update otherwise); a checkout taken over by the
-   developer (dirty, or off `rolldown-canary`) is built exactly as-is,
+   developer (dirty, or on another branch) is built exactly as-is.
+   Clean legacy `rolldown-canary` checkouts migrate to `main`; no rebase is needed,
 2. `vp install --frozen-lockfile` (vp delegates to the checkout's pinned
    pnpm; this also resets any previous step-3 symlink swap),
 3. link `vite/packages/vite/node_modules/rolldown` to the workspace's
@@ -178,6 +179,8 @@ entry covers gitignore-respecting walkers like oxfmt, plus `.typos.toml` and
 files inside `vite/`. On CI, both the dev-server workflow and the vite-tests
 jobs prepare the checkout via a setup-vite step (`run.ts` then clones it
 locally to run Vite's own suite); every other job needs no Vite checkout.
+The throwaway test clone retains canary's log-order and CI timeout adjustments;
+the shared `vite/` source checkout remains unmodified.
 
 ### Server entry point (`src/`)
 
@@ -297,7 +300,7 @@ in the `tests` workspace.
 
 - **Upstream the two Vite bundled-dev fixes.** The recovery reload and the
   stale-error replay (see [The Vite backend](#the-vite-backend)) are genuine
-  upstream gaps; once the fixes land on vitejs/vite `rolldown-canary`, delete
+  upstream gaps; once the fixes land on vitejs/vite `main`, delete
   the `WORKAROUND` blocks in `src/vite-server.ts`.
 - **Client-reconnect gate after reloads.** Add
   `untilBrowserLogAfter(() => page.reload(), [/\[vite\] connected\./])` so an
