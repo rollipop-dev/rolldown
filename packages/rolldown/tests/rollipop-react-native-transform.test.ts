@@ -51,6 +51,61 @@ const orderingCode = `
   record('retained-side-effect');
 `;
 
+describe.each([
+  {
+    filename: 'CompatNativeComponent.ts',
+    props: 'interface NativeProps extends ViewProps { tintColor?: ColorValue; }',
+  },
+  {
+    filename: 'CompatNativeComponent.js',
+    props: 'type NativeProps = $ReadOnly<{ ...ViewProps, tintColor?: ColorValue }>;',
+  },
+])('native codegen RN 0.84 compatibility: $filename', ({ filename, props }) => {
+  test.each([false, true])(
+    'uses the color processor fallback with defaultExport=%s',
+    async (defaultExport) => {
+      const transformer = new RollipopReactNativeTransformer({
+        swc: { module: { type: 'commonjs' } },
+      });
+      const source = `
+        import type { ViewProps, ColorValue } from 'react-native';
+        ${props}
+        export default codegenNativeComponent<NativeProps>('CompatView');
+      `;
+      const processColor = (value: string) => `processed:${value}`;
+      const wrap = (value: unknown) => (defaultExport ? { default: value } : value);
+      const modules: Record<string, unknown> = {
+        'react-native/Libraries/Components/View/ReactNativeStyleAttributes': wrap({
+          color: { process: processColor },
+        }),
+        'react-native/Libraries/StyleSheet/processColor': wrap(processColor),
+        'react-native/Libraries/NativeComponent/NativeComponentRegistry': {
+          get(name: string, getConfig: () => unknown) {
+            expect(name).toBe('CompatView');
+            return getConfig();
+          },
+        },
+      };
+      const results = [
+        transformer.transformSync(filename, source),
+        await transformer.transform(filename, source),
+      ];
+      for (const result of results) {
+        const exports = runInNewContext(`${result.code}\nexports;`, {
+          exports: {},
+          require(id: string) {
+            expect(Object.hasOwn(modules, id), `unexpected require: ${id}`).toBe(true);
+            return modules[id];
+          },
+        });
+        expect(exports.default).toBe(exports.__INTERNAL_VIEW_CONFIG);
+        expect(exports.default.validAttributes.tintColor.process).toBe(processColor);
+        expect(exports.default.validAttributes.tintColor.process('red')).toBe('processed:red');
+      }
+    },
+  );
+});
+
 describe('native Worklets errors', () => {
   test('reports missing Bundle Mode packages through sync and async transforms', async () => {
     const root = mkdtempSync(join(tmpdir(), 'rolldown-worklets-'));
