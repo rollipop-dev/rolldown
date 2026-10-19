@@ -1,0 +1,9 @@
+{
+  "config": {
+    "id": "host",
+    "format": "rollipop",
+    "codeSplitting": false,
+    "experimental": { "devMode": {} }
+  },
+  "snapshot": false
+}

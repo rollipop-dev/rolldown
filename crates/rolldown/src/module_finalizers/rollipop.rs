@@ -9,9 +9,9 @@ use oxc::{
 };
 use oxc_traverse::{Ancestor, Traverse};
 use rolldown_common::{
-  ExternalModule, ImportKind, ImportRecordIdx, IndexModules, Interop, Module, ModuleIdx,
-  ModuleType, NormalModule, Specifier, StmtInfoIdx, StmtInfos, StrictMode, SymbolRef, SymbolRefDb,
-  ThisExprReplaceKind,
+  ConstExportMeta, ExternalModule, ImportKind, ImportRecordIdx, IndexModules, Interop, Module,
+  ModuleIdx, ModuleType, NormalModule, RetainedExportSymbols, Specifier, StmtInfoIdx, StmtInfos,
+  StrictMode, SymbolRef, SymbolRefDb, ThisExprReplaceKind, side_effects::DeterminedSideEffects,
 };
 use rolldown_ecmascript::CJS_REQUIRE_REF_STR;
 use rolldown_ecmascript_utils::{
@@ -40,6 +40,32 @@ const FACTORY_PARAM_NAMES: [&str; 5] = [
   ROLLIPOP_REQUIRE_NAME,
   HMR_RUNTIME_NAME,
 ];
+
+enum ExportRetentionMode {
+  Resolved,
+  ResolvedOrCanonical,
+}
+
+#[inline]
+fn is_export_retained(
+  symbol_ref: SymbolRef,
+  mode: &ExportRetentionMode,
+  retained_exports: &RetainedExportSymbols,
+  symbol_db: &SymbolRefDb,
+  constants: &FxHashMap<SymbolRef, ConstExportMeta>,
+) -> bool {
+  if retained_exports.contains(&symbol_ref) {
+    return true;
+  }
+  if matches!(mode, ExportRetentionMode::Resolved) && constants.is_empty() {
+    return false;
+  }
+  let canonical_ref = symbol_db.canonical_ref_for(symbol_ref);
+  (matches!(mode, ExportRetentionMode::ResolvedOrCanonical)
+    && canonical_ref != symbol_ref
+    && retained_exports.contains(&canonical_ref))
+    || constants.get(&canonical_ref).is_some_and(|meta| !meta.commonjs_export)
+}
 
 struct AstFactory<'ast> {
   ast_builder: AstBuilder<'ast>,
@@ -901,16 +927,32 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     self.add_json_metadata_exports();
     self.add_missing_re_exports();
 
-    if self.exports.is_empty() {
+    let mut properties = self.exports.take_in(&self.ast_factory);
+    if !self.is_dev_mode
+      && self.ctx.options.treeshake.is_some()
+      && !matches!(self.ctx.module.side_effects, DeterminedSideEffects::NoTreeshake)
+    {
+      let link_output = self.ctx.link_output;
+      let resolved_exports = &link_output.metas[self.ctx.module.idx].resolved_exports;
+      let mut visited_namespaces = FxHashSet::default();
+      properties.retain(|property| match property {
+        ObjectPropertyKind::ObjectProperty(property) => property
+          .key
+          .static_name()
+          .and_then(|name| resolved_exports.get(name.as_ref()))
+          .is_some_and(|export| {
+            visited_namespaces.clear();
+            self.should_retain_export(export.symbol_ref, &mut visited_namespaces)
+          }),
+        ObjectPropertyKind::SpreadProperty(_) => {
+          unreachable!("export getters are object properties")
+        }
+      });
+    }
+    if properties.is_empty() {
       return None;
     }
-
-    let mut obj = ast::ObjectExpression::boxed(
-      SPAN,
-      oxc::allocator::Vec::with_capacity_in(self.exports.len(), &self.ast_factory),
-      &self.ast_factory,
-    );
-    obj.properties.extend(self.exports.drain(..));
+    let obj = ast::ObjectExpression::boxed(SPAN, properties, &self.ast_factory);
     let call = Expression::new_call_expression(
       SPAN,
       self.ast_factory.make_member_access_expr(ROLLIPOP_REQUIRE_NAME, "d"),
@@ -926,6 +968,56 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
       &self.ast_factory,
     );
     Some(Statement::new_expression_statement(SPAN, call, &self.ast_factory))
+  }
+
+  fn should_retain_export(
+    &self,
+    symbol_ref: SymbolRef,
+    visited_namespaces: &mut FxHashSet<ModuleIdx>,
+  ) -> bool {
+    let link_output = self.ctx.link_output;
+    // Rollipop reads through module export objects even when linking only retains
+    // the canonical binding, rather than every intermediate re-export alias.
+    if is_export_retained(
+      symbol_ref,
+      &ExportRetentionMode::ResolvedOrCanonical,
+      &link_output.retained_export_symbols,
+      &link_output.symbol_db,
+      &link_output.global_constant_symbol_map,
+    ) {
+      return true;
+    }
+    let canonical_ref = link_output.symbol_db.canonical_ref_for(symbol_ref);
+    if let Some(alias) = &link_output.symbol_db.get(canonical_ref).namespace_alias {
+      // CJS imports retain the interop namespace and the original CJS export,
+      // rather than the intermediate alias. Unknown exports remain dynamic.
+      return link_output.metas[alias.namespace_ref.owner]
+        .import_record_ns_to_cjs_module
+        .get(&alias.namespace_ref)
+        .and_then(|module_idx| {
+          link_output.metas[*module_idx].resolved_exports.get(&alias.property_name)
+        })
+        .is_none_or(|export| {
+          is_export_retained(
+            export.symbol_ref,
+            &ExportRetentionMode::ResolvedOrCanonical,
+            &link_output.retained_export_symbols,
+            &link_output.symbol_db,
+            &link_output.global_constant_symbol_map,
+          )
+        });
+    }
+    let Some(module) = self.modules()[canonical_ref.owner].as_normal() else {
+      return false;
+    };
+    // A statically resolved namespace member only retains its final binding.
+    // Keep the namespace getter needed to reach that binding at runtime as well.
+    module.namespace_object_ref == canonical_ref
+      && self.metas()[module.idx].is_included
+      && visited_namespaces.insert(module.idx)
+      && self.metas()[module.idx]
+        .canonical_exports(true)
+        .any(|(_, export)| self.should_retain_export(export.symbol_ref, visited_namespaces))
   }
 
   fn add_shimmed_exports(&mut self) {
@@ -981,13 +1073,12 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
   }
 
   fn add_missing_re_exports(&mut self) {
+    let link_output = self.ctx.link_output;
     let existing_exports = self
       .exports
       .iter()
       .filter_map(|property| match property {
-        ObjectPropertyKind::ObjectProperty(property) => {
-          property.key.static_name().map(std::borrow::Cow::into_owned)
-        }
+        ObjectPropertyKind::ObjectProperty(property) => property.key.static_name(),
         ObjectPropertyKind::SpreadProperty(_) => None,
       })
       .collect::<FxHashSet<_>>();
@@ -997,9 +1088,15 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
       if existing_exports.contains(exported.as_str()) {
         continue;
       }
-      let canonical_ref = self.symbol_db().canonical_ref_for(resolved_export.symbol_ref);
+      let canonical_ref = link_output.symbol_db.canonical_ref_for(resolved_export.symbol_ref);
       if canonical_ref.owner == self.ctx.module.idx
-        || !self.ctx.link_output.retained_export_symbols.contains(&canonical_ref)
+        || !is_export_retained(
+          canonical_ref,
+          &ExportRetentionMode::Resolved,
+          &link_output.retained_export_symbols,
+          &link_output.symbol_db,
+          &link_output.global_constant_symbol_map,
+        )
         || !self.should_require_importee(canonical_ref.owner)
       {
         continue;
