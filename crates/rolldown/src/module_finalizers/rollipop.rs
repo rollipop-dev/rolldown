@@ -897,6 +897,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
       );
       self.exports.push(prop);
     }
+    self.add_shimmed_exports();
     self.add_json_metadata_exports();
     self.add_missing_re_exports();
 
@@ -925,6 +926,28 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
       &self.ast_factory,
     );
     Some(Statement::new_expression_statement(SPAN, call, &self.ast_factory))
+  }
+
+  fn add_shimmed_exports(&mut self) {
+    for (exported, resolved_export) in self.linking_info().canonical_exports(true) {
+      let Some(symbol_ref) = self.linking_info().shimmed_missing_exports.get(exported) else {
+        continue;
+      };
+      if resolved_export.symbol_ref != *symbol_ref
+        || !self
+          .stmt_infos()
+          .declared_stmts_by_symbol(symbol_ref)
+          .iter()
+          .any(|stmt_info_idx| self.should_include_top_level_stmt(*stmt_info_idx))
+      {
+        continue;
+      }
+      self.exports.push(self.ast_factory.make_lazy_export_property(
+        exported,
+        Expression::new_void_0(SPAN, &self.ast_factory),
+        !is_validate_identifier_name(exported.as_str()),
+      ));
+    }
   }
 
   fn add_json_metadata_exports(&mut self) {

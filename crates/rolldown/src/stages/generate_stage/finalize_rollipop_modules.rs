@@ -31,9 +31,10 @@ impl GenerateStage<'_> {
       ast_table
         .par_iter_mut_enumerated()
         .filter(|(idx, _ast)| {
-          link_output.module_table[*idx]
-            .as_normal()
-            .is_some_and(|m| link_output.metas[m.idx].is_included)
+          link_output.module_table[*idx].as_normal().is_some_and(|m| {
+            // The Rollipop renderer also prints a runtime retained by chunk planning.
+            m.idx == link_output.runtime.id() || link_output.metas[m.idx].is_included
+          })
         })
         .for_each(|(idx, ast)| {
           let Some(ast) = ast.as_mut() else { return };

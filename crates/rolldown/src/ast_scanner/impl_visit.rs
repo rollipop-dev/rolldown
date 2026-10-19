@@ -65,6 +65,17 @@ impl<'me, 'ast: 'me> VisitJs<'ast> for AstScanner<'me, 'ast> {
     );
     // Custom visit
 
+    if self.immutable_ctx.options.is_strict_execution_order_enabled()
+      && self.immutable_ctx.options.treeshake.is_some()
+      && super::independent_init::has_independent_initialization(
+        program,
+        &self.result.symbol_ref_db.ast_scopes,
+        self.immutable_ctx.options.keep_names,
+      )
+    {
+      self.result.ecma_view_meta.insert(EcmaViewMeta::IndependentInitialization);
+    }
+
     for (idx, stmt) in program.body.iter().enumerate() {
       // `0` is reserved for Module Namespace Object stmt info
       #[expect(
@@ -80,6 +91,9 @@ impl<'me, 'ast: 'me> VisitJs<'ast> for AstScanner<'me, 'ast> {
         self.immutable_ctx.options,
         None,
         Some(&self.namespace_object_symbol_ids),
+        // Constants that earlier statements declared. The map grows in statement order, so no read
+        // precedes its declaration.
+        Some(&self.result.constant_export_map),
       );
       let mut stmt_eval_facts = analyzer.analyze_stmt(stmt);
       // `ExecutionOrderSensitive` is read outside the wrap planner too — it gates which leaf
@@ -352,30 +366,16 @@ impl<'me, 'ast: 'me> VisitJs<'ast> for AstScanner<'me, 'ast> {
     if decl.kind == ast::VariableDeclarationKind::AwaitUsing && self.is_valid_tla_scope() {
       self.handle_top_level_await(decl.span());
     }
-    match decl.declarations.as_slice() {
-      [decl] => {
-        if let (BindingPattern::BindingIdentifier(binding), Some(init)) = (&decl.id, &decl.init) {
-          // Extract constant value for top-level variable declarations
-          if self.is_root_symbol(binding.symbol_id()) {
-            if let Some(value) = self.extract_constant_value_from_expr(Some(init)) {
-              self.add_constant_symbol(binding.symbol_id(), ConstExportMeta::new(value, false));
-            }
-          }
+    // Record constants only from a module-level statement, which always runs its initializers. A
+    // `var` in a nested statement also declares a root binding, but its initializer can be skipped.
+    if matches!(self.visit_path.as_slice(), [] | [AstKind::ExportDeclaration(_)]) {
+      for declarator in &decl.declarations {
+        if let (BindingPattern::BindingIdentifier(binding), Some(init)) =
+          (&declarator.id, &declarator.init)
+          && let Some(value) = self.extract_constant_value_from_expr(Some(init))
+        {
+          self.add_constant_symbol(binding.symbol_id(), ConstExportMeta::new(value, false));
         }
-      }
-      _ => {
-        if self.immutable_ctx.flat_options.inline_const_enabled() && self.is_root_scope() {
-          for var_decl in &decl.declarations {
-            if let BindingPattern::BindingIdentifier(binding) = &var_decl.id {
-              if let Some(init) = &var_decl.init {
-                if let Some(value) = self.extract_constant_value_from_expr(Some(init)) {
-                  self.add_constant_symbol(binding.symbol_id(), ConstExportMeta::new(value, false));
-                }
-              }
-            }
-          }
-        }
-        // Handle multiple declarations in a single statement
       }
     }
     walk_js::walk_variable_declaration(self, decl);
@@ -563,21 +563,20 @@ impl<'me, 'ast: 'me> AstScanner<'me, 'ast> {
         // use this flag to avoid insert it as `Symbol` at the same time.
         let mut is_inserted_before = false;
         if let Some(named_import) = self.result.named_imports.get(&root_symbol_id) {
-          let (ty, max_tract_len) = match named_import.imported {
-            rolldown_common::Specifier::Star => {
-              (MemberExprObjectReferencedType::Namespace, usize::MAX)
-            }
+          let ty = match named_import.imported {
+            rolldown_common::Specifier::Star => MemberExprObjectReferencedType::Namespace,
             rolldown_common::Specifier::Literal(ref compact_str)
               if compact_str.as_str() == "default" =>
             {
-              (MemberExprObjectReferencedType::Default, 2)
+              MemberExprObjectReferencedType::Default
             }
-            rolldown_common::Specifier::Literal(_) => {
-              (MemberExprObjectReferencedType::Named, usize::MAX)
-            }
+            rolldown_common::Specifier::Literal(_) => MemberExprObjectReferencedType::Named,
           };
+          // Record the whole chain for every import kind: a default or named import can resolve
+          // to a namespace (`export * as default from`), and the link stage resolves and shims
+          // missing exports through each nested namespace in the chain.
           if let Some((node_id, span, props)) =
-            self.try_extract_parent_static_member_expr_chain(max_tract_len)
+            self.try_extract_parent_static_member_expr_chain(usize::MAX)
           {
             if !span.is_unspanned() {
               is_inserted_before = true;
@@ -593,15 +592,19 @@ impl<'me, 'ast: 'me> AstScanner<'me, 'ast> {
                 let symbol_ref_flags = root_symbol_id.flags_mut(&mut self.result.symbol_ref_db);
                 *symbol_ref_flags |= SymbolRefFlags::HasComputedMemberWrite;
               }
-              self.add_member_expr_reference(MemberExprRef::new(
-                root_symbol_id,
-                props,
+              // The chain holds the nearest ancestors, so its last prop is at this index.
+              let write_target = self.member_expr_write_kind(self.visit_path.len() - props.len());
+              self.add_member_expr_reference(MemberExprRef {
+                object_ref: root_symbol_id,
+                prop_and_span_list: props,
                 node_id,
                 span,
-                ty,
-                ident_ref.reference_id.get(),
-                is_member_write,
-              ));
+                object_ref_type: ty,
+                reference_id: ident_ref.reference_id.get(),
+                // oxc does not flag `delete ns.a?.b` (oxc-project/oxc#27419).
+                is_write: is_member_write || write_target.is_some(),
+                write_target,
+              });
             }
           } else if is_member_write
             && matches!(

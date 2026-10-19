@@ -1,7 +1,9 @@
-use json_escape_simd::escape;
 use rolldown_common::{AddonRenderContext, ExportsKind, NormalModule};
 use rolldown_sourcemap::{Source, SourceJoiner};
-use rolldown_utils::concat_string;
+use rolldown_utils::{
+  concat_string,
+  ecmascript::{escape_non_ascii, to_ecma_string_literal},
+};
 
 use crate::{
   ecmascript::ecma_generator::{RenderedModuleSource, RenderedModuleSources},
@@ -55,7 +57,8 @@ pub fn render_rollipop<'code>(
       None,
     )
   {
-    source_joiner.append_source(prelude);
+    source_joiner
+      .append_source(escape_non_ascii(&prelude, ctx.options.charset.is_ascii()).into_owned());
   }
   render_module_factories(ctx, module_sources, &mut source_joiner);
   source_joiner.append_source(render_entry_execution(ctx));
@@ -141,7 +144,7 @@ fn render_entry_execution(ctx: &GenerateContext<'_>) -> String {
 
 fn render_module_runtime_id(ctx: &GenerateContext<'_>, module: &NormalModule) -> String {
   if ctx.options.profiler_names {
-    escape(module.stable_id.as_str())
+    to_ecma_string_literal(module.stable_id.as_str(), ctx.options.charset.is_ascii())
   } else {
     module.idx.raw().to_string()
   }
