@@ -106,6 +106,80 @@ describe.each([
   );
 });
 
+describe.each(['bundle', 'sync', 'async'] as const)('native Worklets captures: %s', (mode) => {
+  describe.each(['hermes', 'hermes-v1'] as const)('%s', (runtimeTarget) => {
+    describe.each(['0.7.4', '0.13.0'])('Worklets %s', (pluginVersion) => {
+      test.each([
+        {
+          name: 'unresolved global with a default parameter',
+          source: `export function probe(value: number = 2) { 'worklet'; return customFlag ? value + 40 : 0; }`,
+        },
+        {
+          name: 'local capture with rest parameters',
+          source: `const offset = 40; export function probe(...values: number[]) { 'worklet'; return customFlag ? offset + values[0] : 0; }`,
+        },
+        {
+          name: 'import capture',
+          source: `import { offset } from 'worklet-offset'; export function probe(value: number) { 'worklet'; return customFlag ? offset + value : 0; }`,
+        },
+      ])('$name', async ({ source }) => {
+        const worklets = { pluginVersion, disableSourceMaps: true };
+        let code: string;
+        if (mode === 'bundle') {
+          const bundle = await rolldown({
+            input: 'probe.ts',
+            external: ['worklet-offset'],
+            plugins: [
+              {
+                name: 'worklet-capture-fixture',
+                resolveId: (id) => (id === 'probe.ts' ? id : null),
+                load: (id) => (id === 'probe.ts' ? source : null),
+              },
+              rollipopReactNativePlugin({ runtimeTarget, worklets }),
+            ],
+          });
+          try {
+            code = (await bundle.generate({ format: 'cjs' })).output[0].code;
+          } finally {
+            await bundle.close();
+          }
+        } else {
+          const transformer = new RollipopReactNativeTransformer({
+            runtimeTarget,
+            worklets,
+            swc: { module: { type: 'commonjs' } },
+          });
+          code = (
+            mode === 'sync'
+              ? transformer.transformSync('probe.ts', source)
+              : await transformer.transform('probe.ts', source)
+          ).code;
+        }
+        const module = { exports: {} as Record<string, unknown> };
+        runInNewContext(`globalThis.global = globalThis;\n${code}`, {
+          module,
+          exports: module.exports,
+          __DEV__: true,
+          customFlag: true,
+          require(id: string) {
+            expect(id).toBe('worklet-offset');
+            return { offset: 40 };
+          },
+        });
+        const probe = module.exports.probe as ((value: number) => number) & {
+          __closure: unknown;
+          __initData: { code: string };
+          __workletHash: number;
+        };
+        expect(probe(2)).toBe(42);
+        expect(probe.__workletHash).toEqual(expect.any(Number));
+        const serialized = runInNewContext(`(${probe.__initData.code})`);
+        expect(serialized.call({ __closure: probe.__closure }, 2)).toBe(42);
+      });
+    });
+  });
+});
+
 describe('native Worklets errors', () => {
   test('reports missing Bundle Mode packages through sync and async transforms', async () => {
     const root = mkdtempSync(join(tmpdir(), 'rolldown-worklets-'));
