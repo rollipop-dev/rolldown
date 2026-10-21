@@ -34,7 +34,6 @@ use crate::inner_bundler_options::types::transform_option::{
   TransformOptions, TypeScriptOptions,
 };
 use crate::inner_bundler_options::types::tsconfig_merge::merge_transform_options_with_tsconfig;
-use crate::utils::react_compiler::run_react_compiler;
 
 pub type InjectOptions = Vec<(String, Either<String, Vec<String>>)>;
 
@@ -261,7 +260,6 @@ fn build_inject_config(
 /// * `source_text` - The source code to transform
 /// * `transform_options` - Transform options including tsconfig and sourcemap settings
 /// * `yarn_pnp` - Whether to enable Yarn PnP support when resolving tsconfig
-#[expect(clippy::too_many_lines)]
 pub fn enhanced_transform(
   filename: &str,
   source_text: &str,
@@ -326,10 +324,9 @@ pub fn enhanced_transform(
   let input_map = transform_options.input_map.clone();
   let define_options = transform_options.define.clone();
   let inject_options = transform_options.inject.clone();
-  let cwd = transform_options.cwd.clone().unwrap_or_default();
 
   let bundler_options: TransformOptions = transform_options.into();
-  let mut merged_options = if let Some(ref tsconfig) = tsconfig {
+  let merged_options = if let Some(ref tsconfig) = tsconfig {
     let (merged, merge_warnings) =
       merge_transform_options_with_tsconfig(bundler_options, tsconfig, false);
     warnings.extend(merge_warnings);
@@ -337,14 +334,6 @@ pub fn enhanced_transform(
   } else {
     bundler_options
   };
-  if let Some(react_compiler) = merged_options.react_compiler()
-    && !react_compiler.should_transform(filename, &cwd)
-  {
-    if let Some(Either::Right(jsx)) = &mut merged_options.jsx {
-      jsx.compiler = None;
-    }
-  }
-  let react_compiler = merged_options.react_compiler().cloned().map(Into::into);
   let declaration_options =
     merged_options.typescript.as_ref().and_then(|ts| ts.declaration.clone());
 
@@ -426,27 +415,9 @@ pub fn enhanced_transform(
     }
   }
 
-  let mut scoping = scoping
+  let scoping = scoping
     .take()
     .unwrap_or_else(|| semantic_builder_for_transform().build(&program).semantic.into_scoping());
-
-  let (react_compiler_scoping, react_compiler_diagnostics) =
-    run_react_compiler(&allocator, &mut program, react_compiler);
-  if !react_compiler_diagnostics.is_empty() {
-    append_oxc_diagnostics(
-      react_compiler_diagnostics,
-      &source,
-      filename,
-      &mut warnings,
-      &mut errors,
-    );
-    if !errors.is_empty() {
-      return EnhancedTransformResult::new_for_error(errors, warnings, tsconfig_file_paths);
-    }
-  }
-  if let Some(react_compiler_scoping) = react_compiler_scoping {
-    scoping = react_compiler_scoping;
-  }
 
   let transform_ret = Transformer::new(&allocator, Path::new(filename), &oxc_transform_options)
     .build_with_scoping(scoping, &mut program);

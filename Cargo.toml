@@ -1,5 +1,6 @@
 [workspace]
 members = ["./crates/*", "tasks/*"]
+exclude = ["vendor/swc_ecma_react_compiler"]
 resolver = "3"
 
 [workspace.package]
@@ -296,9 +297,6 @@ oxc_minify_napi = { version = "0.154.0" }
 oxc_parser_napi = { version = "0.154.0" }
 oxc_transform_napi = { version = "0.154.0" }
 oxc_traverse = { version = "0.154.0" }
-# MARK: - Rollipop
-# Pin React Compiler to OXC 0.154.0#d47efe5cb875e118e845ee6eda15d205ce3b566d.
-oxc_react_compiler = { version = "0.143.0", git = "https://github.com/oxc-project/oxc.git", rev = "d47efe5cb875e118e845ee6eda15d205ce3b566d" }
 
 # oxc crates in their own repos
 # Versions must be relaxed for usage in oxc.
@@ -313,21 +311,15 @@ oxc_resolver = { version = "11.24.3", features = [
 oxc_resolver_napi = { version = "11.24.3", default-features = false, features = ["yarn_pnp"] }
 oxc_sourcemap = { version = "9.0.0" } # https://github.com/oxc-project/oxc-sourcemap
 
-[patch."https://github.com/oxc-project/oxc.git"]
-# Keep the git-only React Compiler on the same published OXC 0.154.0 crate types.
-oxc_allocator = { version = "0.154.0" }
-oxc_ast = { version = "0.154.0" }
-oxc_ast_macros = { version = "0.154.0" }
-oxc_ast_visit = { version = "0.154.0" }
-oxc_data_structures = { version = "0.154.0" }
-oxc_diagnostics = { version = "0.154.0" }
-oxc_ecmascript = { version = "0.154.0" }
-oxc_estree = { version = "0.154.0" }
-oxc_regular_expression = { version = "0.154.0" }
-oxc_semantic = { version = "0.154.0" }
-oxc_span = { version = "0.154.0" }
-oxc_str = { version = "0.154.0" }
-oxc_syntax = { version = "0.154.0" }
+# Preserve component/hook source maps: https://github.com/facebook/react/pull/36921
+# Pin the latest PR revision; align the vendored SWC adapter's core/AST/HIR versions.
+[patch.crates-io]
+# Match renames by original identifier as well as offset for the source-map-preserving core.
+# See vendor/swc_ecma_react_compiler/README.rolldown.md.
+swc_ecma_react_compiler = { path = "vendor/swc_ecma_react_compiler" }
+react_compiler = { git = "https://github.com/facebook/react.git", rev = "b3ec622201fd97464de0cb92f47c9c5978d05d79" }
+react_compiler_ast = { git = "https://github.com/facebook/react.git", rev = "b3ec622201fd97464de0cb92f47c9c5978d05d79" }
+react_compiler_hir = { git = "https://github.com/facebook/react.git", rev = "b3ec622201fd97464de0cb92f47c9c5978d05d79" }
 
 [profile.dev]
 # Minimal debug info to speed up local and CI builds.

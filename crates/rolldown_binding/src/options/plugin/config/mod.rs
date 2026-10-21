@@ -31,6 +31,7 @@ pub use binding_vite_resolve_plugin_config::BindingViteResolvePluginConfig;
 pub use binding_vite_transform_plugin_config::BindingViteTransformPluginConfig;
 
 // MARK: - Rollipop
+mod binding_rollipop_react_native_compiler_options;
 mod binding_rollipop_react_native_plugin_config;
 mod binding_rollipop_react_refresh_wrapper_plugin_config;
 

@@ -3,7 +3,7 @@ use rollipop_react_native_transform::{TransformInput, Transformer, TransformerOp
 fn transform(code: &str) -> String {
   let transformer = Transformer::new(None, TransformerOptions::default()).unwrap();
   transformer
-    .transform(TransformInput { filename: "input.js", code, module_kind: None })
+    .transform(TransformInput { cwd: "", filename: "input.js", code, module_kind: None })
     .unwrap()
     .code
 }

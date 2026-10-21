@@ -10,7 +10,6 @@ description = "Standalone SWC transform pipeline for React Native (Flow strip, T
 
 [lib]
 doctest = false
-test = false
 
 [lints]
 workspace = true
@@ -29,6 +28,8 @@ serde_json = { workspace = true }
 swc_common = { version = "26.0.0", features = ["concurrent", "sourcemap"] }
 swc_ecma_ast = "29.0.2"
 swc_ecma_parser = { version = "45.1.6", features = ["flow"] }
+swc_ecma_react_compiler = "=25.0.0"
+react_compiler = "=0.0.1-oidc.0"
 swc_ecma_codegen = "32.0.3"
 swc_ecma_ext_transforms = "35.0.0"
 swc_ecma_transforms_base = { version = "49.0.1", features = ["inline-helpers"] }

@@ -13,6 +13,7 @@ export default defineConfig({
     plugins: ['import', 'jsdoc', 'unicorn', 'typescript', 'oxc'],
     ignorePatterns: [
       'crates/**',
+      'vendor/**',
       'packages/rollup-tests/**',
       'packages/rolldown/tests/fixtures/**',
       '!packages/rolldown/tests/fixtures/**/_config.ts',
@@ -117,6 +118,7 @@ export default defineConfig({
     singleQuote: true,
     ignorePatterns: [
       '**/.pnp.cjs',
+      'vendor/**',
       'rollup',
       'test262',
       'CHANGELOG-*.md',

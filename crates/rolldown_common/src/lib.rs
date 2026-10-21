@@ -10,7 +10,6 @@ mod source_map_gen_msg;
 mod type_aliases;
 mod types;
 mod utils;
-pub use utils::react_compiler::run_react_compiler;
 
 /// This module is to help `rolldown` crate could export types related bundler options easily.
 /// `rolldown` crate could use `pub use rolldown_common::bundler_options::*;` to export all types, so we don't need write
@@ -90,9 +89,6 @@ pub mod bundler_options {
         JsxOptions,
         // MARK: - Rollipop
         PluginsOptions,
-        ReactCompilerDynamicGating,
-        ReactCompilerGating,
-        ReactCompilerOptions,
         ReactRefreshOptions,
         StyledComponentsOptions,
         TransformOptions as BundlerTransformOptions,

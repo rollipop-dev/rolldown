@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use oxc::codegen::{Codegen, CodegenOptions, CodegenReturn, CommentOptions};
 use oxc::parser::{ParseOptions, Parser};
 use oxc::transformer::Transformer;
-use rolldown_common::{BundlerTransformOptions, ModuleType, run_react_compiler};
+use rolldown_common::{BundlerTransformOptions, ModuleType};
 use rolldown_ecmascript::semantic_builder_for_transform;
 use rolldown_error::{BatchedBuildDiagnostic, BuildDiagnostic, EventKind, Severity};
 use rolldown_plugin::{HookTransformOutputMap, HookUsage, Plugin, SharedTransformPluginContext};
@@ -60,7 +60,7 @@ impl Plugin for ViteTransformPlugin {
       return Ok(None);
     }
 
-    let (source_type, transform_options, react_compiler) =
+    let (source_type, transform_options) =
       self.get_modified_transform_options(&ctx, args.id, &cwd, extension, args.code)?;
 
     let allocator = oxc::allocator::Allocator::default();
@@ -78,21 +78,7 @@ impl Plugin for ViteTransformPlugin {
     }
 
     let mut program = ret.program;
-    let mut scoping = semantic_builder_for_transform().build(&program).semantic.into_scoping();
-    let (react_compiler_scoping, react_compiler_diagnostics) =
-      run_react_compiler(&allocator, &mut program, react_compiler);
-    if !react_compiler_diagnostics.is_empty() {
-      Err(BatchedBuildDiagnostic::new(BuildDiagnostic::from_oxc_diagnostics(
-        react_compiler_diagnostics,
-        args.code,
-        args.id,
-        Severity::Error,
-        EventKind::ParseError,
-      )))?;
-    }
-    if let Some(react_compiler_scoping) = react_compiler_scoping {
-      scoping = react_compiler_scoping;
-    }
+    let scoping = semantic_builder_for_transform().build(&program).semantic.into_scoping();
     let transformer = Transformer::new(&allocator, Path::new(args.id), &transform_options);
     let transformer_return = transformer.build_with_scoping(scoping, &mut program);
     if !transformer_return.diagnostics.is_empty() {

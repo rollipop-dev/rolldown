@@ -6,7 +6,7 @@ fn transform(runtime_target: RuntimeTarget, code: &str) -> String {
   let transformer =
     Transformer::new(None, TransformerOptions { runtime_target, ..Default::default() }).unwrap();
   transformer
-    .transform(TransformInput { filename: "input.js", code, module_kind: None })
+    .transform(TransformInput { cwd: "", filename: "input.js", code, module_kind: None })
     .unwrap()
     .code
 }

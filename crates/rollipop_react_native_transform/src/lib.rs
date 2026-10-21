@@ -1,16 +1,17 @@
 //! Standalone SWC transform pipeline for React Native modules.
 //!
-//! Mirrors the Babel preset used by Metro: Flow strip → codegen native
-//! component → TS strip → react-native-worklets → Hermes compat passes.
-//! Optional user-supplied SWC `.wasm` plugins run after type stripping by default,
-//! or before it when `swc.run_plugin_first` is enabled. Scope resolution always
-//! precedes plugins, matching SWC's `jsc.experimental.runPluginFirst` pipeline.
+//! Optionally runs React Compiler on the parsed, typed AST, then mirrors the Babel preset used by Metro:
+//! codegen native component → type stripping → react-native-worklets → Hermes compat passes.
 //!
-//! This crate has no rolldown dependencies. It powers both the rolldown
-//! plugin (which forwards `HookTransformArgs` into [`Transformer`]) and a
-//! NAPI binding exposed via `rolldown_binding`.
+//! Optional user-supplied SWC `.wasm` plugins run after type stripping by default,
+//! or before it when `swc.run_plugin_first` is enabled.
+//! Scope resolution always precedes plugins, matching SWC's `jsc.experimental.runPluginFirst` pipeline.
+//!
+//! This crate has no rolldown dependencies. It powers both the rolldown plugin (which forwards `HookTransformArgs` into [`Transformer`])
+//! and a NAPI binding exposed via `rolldown_binding`.
 
 mod flow;
+mod react_compiler;
 mod visitors;
 #[cfg(feature = "wasm_plugins")]
 mod wasm_plugins;
@@ -58,7 +59,12 @@ use swc_react_native::{
 
 use crate::visitors::{RemoveFlowTypeOnlyFields, template_literal_caching};
 
+pub use swc_ecma_react_compiler::{
+  DynamicGatingConfig as ReactCompilerDynamicGating, GatingConfig as ReactCompilerGating,
+};
 pub use swc_react_native::WorkletsOptions as SwcWorkletsOptions;
+
+pub use crate::react_compiler::{ReactCompilerFilter, ReactCompilerOptions};
 
 /// SWC wasm plugin entry — path on disk plus the JSON config to pass to it.
 ///
@@ -91,11 +97,13 @@ pub enum ReactRuntime {
   Classic,
 }
 
-/// React transform pass options. Modeled on Babel's
+/// React Compiler and JSX transform options. JSX options are modeled on Babel's
 /// `@babel/plugin-transform-react-jsx`, minus the dev-server-only
 /// fast-refresh knobs (a bundler concern, not a test/precompile concern).
 #[derive(Debug, Default, Clone)]
 pub struct ReactConfig {
+  /// Run React Compiler before type stripping and Hermes lowering.
+  pub compiler: Option<ReactCompilerOptions>,
   pub runtime: ReactRuntime,
   /// Import source for the automatic runtime. Defaults to `"react"`.
   pub import_source: Option<String>,
@@ -148,8 +156,8 @@ pub struct SwcConfig {
   /// safer for callers that hand the output straight to a runtime (e.g.
   /// jest) without a bundle step in between.
   pub external_helpers: bool,
-  /// React (JSX) transform configuration. Skipped entirely when
-  /// `react.runtime` is `Preserve`.
+  /// React configuration. JSX lowering is skipped when `react.runtime` is `Preserve`;
+  /// React Compiler runs independently when configured.
   pub react: ReactConfig,
   /// Module transform configuration. When omitted, defaults to
   /// `type: "unambiguous"`, preserving the input module shape.
@@ -218,6 +226,8 @@ pub struct TransformerOptions {
 /// bundler-driven typing.
 #[derive(Debug, Clone, Copy)]
 pub struct TransformInput<'a> {
+  /// Base directory used by host-side filename filters.
+  pub cwd: &'a str,
   pub filename: &'a str,
   pub code: &'a str,
   pub module_kind: Option<ModuleKind>,
@@ -230,8 +240,11 @@ pub struct TransformInput<'a> {
 /// Matches rolldown's behavior in `get_module_loader_from_file_extension`:
 /// scan `.` positions left-to-right and take the first suffix that maps to
 /// a known kind. This handles compound extensions correctly (`foo.d.ts` →
-/// `Ts`, `foo.test.tsx` → `Tsx`). Falls back to `Js` when no suffix matches.
+/// `Ts`, `foo.test.tsx` → `Tsx`). Query strings and fragments are ignored.
+/// Falls back to `Js` when no suffix matches.
 pub fn infer_module_kind_from_filename(filename: &str) -> ModuleKind {
+  let filename =
+    memchr::memchr2(b'?', b'#', filename.as_bytes()).map_or(filename, |end| &filename[..end]);
   let bytes = filename.as_bytes();
   for i in memchr::memchr_iter(b'.', bytes) {
     let suffix = &filename[i + 1..];
@@ -270,6 +283,8 @@ fn hermes_class_properties_config() -> class_properties::Config {
 #[derive(Debug)]
 pub struct TransformOutput {
   pub code: String,
+  /// Non-fatal React Compiler diagnostics, including lint-only errors.
+  pub warnings: Vec<String>,
   /// JSON-encoded source map (sourcemap V3). Kept as a string to avoid
   /// leaking SWC-internal types in the public API; downstream callers can
   /// parse it into whatever representation they need.
@@ -373,6 +388,13 @@ impl Transformer {
           .map_err(|e| anyhow::anyhow!("Parse error in '{}': {:?}", input.filename, e))?;
       let unresolved_mark = Mark::new();
       let top_level_mark = Mark::new();
+      let warnings = if let Some(config) =
+        self.options.swc.as_ref().and_then(|swc| swc.react.compiler.as_ref())
+      {
+        react_compiler::transform(&mut program, &comments, &input, syntax.typescript(), config)?
+      } else {
+        Vec::new()
+      };
 
       resolver(unresolved_mark, top_level_mark, syntax.typescript()).process(&mut program);
 
@@ -516,6 +538,7 @@ impl Transformer {
 
       Ok(TransformOutput {
         code,
+        warnings,
         map_json,
         output_module_kind: if is_flow { Some(ModuleKind::Jsx) } else { None },
       })

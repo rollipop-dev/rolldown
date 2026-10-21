@@ -1,0 +1,6 @@
+{
+  "git": {
+    "sha1": "cc1a7992b0ae13730350129354b4b723e59084f5"
+  },
+  "path_in_vcs": "crates/swc_ecma_react_compiler"
+}

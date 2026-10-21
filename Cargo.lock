@@ -1732,6 +1732,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0b3ba31f6dc772cc8221ce81dbbbd64fa1e668255a6737d95eeace59b5a8823"
 
 [[package]]
+name = "hmac-sha256"
+version = "1.1.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ad320b3b96fb2a455a0726d16efe0a5afdbd34b71dea5bc53b05ea057714d4e"
+
+[[package]]
 name = "hstr"
 version = "4.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3143,27 +3149,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "oxc_react_compiler"
-version = "0.143.0"
-source = "git+https://github.com/oxc-project/oxc.git?rev=d47efe5cb875e118e845ee6eda15d205ce3b566d#d47efe5cb875e118e845ee6eda15d205ce3b566d"
-dependencies = [
- "cow-utils",
- "indexmap",
- "oxc_allocator",
- "oxc_ast",
- "oxc_ast_visit",
- "oxc_diagnostics",
- "oxc_ecmascript",
- "oxc_index",
- "oxc_semantic",
- "oxc_span",
- "oxc_str",
- "oxc_syntax",
- "rustc-hash 2.1.3",
- "smallvec",
-]
-
-[[package]]
 name = "oxc_regular_expression"
 version = "0.154.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3881,6 +3866,158 @@ dependencies = [
 ]
 
 [[package]]
+name = "react_compiler"
+version = "0.0.1-oidc.0"
+source = "git+https://github.com/facebook/react.git?rev=b3ec622201fd97464de0cb92f47c9c5978d05d79#b3ec622201fd97464de0cb92f47c9c5978d05d79"
+dependencies = [
+ "indexmap",
+ "react_compiler_ast",
+ "react_compiler_diagnostics",
+ "react_compiler_hir",
+ "react_compiler_inference",
+ "react_compiler_lowering",
+ "react_compiler_optimization",
+ "react_compiler_reactive_scopes",
+ "react_compiler_ssa",
+ "react_compiler_typeinference",
+ "react_compiler_validation",
+ "rustc-hash 2.1.3",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "react_compiler_ast"
+version = "0.0.1-oidc.0"
+source = "git+https://github.com/facebook/react.git?rev=b3ec622201fd97464de0cb92f47c9c5978d05d79#b3ec622201fd97464de0cb92f47c9c5978d05d79"
+dependencies = [
+ "indexmap",
+ "react_compiler_diagnostics",
+ "rustc-hash 2.1.3",
+ "serde",
+ "serde-transcode",
+ "serde_json",
+]
+
+[[package]]
+name = "react_compiler_diagnostics"
+version = "0.0.1-oidc.0"
+source = "git+https://github.com/facebook/react.git?rev=b3ec622201fd97464de0cb92f47c9c5978d05d79#b3ec622201fd97464de0cb92f47c9c5978d05d79"
+dependencies = [
+ "rustc-hash 2.1.3",
+ "serde",
+]
+
+[[package]]
+name = "react_compiler_hir"
+version = "0.0.1-oidc.0"
+source = "git+https://github.com/facebook/react.git?rev=b3ec622201fd97464de0cb92f47c9c5978d05d79#b3ec622201fd97464de0cb92f47c9c5978d05d79"
+dependencies = [
+ "indexmap",
+ "react_compiler_diagnostics",
+ "rustc-hash 2.1.3",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "react_compiler_inference"
+version = "0.0.1-oidc.0"
+source = "git+https://github.com/facebook/react.git?rev=b3ec622201fd97464de0cb92f47c9c5978d05d79#b3ec622201fd97464de0cb92f47c9c5978d05d79"
+dependencies = [
+ "indexmap",
+ "react_compiler_diagnostics",
+ "react_compiler_hir",
+ "react_compiler_lowering",
+ "react_compiler_optimization",
+ "react_compiler_ssa",
+ "react_compiler_utils",
+ "rustc-hash 2.1.3",
+]
+
+[[package]]
+name = "react_compiler_lowering"
+version = "0.0.1-oidc.0"
+source = "git+https://github.com/facebook/react.git?rev=b3ec622201fd97464de0cb92f47c9c5978d05d79#b3ec622201fd97464de0cb92f47c9c5978d05d79"
+dependencies = [
+ "indexmap",
+ "react_compiler_ast",
+ "react_compiler_diagnostics",
+ "react_compiler_hir",
+ "rustc-hash 2.1.3",
+ "serde_json",
+]
+
+[[package]]
+name = "react_compiler_optimization"
+version = "0.0.1-oidc.0"
+source = "git+https://github.com/facebook/react.git?rev=b3ec622201fd97464de0cb92f47c9c5978d05d79#b3ec622201fd97464de0cb92f47c9c5978d05d79"
+dependencies = [
+ "indexmap",
+ "react_compiler_diagnostics",
+ "react_compiler_hir",
+ "react_compiler_lowering",
+ "react_compiler_ssa",
+ "rustc-hash 2.1.3",
+]
+
+[[package]]
+name = "react_compiler_reactive_scopes"
+version = "0.0.1-oidc.0"
+source = "git+https://github.com/facebook/react.git?rev=b3ec622201fd97464de0cb92f47c9c5978d05d79#b3ec622201fd97464de0cb92f47c9c5978d05d79"
+dependencies = [
+ "hmac-sha256",
+ "indexmap",
+ "react_compiler_ast",
+ "react_compiler_diagnostics",
+ "react_compiler_hir",
+ "rustc-hash 2.1.3",
+ "serde_json",
+]
+
+[[package]]
+name = "react_compiler_ssa"
+version = "0.0.1-oidc.0"
+source = "git+https://github.com/facebook/react.git?rev=b3ec622201fd97464de0cb92f47c9c5978d05d79#b3ec622201fd97464de0cb92f47c9c5978d05d79"
+dependencies = [
+ "indexmap",
+ "react_compiler_diagnostics",
+ "react_compiler_hir",
+ "rustc-hash 2.1.3",
+]
+
+[[package]]
+name = "react_compiler_typeinference"
+version = "0.0.1-oidc.0"
+source = "git+https://github.com/facebook/react.git?rev=b3ec622201fd97464de0cb92f47c9c5978d05d79#b3ec622201fd97464de0cb92f47c9c5978d05d79"
+dependencies = [
+ "react_compiler_diagnostics",
+ "react_compiler_hir",
+ "react_compiler_ssa",
+ "rustc-hash 2.1.3",
+]
+
+[[package]]
+name = "react_compiler_utils"
+version = "0.0.1-oidc.0"
+source = "git+https://github.com/facebook/react.git?rev=b3ec622201fd97464de0cb92f47c9c5978d05d79#b3ec622201fd97464de0cb92f47c9c5978d05d79"
+dependencies = [
+ "indexmap",
+ "rustc-hash 2.1.3",
+]
+
+[[package]]
+name = "react_compiler_validation"
+version = "0.0.1-oidc.0"
+source = "git+https://github.com/facebook/react.git?rev=b3ec622201fd97464de0cb92f47c9c5978d05d79#b3ec622201fd97464de0cb92f47c9c5978d05d79"
+dependencies = [
+ "indexmap",
+ "react_compiler_diagnostics",
+ "react_compiler_hir",
+ "rustc-hash 2.1.3",
+]
+
+[[package]]
 name = "redox_syscall"
 version = "0.5.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4217,6 +4354,7 @@ dependencies = [
  "rolldown_plugin_vite_transform",
  "rolldown_plugin_vite_web_worker_post",
  "rolldown_sourcemap",
+ "rolldown_std_utils",
  "rolldown_tracing",
  "rolldown_tracking_allocator",
  "rolldown_utils",
@@ -4248,7 +4386,6 @@ dependencies = [
  "oxc",
  "oxc_ecmascript",
  "oxc_index",
- "oxc_react_compiler",
  "oxc_resolver",
  "oxc_sourcemap",
  "oxc_str",
@@ -4561,6 +4698,7 @@ dependencies = [
  "rolldown_common",
  "rolldown_plugin",
  "rolldown_sourcemap",
+ "rolldown_utils",
  "rollipop_react_native_transform",
 ]
 
@@ -4771,7 +4909,6 @@ dependencies = [
  "itertools 0.15.0",
  "memchr",
  "oxc",
- "oxc_react_compiler",
  "oxc_resolver",
  "rolldown_common",
  "rolldown_ecmascript",
@@ -4943,6 +5080,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "memchr",
+ "react_compiler",
  "rustc-hash 2.1.3",
  "serde_json",
  "swc_common",
@@ -4955,6 +5093,7 @@ dependencies = [
  "swc_ecma_compat_es2022",
  "swc_ecma_ext_transforms",
  "swc_ecma_parser",
+ "swc_ecma_react_compiler",
  "swc_ecma_transforms_base",
  "swc_ecma_transforms_module",
  "swc_ecma_transforms_optimization",
@@ -5201,6 +5340,15 @@ checksum = "4148590afebada386688f18773da617792bf2ef03ffc1e4cbd2b1d45b023e0ba"
 dependencies = [
  "serde_core",
  "serde_derive",
+]
+
+[[package]]
+name = "serde-transcode"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "590c0e25c2a5bb6e85bf5c1bce768ceb86b316e7a01bdf07d2cb4ec2271990e2"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -5850,6 +5998,25 @@ dependencies = [
  "swc_common",
  "swc_ecma_ast",
  "tracing",
+]
+
+[[package]]
+name = "swc_ecma_react_compiler"
+version = "25.0.0"
+dependencies = [
+ "indexmap",
+ "react_compiler",
+ "react_compiler_ast",
+ "react_compiler_hir",
+ "rustc-hash 2.1.3",
+ "serde",
+ "serde_json",
+ "swc_atoms",
+ "swc_common",
+ "swc_ecma_ast",
+ "swc_ecma_codegen",
+ "swc_ecma_parser",
+ "swc_ecma_visit",
 ]
 
 [[package]]

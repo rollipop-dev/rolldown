@@ -5,6 +5,7 @@ fn lowers_for_await_inside_async_generator_for_hermes_v1() {
   let transformer = Transformer::new(None, TransformerOptions::default()).unwrap();
   let code = transformer
     .transform(TransformInput {
+      cwd: "",
       filename: "input.js",
       code: r"export class Provider {
   async *stream(events) {

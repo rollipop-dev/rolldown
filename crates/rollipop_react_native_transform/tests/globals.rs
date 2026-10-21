@@ -17,7 +17,7 @@ fn options_with_globals(module: Option<ModuleConfig>) -> TransformerOptions {
 fn transform_with_globals(code: &str, module: Option<ModuleConfig>) -> String {
   let transformer = Transformer::new(None, options_with_globals(module)).unwrap();
   transformer
-    .transform(TransformInput { filename: "input.js", code, module_kind: None })
+    .transform(TransformInput { cwd: "", filename: "input.js", code, module_kind: None })
     .unwrap()
     .code
 }
@@ -61,6 +61,7 @@ fn replaces_global_expressions_after_worklets_transform() {
 
   let code = transformer
     .transform(TransformInput {
+      cwd: "",
       filename: "input.js",
       code: "function getHot() { 'worklet'; return import.meta.hot; }\n",
       module_kind: None,

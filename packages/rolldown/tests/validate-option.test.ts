@@ -42,6 +42,27 @@ test('validate output option', async () => {
   );
 });
 
+test('warns when React Compiler is configured in the ordinary transform options', async () => {
+  const consoleSpy = vi.spyOn(console, 'warn');
+  const bundle = await rolldown({
+    input: './build-api/main.js',
+    cwd: import.meta.dirname,
+    transform: {
+      jsx: {
+        // @ts-expect-error -- React Compiler is configured through the React Native API
+        compiler: {},
+      },
+    },
+  });
+  try {
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Invalid key: Expected never but received "compiler"'),
+    );
+  } finally {
+    await bundle.close();
+  }
+});
+
 test('requires RegExp for mangleProps include', async () => {
   const consoleSpy = vi.spyOn(console, 'warn');
   const bundle = await rolldown({

@@ -57,7 +57,6 @@ jobs:
         run: vp run --filter '@rolldown-internal/scripts' setup-vite
 
       - wait: playwright
-        if: ${{ runner.os != 'Windows' }}
 
       # MARK - rollipop: Browser dev-server tests hang intermittently on windows-2025 while starting multiple long-lived servers, so keep Windows coverage to fixture tests and run browser coverage on Ubuntu/macOS.
       - name: Dev Server Fixture Test

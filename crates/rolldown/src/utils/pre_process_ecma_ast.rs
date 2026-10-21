@@ -5,7 +5,7 @@ use oxc::ast::ast::CommentContent;
 use oxc::ast::ast::Program;
 use oxc::ast::ast::{Declaration, ExportDefaultDeclarationKind, Statement};
 use oxc::ast_visit::{VisitJs, VisitJsMut, walk_js};
-use oxc::diagnostics::{Diagnostics, LabeledSpan, Severity as OxcSeverity};
+use oxc::diagnostics::{LabeledSpan, Severity as OxcSeverity};
 use oxc::minifier::{CompressOptions, Compressor, TreeShakeOptions};
 use oxc::semantic::{Scoping, Stats};
 use oxc::syntax::symbol::SymbolFlags;
@@ -15,9 +15,7 @@ use oxc::transformer_plugins::{
 };
 use oxc_str::CompactStr;
 
-use rolldown_common::{
-  ConstExportMeta, ConstantValue, NormalizedBundlerOptions, run_react_compiler,
-};
+use rolldown_common::{ConstExportMeta, ConstantValue, NormalizedBundlerOptions};
 use rolldown_ecmascript::{EcmaAst, WithMutFields, semantic_builder_for_transform};
 use rolldown_ecmascript_utils::contains_script_closing_tag;
 use rolldown_error::{BatchedBuildDiagnostic, BuildDiagnostic, BuildResult, EventKind, Severity};
@@ -188,24 +186,29 @@ impl PreProcessEcmaAst {
           preserve_jsx = true;
         }
 
-        let mut scoping = self.recreate_scoping(&mut scoping, program);
-        let (react_compiler_scoping, react_compiler_diagnostics) =
-          run_react_compiler(allocator, program, transform_options.react_compiler.clone());
-        append_transform_diagnostics(
-          react_compiler_diagnostics,
-          &source,
-          resolved_id,
-          &mut warnings,
-        )?;
-        if let Some(react_compiler_scoping) = react_compiler_scoping {
-          scoping = react_compiler_scoping;
-        }
-
+        let scoping = self.recreate_scoping(&mut scoping, program);
         let ret = Transformer::new(allocator, Path::new(stable_id), &transform_options)
           .build_with_scoping(scoping, program);
 
-        append_transform_diagnostics(ret.diagnostics, &source, resolved_id, &mut warnings)?;
-        Ok::<(), BatchedBuildDiagnostic>(())
+        let (errors, transformer_warnings): (Vec<_>, Vec<_>) =
+          ret.diagnostics.into_iter().partition(|error| error.severity == OxcSeverity::Error);
+        if !errors.is_empty() {
+          return Err(BatchedBuildDiagnostic::from(BuildDiagnostic::from_oxc_diagnostics(
+            errors,
+            &source,
+            resolved_id,
+            Severity::Error,
+            EventKind::TransformError,
+          )));
+        }
+        warnings.extend(BuildDiagnostic::from_oxc_diagnostics(
+          transformer_warnings,
+          &source,
+          resolved_id,
+          Severity::Warning,
+          EventKind::ToleratedTransform,
+        ));
+        Ok(())
       })?;
     }
 
@@ -292,33 +295,6 @@ impl PreProcessEcmaAst {
     self.stats = ret.stats();
     ret.into_scoping()
   }
-}
-
-fn append_transform_diagnostics(
-  diagnostics: Diagnostics,
-  source: &ArcStr,
-  resolved_id: &str,
-  warnings: &mut Vec<BuildDiagnostic>,
-) -> BuildResult<()> {
-  let (errors, transformer_warnings): (Vec<_>, Vec<_>) =
-    diagnostics.into_iter().partition(|error| error.severity == OxcSeverity::Error);
-  if !errors.is_empty() {
-    return Err(BatchedBuildDiagnostic::from(BuildDiagnostic::from_oxc_diagnostics(
-      errors,
-      source,
-      resolved_id,
-      Severity::Error,
-      EventKind::TransformError,
-    )));
-  }
-  warnings.extend(BuildDiagnostic::from_oxc_diagnostics(
-    transformer_warnings,
-    source,
-    resolved_id,
-    Severity::Warning,
-    EventKind::ToleratedTransform,
-  ));
-  Ok(())
 }
 
 fn function_declaration_stmt_start(stmt: &Statement<'_>) -> Option<u32> {

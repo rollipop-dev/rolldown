@@ -1,5 +1,4 @@
 import type {
-  OxcReactCompilerOptions,
   JsxOptions as OxcJsxOptions,
   ReactRefreshOptions as OxcReactRefreshOptions,
   TransformOptions as OxcTransformOptions,
@@ -24,10 +23,6 @@ interface JsxOptions extends Omit<OxcJsxOptions, 'refresh'> {
    * Enable React Fast Refresh.
    */
   refresh?: boolean | ReactRefreshOptions;
-  /**
-   * Enable React Compiler.
-   */
-  compiler?: OxcReactCompilerOptions;
 }
 
 export interface TransformOptions extends Omit<
