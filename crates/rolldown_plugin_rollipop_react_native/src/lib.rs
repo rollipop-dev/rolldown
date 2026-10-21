@@ -5,7 +5,11 @@
 //! transformer's input/output types, and owns the construction step that
 //! preloads the SWC wasm plugins.
 
+mod react_compiler;
+
 use std::borrow::Cow;
+
+pub use react_compiler::ReactCompilerFilenameFilter;
 
 use rolldown_common::{ModuleType, RUNTIME_MODULE_KEY};
 use rolldown_plugin::{
@@ -75,7 +79,7 @@ impl Plugin for RollipopReactNativePlugin {
 
   async fn transform(
     &self,
-    _ctx: SharedTransformPluginContext,
+    ctx: SharedTransformPluginContext,
     args: &HookTransformArgs<'_>,
   ) -> HookTransformReturn {
     if args.id == RUNTIME_MODULE_KEY {
@@ -86,11 +90,18 @@ impl Plugin for RollipopReactNativePlugin {
       return Ok(None);
     };
 
+    // Run before type stripping and Hermes const -> var lowering, on the existing AST.
+    // See internal-docs/react-native-compiler/implementation.md.
     let output = self.transformer.transform(TransformInput {
       filename: args.id,
       code: args.code.as_str(),
       module_kind: Some(module_kind),
+      cwd: &ctx.options().cwd.to_string_lossy(),
     })?;
+
+    for message in output.warnings {
+      ctx.warn(rolldown_plugin::LogWithoutPlugin { message, ..Default::default() });
+    }
 
     let map = OwnedSourceMap::from_json_string(&output.map_json)
       .map_err(|e| anyhow::anyhow!("Failed to parse source map: {e}"))?

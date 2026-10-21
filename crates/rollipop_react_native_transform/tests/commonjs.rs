@@ -6,7 +6,7 @@ use rollipop_react_native_transform::{
 fn transform_with_swc_config(filename: &str, code: &str, swc: SwcConfig) -> String {
   let transformer =
     Transformer::new(None, TransformerOptions { swc: Some(swc), ..Default::default() }).unwrap();
-  transformer.transform(TransformInput { filename, code, module_kind: None }).unwrap().code
+  transformer.transform(TransformInput { cwd: "", filename, code, module_kind: None }).unwrap().code
 }
 
 #[test]

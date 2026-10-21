@@ -6,6 +6,8 @@ import {
   type PreRenderedChunk,
   type RenderedChunk,
 } from '@rollipop/rolldown';
+import { rollipopReactNativePlugin, viteTransformPlugin } from '@rollipop/rolldown/experimental';
+import { transformSync } from '@rollipop/rolldown/utils';
 import type { Plugin as RollupPlugin } from 'rollup';
 import { describe, expectTypeOf, test } from 'vitest';
 
@@ -65,10 +67,10 @@ describe('plugin type compatibility', () => {
 });
 
 describe('transform option types', () => {
-  test('accepts React Compiler under `transform.jsx.compiler`', () => {
-    defineConfig({
-      transform: {
-        jsx: {
+  test('accepts React Compiler only in the React Native plugin', () => {
+    rollipopReactNativePlugin({
+      swc: {
+        react: {
           compiler: {
             target: '17',
           },
@@ -77,11 +79,43 @@ describe('transform option types', () => {
     });
   });
 
+  test('does not accept React Compiler under `transform.jsx`', () => {
+    defineConfig({
+      transform: {
+        jsx: {
+          // @ts-expect-error -- configure the React Native plugin's `swc.react.compiler`
+          compiler: {},
+        },
+      },
+    });
+  });
+
   test('does not accept React Compiler directly under `transform`', () => {
     defineConfig({
       transform: {
-        // @ts-expect-error -- use `transform.jsx.compiler` instead
+        // @ts-expect-error -- configure the React Native plugin's `swc.react.compiler`
         reactCompiler: {},
+      },
+    });
+  });
+
+  test('does not accept React Compiler in the generic transform utility', () => {
+    transformSync('App.jsx', '', {
+      jsx: {
+        // @ts-expect-error -- configure the React Native transformer's `swc.react.compiler`
+        compiler: {},
+      },
+    });
+  });
+
+  test('does not accept React Compiler in the Vite transform plugin', () => {
+    viteTransformPlugin({
+      root: process.cwd(),
+      transformOptions: {
+        jsx: {
+          // @ts-expect-error -- configure the React Native plugin's `swc.react.compiler`
+          compiler: {},
+        },
       },
     });
   });

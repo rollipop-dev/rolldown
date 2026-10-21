@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use napi::{Task, bindgen_prelude::AsyncTask};
 use napi_derive::napi;
+use rolldown_std_utils::path_buf_to_slash;
 use rollipop_react_native_transform::{TransformInput, Transformer};
 
 use crate::options::plugin::BindingRollipopReactNativePluginConfig;
@@ -20,11 +21,18 @@ pub struct BindingRollipopReactNativeTransformResult {
   /// JSON-encoded source map (sourcemap V3). Parse on the JS side if you
   /// need a structured representation.
   pub map: String,
+  /// Non-fatal React Compiler diagnostics, including analysis-only lint warnings.
+  pub warnings: Vec<String>,
 }
 
 #[napi]
 pub struct BindingRollipopReactNativeTransformer {
-  inner: Arc<Transformer>,
+  inner: Arc<ReactNativeTransformer>,
+}
+
+struct ReactNativeTransformer {
+  transformer: Transformer,
+  cwd: String,
 }
 
 #[napi]
@@ -36,9 +44,21 @@ impl BindingRollipopReactNativeTransformer {
   pub fn new(config: BindingRollipopReactNativePluginConfig) -> napi::Result<Self> {
     let (env_name, options) =
       config.into_parts().map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let cwd = if options
+      .swc
+      .as_ref()
+      .and_then(|swc| swc.react.compiler.as_ref())
+      .is_some_and(|compiler| compiler.filter.is_some())
+    {
+      path_buf_to_slash(
+        std::env::current_dir().map_err(|e| napi::Error::from_reason(e.to_string()))?,
+      )
+    } else {
+      String::new()
+    };
     let transformer =
       Transformer::new(env_name, options).map_err(|e| napi::Error::from_reason(e.to_string()))?;
-    Ok(Self { inner: Arc::new(transformer) })
+    Ok(Self { inner: Arc::new(ReactNativeTransformer { transformer, cwd }) })
   }
 
   /// Asynchronously transform `code`. The module kind is inferred from the
@@ -69,20 +89,29 @@ impl BindingRollipopReactNativeTransformer {
 }
 
 fn run(
-  transformer: &Transformer,
+  transformer: &ReactNativeTransformer,
   filename: &str,
   code: &str,
 ) -> napi::Result<BindingRollipopReactNativeTransformResult> {
   // WASI plugins require a Tokio context on both JS and libuv worker threads.
   let output = napi::bindgen_prelude::within_runtime_if_available(|| {
-    transformer.transform(TransformInput { filename, code, module_kind: None })
+    transformer.transformer.transform(TransformInput {
+      filename,
+      code,
+      module_kind: None,
+      cwd: &transformer.cwd,
+    })
   })
   .map_err(|e| napi::Error::from_reason(e.to_string()))?;
-  Ok(BindingRollipopReactNativeTransformResult { code: output.code, map: output.map_json })
+  Ok(BindingRollipopReactNativeTransformResult {
+    code: output.code,
+    map: output.map_json,
+    warnings: output.warnings,
+  })
 }
 
 pub struct BindingRollipopReactNativeTransformTask {
-  transformer: Arc<Transformer>,
+  transformer: Arc<ReactNativeTransformer>,
   filename: String,
   code: String,
 }

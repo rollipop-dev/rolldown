@@ -32,6 +32,7 @@
     "test262/**",
     "vite/**",
     "target/**",
+    "vendor/**",
     "packages/rollup-tests/test/**",
     "packages/rolldown/npm/**",
     "packages/rolldown/tests/fixtures/**/_config.ts",

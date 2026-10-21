@@ -55,7 +55,6 @@ pub fn normalize_oxc_transform_options(options: TransformOptions) -> BundlerTran
         pragma_frag: jsx.pragma_frag,
         refresh,
         // MARK: - Rollipop
-        compiler: None,
       })
     }
   });

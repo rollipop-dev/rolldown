@@ -66,7 +66,7 @@ impl ViteTransformPlugin {
     cwd: &str,
     ext: Option<&str>,
     code: &str,
-  ) -> anyhow::Result<(SourceType, TransformOptions, Option<oxc_react_compiler::PluginOptions>)> {
+  ) -> anyhow::Result<(SourceType, TransformOptions)> {
     let is_jsx_refresh_lang = matches!(self.jsx_refresh_filter(id, cwd), JsxRefreshFilter::True)
       && ext.is_none_or(|ext| ["js", "jsx", "mjs", "ts", "tsx"].binary_search(&ext).is_err());
 
@@ -139,18 +139,6 @@ impl ViteTransformPlugin {
       }
     }
 
-    if let Some(react_compiler) = transform_options.react_compiler()
-      && !react_compiler.should_transform(id, cwd)
-    {
-      if let Some(Either::Right(jsx)) = &mut transform_options.jsx {
-        jsx.compiler = None;
-      }
-    }
-    let react_compiler = transform_options.react_compiler().cloned().map(Into::into);
-    Ok((
-      source_type,
-      transform_options.try_into().map_err(|err: String| anyhow::anyhow!(err))?,
-      react_compiler,
-    ))
+    Ok((source_type, transform_options.try_into().map_err(|err: String| anyhow::anyhow!(err))?))
   }
 }

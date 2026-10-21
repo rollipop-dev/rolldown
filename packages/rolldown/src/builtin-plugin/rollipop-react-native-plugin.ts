@@ -1,4 +1,5 @@
 import type { TopLevelFilterExpression } from '@rolldown/pluginutils';
+import type { BindingRollipopReactNativeCompilerOptions } from '../binding.cjs';
 import { bindingifyFilterExpr } from '../plugin/bindingify-hook-filter';
 import { BuiltinPlugin } from './utils';
 
@@ -47,7 +48,7 @@ export interface RollipopReactNativeFlowConfig {
 }
 
 /**
- * React (JSX) transform configuration. Mirrors Babel's
+ * React JSX and Compiler configuration. JSX options mirror Babel's
  * `@babel/plugin-transform-react-jsx`, minus dev-server-only knobs
  * (fast refresh) — those belong to a bundler, not a precompile/test path.
  */
@@ -73,6 +74,11 @@ export interface RollipopReactNativeReactConfig {
    * props for automatic, `react/jsx-dev-runtime` import).
    */
   development?: boolean;
+  /**
+   * Enable React Compiler. Omit this field to skip compiler analysis.
+   * Runs before JSX lowering, including when `runtime` is `"Preserve"`.
+   */
+  compiler?: BindingRollipopReactNativeCompilerOptions;
 }
 
 export interface RollipopReactNativeModuleConfig {
@@ -117,7 +123,7 @@ export interface RollipopReactNativeSwcConfig {
    * output to a runtime (e.g. jest) without a bundle step in between.
    */
   externalHelpers?: boolean;
-  /** React (JSX) transform configuration. Skipped when `runtime` is `"Preserve"`. */
+  /** React configuration. JSX lowering is skipped when `runtime` is `"Preserve"`. */
   react?: RollipopReactNativeReactConfig;
   /** Module transform configuration. Defaults to `type: "unambiguous"`. */
   module?: RollipopReactNativeModuleConfig;

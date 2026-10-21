@@ -9,6 +9,7 @@ use rolldown_utils::filter_expression::{self, FilterExpr, FilterExprKind};
 use rollipop_react_native_transform::{SwcWasmPluginFilter, TransformerOptions};
 use rustc_hash::FxBuildHasher;
 
+use super::binding_rollipop_react_native_compiler_options::BindingRollipopReactNativeCompilerOptions;
 use crate::options::plugin::types::{
   binding_filter_expression::normalized_tokens, binding_hook_filter::BindingHookFilter,
 };
@@ -50,8 +51,8 @@ pub struct BindingRollipopReactNativeSwcConfig {
   /// so a downstream bundler can deduplicate them. When `false` (default),
   /// helpers are inlined into each transformed file.
   pub external_helpers: Option<bool>,
-  /// React (JSX) transform configuration. Skipped entirely when `runtime`
-  /// is `"Preserve"` (the default).
+  /// React configuration. JSX lowering is skipped when `runtime` is `"Preserve"`
+  /// (the default); React Compiler runs independently when configured.
   pub react: Option<BindingRollipopReactNativeReactConfig>,
   /// Module transform configuration. Defaults to `type: "unambiguous"`.
   pub module: Option<BindingRollipopReactNativeModuleConfig>,
@@ -133,6 +134,8 @@ pub enum BindingRollipopReactNativeModuleType {
 #[napi_derive::napi(object, object_to_js = false)]
 #[derive(Debug)]
 pub struct BindingRollipopReactNativeReactConfig {
+  /// Enable React Compiler before type stripping and Hermes lowering.
+  pub compiler: Option<BindingRollipopReactNativeCompilerOptions>,
   /// JSX runtime. Defaults to `"Preserve"` (no transform — bundler owns JSX).
   pub runtime: Option<BindingRollipopReactNativeReactRuntime>,
   /// Import source for the automatic runtime. Defaults to `"react"`.
@@ -279,6 +282,7 @@ impl From<BindingRollipopReactNativeModuleConfig> for ModuleConfig {
 impl From<BindingRollipopReactNativeReactConfig> for ReactConfig {
   fn from(value: BindingRollipopReactNativeReactConfig) -> Self {
     ReactConfig {
+      compiler: value.compiler.map(Into::into),
       runtime: value.runtime.map(ReactRuntime::from).unwrap_or_default(),
       import_source: value.import_source,
       pragma: value.pragma,
@@ -330,6 +334,7 @@ impl BindingRollipopReactNativePluginConfig {
     let runtime_target = self.runtime_target.map(RuntimeTarget::from).unwrap_or_default();
     let worklets = self.worklets.map(WorkletsConfig::from);
     let flow = self.flow.map(FlowConfig::from);
+
     Ok((self.env_name, TransformerOptions { runtime_target, worklets, flow, swc }))
   }
 }

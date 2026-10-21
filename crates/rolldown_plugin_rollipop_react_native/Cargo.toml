@@ -10,7 +10,6 @@ description = "Rolldown plugin for React Native — thin adapter over rollipop_r
 
 [lib]
 doctest = false
-test = false
 
 [lints]
 workspace = true
@@ -26,4 +25,5 @@ anyhow = { workspace = true }
 rolldown_common = { workspace = true }
 rolldown_plugin = { workspace = true }
 rolldown_sourcemap = { workspace = true }
+rolldown_utils = { workspace = true }
 rollipop_react_native_transform = { workspace = true, default-features = false }

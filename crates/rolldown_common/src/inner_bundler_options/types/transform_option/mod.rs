@@ -3,8 +3,6 @@ mod decorator_options;
 mod jsx_options;
 mod plugin_options;
 mod typescript_options;
-// MARK: - Rollipop
-mod react_compiler_options;
 
 use oxc::transformer::{EnvOptions, HelperLoaderOptions};
 
@@ -14,7 +12,6 @@ pub use {
   decorator_options::DecoratorOptions,
   jsx_options::{JsxOptions, ReactRefreshOptions},
   plugin_options::{PluginsOptions, StyledComponentsOptions},
-  react_compiler_options::{ReactCompilerDynamicGating, ReactCompilerGating, ReactCompilerOptions},
   typescript_options::{IsolatedDeclarationsOptions, TypeScriptOptions},
 };
 
@@ -85,16 +82,6 @@ impl From<TransformOptions> for crate::utils::enhanced_transform::EnhancedTransf
       input_map: None,
       define: None,
       inject: None,
-    }
-  }
-}
-
-impl TransformOptions {
-  // MARK: - Rollipop
-  pub fn react_compiler(&self) -> Option<&ReactCompilerOptions> {
-    match &self.jsx {
-      Some(Either::Right(jsx)) => jsx.compiler.as_ref(),
-      _ => None,
     }
   }
 }
