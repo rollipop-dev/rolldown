@@ -131,6 +131,11 @@ the pin. The native core dependency and the vendored adapter's normalized manife
 require `=0.0.1-oidc.0`, matching this revision's crate version contract;
 `Cargo.toml.orig` retains SWC's published manifest for comparison.
 
+Windows release builds set `CARGO_HOME=C:\c` before tool setup. React's monorepo
+contains fixture paths that exceed Windows `MAX_PATH` under the runner's default
+user-profile Cargo home. Keep this override Windows-only; release builds still
+disable Rust cache restoration and saving.
+
 `rollipop-react-native-compiler-sourcemap.test.ts` checks actual original
 file/line/column lookups inside compiled components, custom hooks, effect and
 event callbacks, state updates and JSX. The fixture includes Unicode before
