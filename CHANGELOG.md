@@ -1,4 +1,15 @@
 
+## [1.1.0] - 2026-10-22
+
+### 🚀 Features
+
+- compiler: run react-compier in the react-native pipeline by `@leegeunhyeok`
+
+### ⚙️ Miscellaneous Tasks
+
+- bump swc_react_native by `@leegeunhyeok`
+
+
 ## [1.0.34] - 2026-10-19
 
 ### ⚙️ Miscellaneous Tasks
