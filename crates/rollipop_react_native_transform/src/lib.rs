@@ -497,7 +497,7 @@ impl Transformer {
               .process(&mut program),
             RuntimeTarget::Hermes => (
               // Class fields need the static-block output. Keep this boundary between
-              // the two hook traversals. See internal-docs/hermes-compat/implementation.md.
+              // the two hook traversals.
               hermes_regexp_and_static_blocks(),
               template_literal_caching(),
               class_properties(hermes_class_properties_config(), unresolved_mark),
