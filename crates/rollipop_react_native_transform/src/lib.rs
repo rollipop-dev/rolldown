@@ -24,22 +24,19 @@ use rustc_hash::FxHashMap;
 use swc_common::comments::SingleThreadedComments;
 use swc_common::source_map::SourceMapGenConfig;
 use swc_common::sync::Lrc;
-use swc_common::{FileName, GLOBALS, Globals, Mark};
+use swc_common::{FileName, GLOBALS, Globals, Mark, SyntaxContext};
 use swc_ecma_ast::{EsVersion, Expr, Pass, Program};
 use swc_ecma_codegen::text_writer::JsWriter;
 use swc_ecma_codegen::{Emitter, Node};
 use swc_ecma_compat_common::regexp::{Config as RegExpConfig, regexp};
 use swc_ecma_compat_es2015::{block_scoping, classes, destructuring, parameters};
 use swc_ecma_compat_es2017::async_to_generator;
-use swc_ecma_compat_es2018::object_rest_spread;
-use swc_ecma_compat_es2022::{
-  class_properties::{self, class_properties},
-  private_in_object, static_blocks,
-};
+use swc_ecma_compat_es2022::class_properties::{self, class_properties};
 use swc_ecma_ext_transforms::jest::jest;
 use swc_ecma_parser::{
   EsSyntax, FlowSyntax, Syntax, TsSyntax, parse_file_as_expr, parse_file_as_program,
 };
+use swc_ecma_transformer::{Options as TransformerHookOptions, hook_pass, transform_hook};
 use swc_ecma_transforms_base::fixer::fixer;
 use swc_ecma_transforms_base::helpers::{self, Helpers, inject_helpers};
 use swc_ecma_transforms_base::hygiene::hygiene;
@@ -279,6 +276,24 @@ fn hermes_class_properties_config() -> class_properties::Config {
   }
 }
 
+fn hermes_regexp_and_static_blocks() -> impl Pass {
+  let mut options = TransformerHookOptions::default();
+  options.env.regexp.named_capturing_groups_regex = true;
+  options.env.regexp.unicode_property_regex = true;
+  options.env.regexp.unicode_regex = true;
+  options.env.es2022.class_static_block = true;
+  hook_pass(transform_hook(options))
+}
+
+fn hermes_private_async_and_object_rest(unresolved_mark: Mark) -> impl Pass {
+  let mut options = TransformerHookOptions::default();
+  options.unresolved_ctxt = SyntaxContext::empty().apply_mark(unresolved_mark);
+  options.env.es2022.private_property_in_object = true;
+  options.env.es2017.async_to_generator = true;
+  options.env.es2018.object_rest_spread = true;
+  hook_pass(transform_hook(options))
+}
+
 /// Output of [`Transformer::transform`].
 #[derive(Debug)]
 pub struct TransformOutput {
@@ -481,13 +496,12 @@ impl Transformer {
             )
               .process(&mut program),
             RuntimeTarget::Hermes => (
-              hermes_regexp(RuntimeTarget::Hermes),
+              // Class fields need the static-block output. Keep this boundary between
+              // the two hook traversals.
+              hermes_regexp_and_static_blocks(),
               template_literal_caching(),
-              static_blocks(),
               class_properties(hermes_class_properties_config(), unresolved_mark),
-              private_in_object(),
-              async_to_generator(async_to_generator::Config::default(), unresolved_mark),
-              object_rest_spread(object_rest_spread::Config::default()),
+              hermes_private_async_and_object_rest(unresolved_mark),
               classes(classes::Config::default()),
               parameters(parameters::Config::default(), unresolved_mark),
               destructuring(destructuring::Config::default()),
