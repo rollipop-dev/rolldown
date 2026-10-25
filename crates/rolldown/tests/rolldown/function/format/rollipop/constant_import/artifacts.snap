@@ -80,18 +80,16 @@ source: crates/rolldown_testing/src/integration_test.rs
 	//#endregion
 	var __rollipop_modules__ = __rollipop_require__.m = {
 		2: function(global, module, __rollipop_exports__, __rollipop_require__) {
-			//#region constants.js
+			// constants.js
 			__rollipop_require__.r(__rollipop_exports__);
 			__rollipop_require__.d(__rollipop_exports__, { platform: () => platform });
 			const platform = "ios";
-			//#endregion
 		},
 		1: function(global, module, __rollipop_exports__, __rollipop_require__) {
-			//#region main.js
+			// main.js
 			__rollipop_require__.r(__rollipop_exports__);
 			var import_constants_1_0_2 = __rollipop_require__(2);
 			globalThis.__rollipop_constant_import_result = import_constants_1_0_2.platform;
-			//#endregion
 		}
 	};
 	__rollipop_require__(1);

@@ -80,17 +80,15 @@ source: crates/rolldown_testing/src/integration_test.rs
 	//#endregion
 	var __rollipop_modules__ = __rollipop_require__.m = {
 		2: function(global, module, __rollipop_exports__, __rollipop_require__) {
-			//#region dep.js
+			// dep.js
 			__rollipop_require__.r(__rollipop_exports__);
 			globalThis.__rollipop_side_effect_value = "side-effect";
-			//#endregion
 		},
 		1: function(global, module, __rollipop_exports__, __rollipop_require__) {
-			//#region main.js
+			// main.js
 			__rollipop_require__.r(__rollipop_exports__);
 			__rollipop_require__(2);
 			globalThis.__rollipop_side_effect_import_result = `entry:${globalThis.__rollipop_side_effect_value}`;
-			//#endregion
 		}
 	};
 	__rollipop_require__(1);

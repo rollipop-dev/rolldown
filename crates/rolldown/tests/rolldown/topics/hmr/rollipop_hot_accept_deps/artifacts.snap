@@ -91,19 +91,19 @@ source: crates/rolldown_testing/src/integration_test.rs
 	__rolldown_runtime__.registerGraph({
 		ids: ["dep.js", "main.js"],
 		localCount: 2,
-		edges: [[], [0]]
+		edges: [[], [0]],
+		entries: [1]
 	});
 	var __rollipop_modules__ = __rollipop_require__.m = {
 		2: function(global, module, __rollipop_exports__, __rollipop_require__) {
-			//#region dep.js
+			// dep.js
 			__rollipop_require__.r(__rollipop_exports__);
 			__rollipop_require__.d(__rollipop_exports__, { message: () => message });
 			__rolldown_runtime__.registerModule("dep.js", { exports: __rollipop_exports__ });
 			const message = "before";
-			//#endregion
 		},
 		1: function(global, module, __rollipop_exports__, __rollipop_require__) {
-			//#region main.js
+			// main.js
 			__rollipop_require__.r(__rollipop_exports__);
 			const hot_main = __rolldown_runtime__.createModuleHotContext("main.js");
 			__rolldown_runtime__.registerModule("main.js", { exports: __rollipop_exports__ });
@@ -111,7 +111,6 @@ source: crates/rolldown_testing/src/integration_test.rs
 			globalThis.__rollipop_hmr_message = import_dep_1_0_2.message;
 			hot_main.accept("dep.js", () => {});
 			hot_main.accept(["dep.js", "dep.js"], () => {});
-			//#endregion
 		}
 	};
 	__rollipop_require__(1);

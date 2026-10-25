@@ -101,6 +101,15 @@ test.each(['ascii', 'utf8'] as const)(
       } else {
         expect(graph).toContain('dep-\u03c0.js');
       }
+      let entries: string[] | undefined;
+      runInNewContext(graph!, {
+        __rolldown_runtime__: {
+          registerGraph(delta: { ids: string[]; entries?: number[] }) {
+            entries = delta.entries?.map((index) => delta.ids[index]);
+          },
+        },
+      });
+      expect(entries).toEqual(['\\0entry.js']);
     } finally {
       await engine.close();
     }
@@ -253,13 +262,19 @@ test('keeps lowered dynamic imports off a source Promise binding', async () => {
   await expect(context.result).resolves.toMatchObject({ value: 42 });
 });
 
-test.each(['check()', 'check`value`'])(
-  'supports arbitrary import names without binding a namespace as this: %s',
-  async (call) => {
+test.each([
+  { call: 'check()', name: 'a-b' },
+  { call: 'check`value`', name: 'a-b' },
+  { call: 'check()', name: '\u{1f600}' },
+  { call: 'check`value`', name: '\u{1f600}' },
+])(
+  'supports arbitrary import names without binding a namespace as this: $name $call',
+  async ({ call, name }) => {
+    const quotedName = JSON.stringify(name);
     const code = await generate({
-      'entry.js': `import { 'a-b' as check } from 'barrel.js'; globalThis.result = ${call};`,
-      'barrel.js': `export { 'a-b' } from 'dep.js';`,
-      'dep.js': `'use strict'; function check() { return this === undefined; } export { check as 'a-b' };`,
+      'entry.js': `import { ${quotedName} as check } from 'barrel.js'; globalThis.result = ${call};`,
+      'barrel.js': `export { ${quotedName} } from 'dep.js';`,
+      'dep.js': `'use strict'; function check() { return this === undefined; } export { check as ${quotedName} };`,
     });
     const context = { result: undefined };
     runInNewContext(code, context);

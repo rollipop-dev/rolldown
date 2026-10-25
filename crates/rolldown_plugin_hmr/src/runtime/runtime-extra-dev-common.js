@@ -165,7 +165,8 @@ var Module = /*#__PURE__*/ function() {
  * only some rows; a missing row, or a missing or `null` entry, means the whole namespace.
  * `dynamicEdges` also holds only some rows; a missing row means no dynamic edges.
  * `stamps[i]` is the rebuild stamp of `ids[i]`; a missing row means 0.
- * @typedef {{ ids: string[], localCount: number, edges: number[][], bindings?: Record<number, (string[] | null)[]>, dynamicEdges?: Record<number, number[]>, stamps?: Record<number, number> }} ModuleGraphDelta
+ * `entries` lists the rows whose module is an entry.
+ * @typedef {{ ids: string[], localCount: number, edges: number[][], bindings?: Record<number, (string[] | null)[]>, dynamicEdges?: Record<number, number[]>, stamps?: Record<number, number>, entries?: number[] }} ModuleGraphDelta
  * @typedef {{ createModuleHotContext(moduleId: string): any, onModuleCacheRemoval(moduleId: string): void }} DevRuntimeHooks
  */ export var MissingFactoryError = /*#__PURE__*/ function(Error1) {
     "use strict";
@@ -204,6 +205,7 @@ export var DevRuntime = /*#__PURE__*/ function() {
    * Reverse index over the dynamic imports.
    * @type {Map<string, Set<string>>}
    */ this.dynamicImporters = new Map();
+        /** @type {Set<string>} */ this.entries = new Set();
         /**
    * The module cache. Membership means "this module's side effects ran in this tab" —
    * registration is emitted ahead of every module body, and nothing un-registers on
@@ -256,7 +258,7 @@ export var DevRuntime = /*#__PURE__*/ function() {
             value: function registerGraph(delta) {
                 for(var i = 0; i < delta.localCount; i++){
                     var _ref, _ref1, _ref2;
-                    var _this_staticImports_get, _delta_bindings, _delta_dynamicEdges, _this_dynamicImports_get;
+                    var _this_staticImports_get, _delta_bindings, _delta_dynamicEdges, _this_dynamicImports_get, _delta_entries;
                     var id = delta.ids[i];
                     if (delta.stamps) {
                         var _delta_stamps_i, _this_rowStamps_get;
@@ -375,6 +377,11 @@ export var DevRuntime = /*#__PURE__*/ function() {
                     this.dynamicImports.set(id, {
                         edges: dynamicEdges
                     });
+                    if ((_delta_entries = delta.entries) === null || _delta_entries === void 0 ? void 0 : _delta_entries.includes(i)) {
+                        this.entries.add(id);
+                    } else {
+                        this.entries.delete(id);
+                    }
                 }
             }
         },
@@ -448,6 +455,14 @@ export var DevRuntime = /*#__PURE__*/ function() {
                 return names.includes('*') ? names : _to_consumable_array(names).concat([
                     '*'
                 ]);
+            }
+        },
+        {
+            /**
+   * @param {string} id
+   */ key: "isEntry",
+            value: function isEntry(id) {
+                return this.entries.has(id);
             }
         },
         {
