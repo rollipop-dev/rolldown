@@ -1,18 +1,19 @@
 use swc_common::DUMMY_SP;
 use swc_common::util::take::Take;
 use swc_ecma_ast::{
-  ArrowExpr, ArrowFunctionBody, AssignExpr, BinExpr, CallExpr, Expr, Pass, Stmt, TaggedTpl, Tpl,
-  VarDecl, VarDeclKind, VarDeclarator, op,
+  ArrowExpr, ArrowFunctionBody, AssignExpr, BinExpr, CallExpr, Expr, Stmt, TaggedTpl, Tpl, VarDecl,
+  VarDeclKind, VarDeclarator, op,
 };
+use swc_ecma_hooks::VisitMutHook;
+use swc_ecma_transformer::TraverseCtx;
 use swc_ecma_utils::{ExprFactory, prepend_stmt, private_ident};
-use swc_ecma_visit::{VisitMut, VisitMutWith, visit_mut_pass};
 
-pub fn template_literal_caching() -> impl Pass {
-  visit_mut_pass(TemplateLiteralCaching::default())
+pub fn template_literal_caching() -> impl VisitMutHook<TraverseCtx> {
+  TemplateLiteralCaching::default()
 }
 
 // Upstream SWC's pass is Fold-based and marks JSX as unreachable. React Native
-// can preserve JSX here, so keep the same transform shape but use VisitMut.
+// can preserve JSX here, so use a hook in the shared compatibility traversal.
 #[derive(Default)]
 struct TemplateLiteralCaching {
   decls: Vec<VarDeclarator>,
@@ -111,25 +112,21 @@ impl TemplateLiteralCaching {
   }
 }
 
-impl VisitMut for TemplateLiteralCaching {
-  fn visit_mut_expr(&mut self, expr: &mut Expr) {
-    expr.visit_mut_children_with(self);
-
+impl VisitMutHook<TraverseCtx> for TemplateLiteralCaching {
+  fn exit_expr(&mut self, expr: &mut Expr, _ctx: &mut TraverseCtx) {
     *expr = match expr.take() {
       Expr::TaggedTpl(tagged) => self.transform_tagged_template(tagged),
       expr => expr,
     };
   }
 
-  fn visit_mut_module(&mut self, module: &mut swc_ecma_ast::Module) {
-    module.visit_mut_children_with(self);
+  fn exit_module(&mut self, module: &mut swc_ecma_ast::Module, _ctx: &mut TraverseCtx) {
     if let Some(var) = self.create_var_decl() {
       prepend_stmt(&mut module.body, var.into());
     }
   }
 
-  fn visit_mut_script(&mut self, script: &mut swc_ecma_ast::Script) {
-    script.visit_mut_children_with(self);
+  fn exit_script(&mut self, script: &mut swc_ecma_ast::Script, _ctx: &mut TraverseCtx) {
     if let Some(var) = self.create_var_decl() {
       prepend_stmt(&mut script.body, var);
     }
