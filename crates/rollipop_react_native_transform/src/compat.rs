@@ -1,5 +1,4 @@
 //! Compatibility hooks grouped around the legacy class-properties pass.
-// See internal-docs/native-swc-passes/implementation.md.
 
 use swc_common::{Mark, SyntaxContext};
 use swc_ecma_ast::Pass;
