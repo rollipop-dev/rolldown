@@ -71,3 +71,30 @@ try {
   assert!(code.contains("var Foo ="), "class in finally was not rewritten: {code}");
   assert!(code.contains("return Foo;"), "class in finally wrapper was not emitted: {code}");
 }
+
+#[test]
+fn composes_finally_wrappers_accessor_super_and_async_template_caching() {
+  let code = transform(
+    r"try {} finally {
+  class Example {
+    method() {
+      return {
+        get value() {
+          return async (value = 1, { name }) => tag`result ${await value} ${super.value} ${name}`;
+        }
+      };
+    }
+  }
+  use(Example);
+}",
+  );
+
+  assert!(code.contains("var Example ="), "class wrapper was lost: {code}");
+  assert!(code.contains("return Example;"), "wrapped class return was lost: {code}");
+  assert!(code.contains("get [\"value\"]"), "lexical super accessor was not fixed: {code}");
+  assert!(code.contains("var value ="), "default parameter fix was lost: {code}");
+  assert!(code.contains("var { name }"), "destructuring parameter fix was lost: {code}");
+  assert!(!code.contains("async ("), "async arrow remained: {code}");
+  assert!(!code.contains("await value"), "await expression remained: {code}");
+  assert!(!code.contains("tag`"), "tagged template remained: {code}");
+}

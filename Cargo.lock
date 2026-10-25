@@ -5086,14 +5086,13 @@ dependencies = [
  "swc_common",
  "swc_ecma_ast",
  "swc_ecma_codegen",
- "swc_ecma_compat_common",
  "swc_ecma_compat_es2015",
- "swc_ecma_compat_es2017",
- "swc_ecma_compat_es2018",
  "swc_ecma_compat_es2022",
  "swc_ecma_ext_transforms",
+ "swc_ecma_hooks",
  "swc_ecma_parser",
  "swc_ecma_react_compiler",
+ "swc_ecma_transformer",
  "swc_ecma_transforms_base",
  "swc_ecma_transforms_module",
  "swc_ecma_transforms_optimization",
@@ -5877,35 +5876,6 @@ dependencies = [
  "swc_ecma_transforms_macros",
  "swc_ecma_utils",
  "swc_ecma_visit",
- "tracing",
-]
-
-[[package]]
-name = "swc_ecma_compat_es2017"
-version = "50.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4e5df4c8a68a20da8988aab1ba111ccad9a1f0e00bb7517bc1af7600fa95a4b"
-dependencies = [
- "serde",
- "swc_common",
- "swc_ecma_ast",
- "swc_ecma_transformer",
- "swc_ecma_transforms_base",
- "swc_ecma_utils",
- "tracing",
-]
-
-[[package]]
-name = "swc_ecma_compat_es2018"
-version = "51.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c6ce48b26c0a8b5b3818faea97135a1d4b8e34086a87e12d338436bc08cb7b4"
-dependencies = [
- "serde",
- "swc_ecma_ast",
- "swc_ecma_transformer",
- "swc_ecma_transforms_base",
- "swc_ecma_utils",
  "tracing",
 ]
 

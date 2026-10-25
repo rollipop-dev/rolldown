@@ -68,6 +68,10 @@ native-component codegen, type stripping, Worklets and Hermes lowering. The
 normal resolver runs once on the resulting AST; `CodegenVisitor` still receives
 type annotations. No extra parse or emit is introduced on this path.
 
+Hermes compatibility transforms share hook-based traversals around the legacy
+class-properties pass. See [native SWC passes](../native-swc-passes/implementation.md)
+for the groups and ordering boundaries.
+
 The general bundler does not install a Compiler transform or source prepass.
 `enhanced_transform` and Vite's transform implementation match upstream v1.2.14.
 Compiler configuration does not affect OXC's target-based plain-JS transform
