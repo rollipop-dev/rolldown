@@ -670,7 +670,9 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
                 ast::ModuleExportName::IdentifierName(ident) => {
                   Specifier::Literal(ident.name.into())
                 }
-                ast::ModuleExportName::StringLiteral(str) => Specifier::Literal(str.value.into()),
+                ast::ModuleExportName::StringLiteral(_) => {
+                  Specifier::Literal(specifier.local.name().into())
+                }
                 ast::ModuleExportName::IdentifierReference(_) => {
                   unreachable!(
                     "IdentifierReference is invalid in re-exported ExportFromDeclaration"
@@ -986,7 +988,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
       .iter()
       .filter_map(|property| match property {
         ObjectPropertyKind::ObjectProperty(property) => {
-          property.key.static_name().map(std::borrow::Cow::into_owned)
+          property.key.static_name().and_then(|name| name.as_str().map(str::to_owned))
         }
         ObjectPropertyKind::SpreadProperty(_) => None,
       })

@@ -81,15 +81,13 @@ source: crates/rolldown_testing/src/integration_test.rs
 	//#endregion
 	var __rollipop_modules__ = __rollipop_require__.m = {
 		2: function(global, module, __rollipop_exports__, __rollipop_require__) {
-			//#region dep.js
+			// dep.js
 			__rollipop_exports__.answer = 42;
-			//#endregion
 		},
 		1: function(global, module, __rollipop_exports__, __rollipop_require__) {
-			//#region main.js
+			// main.js
 			const dep = __rollipop_require__(2);
 			globalThis.__rollipop_commonjs_result = `cjs:${dep.answer}`;
-			//#endregion
 		}
 	};
 	__rollipop_require__(1);

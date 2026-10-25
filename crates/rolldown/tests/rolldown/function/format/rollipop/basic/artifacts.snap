@@ -79,12 +79,11 @@ source: crates/rolldown_testing/src/integration_test.rs
 	};
 	//#endregion
 	var __rollipop_modules__ = __rollipop_require__.m = { 1: function(global, module, __rollipop_exports__, __rollipop_require__) {
-		//#region main.js
+		// main.js
 		__rollipop_require__.r(__rollipop_exports__);
 		__rollipop_require__.d(__rollipop_exports__, { value: () => value });
 		const value = 1;
 		globalThis.__rollipop_basic_result = `entry:${value}`;
-		//#endregion
 	} };
 	__rollipop_require__(1);
 })(typeof globalThis !== "undefined" ? globalThis : typeof global !== "undefined" ? global : typeof window !== "undefined" ? window : this);
