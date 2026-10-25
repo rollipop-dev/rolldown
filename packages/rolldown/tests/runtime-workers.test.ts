@@ -9,7 +9,7 @@ describe.skipIf(process.platform !== 'linux' || isWasiTest)('native runtime work
     const script = `
       import { readdirSync, readFileSync } from 'node:fs';
       import { setTimeout } from 'node:timers/promises';
-      await import('rolldown');
+      await import('@rollipop/rolldown');
       // Let newly created threads finish setting their names before inspecting /proc.
       await setTimeout(100);
       const workers = readdirSync('/proc/self/task').filter(tid => {
