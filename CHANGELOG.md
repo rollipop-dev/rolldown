@@ -1,4 +1,20 @@
 
+## [1.1.1] - 2026-10-26
+
+### ⚡ Performance
+
+- react-native: reduce SWC compatibility AST traversals (#58) by `@kdy1`
+- react-native: combine supported Hermes transform hooks (#57) by `@kdy1`
+
+### 🧪 Testing
+
+- use fork package in runtime worker tests by `@leegeunhyeok`
+
+### ⚙️ Miscellaneous Tasks
+
+- sync upstream rolldown v1.2.15 by `@leegeunhyeok`
+
+
 ## [1.1.0] - 2026-10-22
 
 ### 🚀 Features
