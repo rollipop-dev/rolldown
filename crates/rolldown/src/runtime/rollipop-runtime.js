@@ -1,11 +1,20 @@
 var __rollipop_module_cache = {};
 function __rollipop_require__(id) {
   var cached = __rollipop_module_cache[id];
-  if (cached !== undefined) return cached.exports;
+  if (cached !== undefined) {
+    if (cached.hasError) throw cached.error;
+    return cached.exports;
+  }
   var factory = __rollipop_modules__[id];
   if (factory === undefined) throw new Error('Module ' + id + ' is not registered');
   var module = __rollipop_module_cache[id] = { id: id, loaded: false, exports: {} };
-  factory.call(module.exports, global, module, module.exports, __rollipop_require__);
+  try {
+    factory.call(module.exports, global, module, module.exports, __rollipop_require__);
+  } catch (error) {
+    module.hasError = true;
+    module.error = error;
+    throw error;
+  }
   module.loaded = true;
   return module.exports;
 }

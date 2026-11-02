@@ -227,6 +227,134 @@ test.each([
   expect(context.result).toEqual([true, !replacement.startsWith('module.'), true]);
 });
 
+const runtimeVariants = [
+  { minify: false, profilerNames: false },
+  { minify: false, profilerNames: true },
+  { minify: true, profilerNames: false },
+  { minify: true, profilerNames: true },
+];
+
+test.each(runtimeVariants)(
+  'rethrows factory initialization errors with minify=$minify and profilerNames=$profilerNames',
+  async ({ minify, profilerNames }) => {
+    const code = await generate(
+      {
+        'entry.js': `
+          require('optional.cjs');
+          for (let i = 0; i < 2; i++) {
+            try { require('consumer.js'); } catch (error) { globalThis.errors.push(error); }
+          }
+        `,
+        'optional.cjs': `
+          try { require('broken.js'); } catch (error) { globalThis.errors.push(error); }
+        `,
+        'consumer.js': `
+          import Animated from 'broken.js';
+          Animated.createAnimatedComponent();
+        `,
+        'broken.js': `
+          globalThis.runs++;
+          throw globalThis.error;
+          export default { createAnimatedComponent() {} };
+        `,
+      },
+      { minify, generatedCode: { profilerNames } },
+    );
+    for (const error of [
+      new Error('initialization failed'),
+      undefined,
+      null,
+      false,
+      0,
+      '',
+      'text',
+    ]) {
+      const context = { error, errors: [] as unknown[], runs: 0 };
+      runInNewContext(code, context);
+      expect(context.errors).toHaveLength(3);
+      for (const caught of context.errors) expect(caught).toBe(error);
+      expect(context.runs).toBe(1);
+    }
+  },
+);
+
+test.each(runtimeVariants)(
+  'preserves executing exports in cycles with minify=$minify and profilerNames=$profilerNames',
+  async ({ minify, profilerNames }) => {
+    const code = await generate(
+      {
+        'entry.js': `
+          const a = require('a.cjs');
+          const b = require('b.cjs');
+          globalThis.result = [a === require('a.cjs'), b.a === a, b.seen, a.phase];
+        `,
+        'a.cjs': `
+          globalThis.runs++;
+          exports.phase = 'executing';
+          exports.b = require('b.cjs');
+          exports.phase = 'complete';
+        `,
+        'b.cjs': `
+          globalThis.runs++;
+          exports.a = require('a.cjs');
+          exports.seen = exports.a.phase;
+        `,
+      },
+      { minify, generatedCode: { profilerNames } },
+    );
+    const context = { result: undefined, runs: 0 };
+    runInNewContext(code, context);
+    expect(context.result).toEqual([true, true, 'executing', 'complete']);
+    expect(context.runs).toBe(2);
+  },
+);
+
+test.each(runtimeVariants)(
+  'recovers failed factories after cache eviction with minify=$minify and profilerNames=$profilerNames',
+  async ({ minify, profilerNames }) => {
+    const code = await generate(
+      {
+        'entry.js': `
+          for (let i = 0; i < 2; i++) {
+            try { require('dep.cjs'); } catch (error) { globalThis.errors.push(error); }
+          }
+          globalThis.failedLoaded = require.c[globalThis.failedId].loaded;
+          delete require.c[globalThis.failedId];
+          globalThis.result = require('dep.cjs');
+          globalThis.loaded = require.c[globalThis.failedId].loaded;
+          globalThis.cached = require('dep.cjs') === globalThis.result;
+        `,
+        'dep.cjs': `
+          globalThis.failedId = module.id;
+          if (++globalThis.runs === 1) throw globalThis.error;
+          module.exports = globalThis.value;
+        `,
+      },
+      { minify, generatedCode: { profilerNames } },
+    );
+    const error = new Error('initialization failed');
+    const value = { recovered: true };
+    const context = {
+      error,
+      errors: [] as unknown[],
+      value,
+      result: undefined,
+      runs: 0,
+      failedLoaded: undefined,
+      loaded: undefined,
+      cached: undefined,
+    };
+    runInNewContext(code, context);
+    expect(context.errors).toHaveLength(2);
+    for (const caught of context.errors) expect(caught).toBe(error);
+    expect(context.failedLoaded).toBe(false);
+    expect(context.result).toBe(value);
+    expect(context.loaded).toBe(true);
+    expect(context.cached).toBe(true);
+    expect(context.runs).toBe(2);
+  },
+);
+
 test('keeps generated import bindings off nested source bindings', async () => {
   const sources = {
     'entry.js': `import { value } from 'dep.js'; globalThis.result = value();`,
