@@ -11,7 +11,10 @@ source: crates/rolldown_testing/src/integration_test.rs
 	var __rollipop_module_cache = {};
 	function __rollipop_require__(id) {
 		var cached = __rollipop_module_cache[id];
-		if (cached !== void 0) return cached.exports;
+		if (cached !== void 0) {
+			if (cached.hasError) throw cached.error;
+			return cached.exports;
+		}
 		var factory = __rollipop_modules__[id];
 		if (factory === void 0) throw new Error("Module " + id + " is not registered");
 		var module = __rollipop_module_cache[id] = {
@@ -19,7 +22,13 @@ source: crates/rolldown_testing/src/integration_test.rs
 			loaded: false,
 			exports: {}
 		};
-		factory.call(module.exports, global, module, module.exports, __rollipop_require__);
+		try {
+			factory.call(module.exports, global, module, module.exports, __rollipop_require__);
+		} catch (error) {
+			module.hasError = true;
+			module.error = error;
+			throw error;
+		}
 		module.loaded = true;
 		return module.exports;
 	}
