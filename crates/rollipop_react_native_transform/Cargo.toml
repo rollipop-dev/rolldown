@@ -43,7 +43,7 @@ swc_ecma_compat_es2022 = "53.0.0"
 swc_ecma_hooks = "1.0.0"
 swc_ecma_transformer = "21.0.2"
 swc_ecma_visit = "29.0.0"
-swc_react_native = { version = "0.3.2", features = ["codegen", "worklets"] }
+swc_react_native = { version = "0.4.0", features = ["codegen", "worklets"] }
 
 # Optional — wasmer-based runtime for user-supplied SWC `.wasm` plugins.
 swc_plugin_runner = { version = "34.0.0", optional = true, features = [
@@ -55,4 +55,4 @@ swc_plugin_backend_wasmer = { version = "17.0.0", optional = true }
 swc_plugin_proxy = { version = "30.0.0", optional = true, features = ["plugin-rt"] }
 
 [dev-dependencies]
-swc_react_native = { version = "0.3.2", features = ["hermes-v1-fixes"] }
+swc_react_native = { version = "0.4.0", features = ["hermes-v1-fixes"] }

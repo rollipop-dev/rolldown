@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use rollipop_react_native_transform::{
-  ReactCompilerFilter, ReactCompilerOptions, ReactConfig, RuntimeTarget, SwcConfig,
-  SwcWorkletsOptions, TransformInput, TransformOutput, Transformer, TransformerOptions,
-  WorkletsConfig,
+  ReactCompilerFilter, ReactCompilerOptions, ReactConfig, RuntimeTarget, SwcCommonOptions,
+  SwcConfig, SwcWorkletOptions, SwcWorkletsOptions, TransformInput, TransformOutput, Transformer,
+  TransformerOptions, WorkletsConfig,
 };
 use swc_common::{GLOBALS, Globals, SourceMap, Span};
 use swc_ecma_ast::{ArrowExpr, Function, Pat, VarDeclarator};
@@ -236,11 +236,11 @@ fn compiler_output_preserves_worklet_transformation() {
         ..Default::default()
       }),
       worklets: Some(WorkletsConfig {
-        options: SwcWorkletsOptions {
+        options: SwcWorkletOptions::Worklets(SwcWorkletsOptions {
           plugin_version: "0.7.4".into(),
-          disable_source_maps: true,
+          common: SwcCommonOptions { disable_source_maps: true, ..Default::default() },
           ..Default::default()
-        },
+        }),
       }),
       ..Default::default()
     },

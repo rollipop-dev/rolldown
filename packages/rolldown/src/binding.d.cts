@@ -3063,7 +3063,7 @@ export interface BindingRollipopReactNativePluginConfig {
    */
   flow?: BindingRollipopReactNativeFlowConfig
   /**
-   * `react-native-worklets` transform configuration. Visitor is skipped
+   * Worklets or Reanimated 3 transform configuration. Visitor is skipped
    * entirely when omitted.
    */
   worklets?: BindingRollipopReactNativeWorkletsConfig
@@ -3148,7 +3148,7 @@ export interface BindingRollipopReactNativeTransformResult {
 }
 
 /**
- * Mirrors `WorkletsOptions` from `swc_react_native::worklets::options`,
+ * Flat JavaScript configuration lowered into the native `Options` enum,
  * minus the rolldown-managed fields (`filename`, `cwd`).
  */
 export interface BindingRollipopReactNativeWorkletsConfig {
@@ -3181,6 +3181,18 @@ export interface BindingRollipopReactNativeWorkletsConfig {
    * installed `react-native-worklets` package version.
    */
   pluginVersion?: string
+  /**
+   * Installed Reanimated version. Selects the legacy transform (3.x only)
+   * when `plugin_version` is absent.
+   */
+  reanimatedVersion?: string
+  /** Transform nested Reanimated 3 worklets before their parent. */
+  processNestedWorklets?: boolean
+  /** Fold web platform checks in host code. */
+  substituteWebPlatformChecks?: boolean
+  /** Babel-only extensions; nonempty lists are rejected in Reanimated mode. */
+  extraPlugins?: Array<string>
+  extraPresets?: Array<string>
 }
 
 export interface BindingRollipopReactRefreshWrapperPluginConfig {
