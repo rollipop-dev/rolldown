@@ -47,14 +47,17 @@ use swc_ecma_transforms_typescript::{
 };
 use swc_ecma_utils::NodeIgnoringSpan;
 use swc_ecma_visit::VisitMutWith;
-use swc_react_native::{CodegenOptions, CodegenVisitor, WorkletsOptions, WorkletsVisitor};
+use swc_react_native::{CodegenOptions, CodegenVisitor, ReanimatedVisitor, WorkletsVisitor};
 
 use crate::visitors::RemoveFlowTypeOnlyFields;
 
 pub use swc_ecma_react_compiler::{
   DynamicGatingConfig as ReactCompilerDynamicGating, GatingConfig as ReactCompilerGating,
 };
-pub use swc_react_native::WorkletsOptions as SwcWorkletsOptions;
+pub use swc_react_native::{
+  CommonOptions as SwcCommonOptions, Options as SwcWorkletOptions,
+  ReanimatedOptions as SwcReanimatedOptions, WorkletsOptions as SwcWorkletsOptions,
+};
 
 pub use crate::react_compiler::{ReactCompilerFilter, ReactCompilerOptions};
 
@@ -169,11 +172,12 @@ pub enum RuntimeTarget {
   HermesV1,
 }
 
-/// Configuration for the react-native-worklets transform. Wraps
-/// [`WorkletsOptions`] and is forwarded to the visitor as-is.
+/// Configuration for the Worklets or Reanimated 3 transform. Wraps
+/// [`SwcWorkletOptions`] and is forwarded to the visitor as-is.
+// See internal-docs/react-native-worklets/implementation.md.
 #[derive(Debug, Default, Clone)]
 pub struct WorkletsConfig {
-  pub options: WorkletsOptions,
+  pub options: SwcWorkletOptions,
 }
 
 /// Flow handling configuration. Mirrors Babel's `@babel/plugin-transform-flow-strip-types` semantics.
@@ -438,10 +442,19 @@ impl Transformer {
 
           if let Some(worklets) = &self.options.worklets {
             let mut options = worklets.options.clone();
-            options.filename = Some(input.filename.to_string());
-            let mut visitor = WorkletsVisitor::new(options).with_source_map(Arc::clone(&cm));
-            program.visit_mut_with(&mut visitor);
-            visitor.into_result().map_err(anyhow::Error::msg)?;
+            options.common_mut().filename = Some(input.filename.to_string());
+            match options {
+              SwcWorkletOptions::Worklets(options) => {
+                let mut visitor = WorkletsVisitor::new(options).with_source_map(Arc::clone(&cm));
+                program.visit_mut_with(&mut visitor);
+                visitor.into_result().map_err(anyhow::Error::msg)?;
+              }
+              SwcWorkletOptions::Reanimated(options) => {
+                let mut visitor = ReanimatedVisitor::new(options).with_source_map(Arc::clone(&cm));
+                program.visit_mut_with(&mut visitor);
+                visitor.into_result().map_err(anyhow::Error::msg)?;
+              }
+            }
           }
 
           // SWC applies optimizer globals after plugin transforms and before compat/module passes.

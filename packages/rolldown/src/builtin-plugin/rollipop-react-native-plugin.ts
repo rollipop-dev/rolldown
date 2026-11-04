@@ -6,34 +6,47 @@ import { BuiltinPlugin } from './utils';
 export type RollipopReactNativeRuntimeTarget = 'hermes' | 'hermes-v1';
 export type RollipopReactNativeModuleType = 'unambiguous' | 'commonjs';
 
-/**
- * `react-native-worklets` transform configuration. Field semantics mirror
- * the upstream Babel plugin's `WorkletsOptions`, minus the rolldown-managed
- * fields (`filename`, `cwd`). Pass `worklets: {}` to opt in with defaults;
- * omit the field entirely to skip the visitor.
- */
-export interface RollipopReactNativeWorkletsConfig {
-  /** Identifiers treated as globals — never captured into worklet closures. */
+/** Options shared by Worklets and Reanimated 3 transforms. */
+interface WorkletOptions {
+  /** Additional identifiers treated as runtime globals. */
   globals?: string[];
-  /** When `true`, only the names listed in `globals` are considered safe. */
-  strictGlobal?: boolean;
-  /** Omit native-only data (`init_data`) from the output. Useful for web builds. */
+  /** Omit native-only init data, for web builds. */
   omitNativeOnlyData?: boolean;
-  /** Disable source map generation for worklets. */
+  /** Disable source map generation for serialized worklets. */
   disableSourceMaps?: boolean;
-  /** Use paths relative to `cwd` for source locations. */
+  /** Use paths relative to the working directory for source locations. */
   relativeSourceLocation?: boolean;
-  /** Disable Worklet Classes support. */
-  disableWorkletClasses?: boolean;
   /** Suppress the inline-shared-values warning. */
   disableInlineStylesWarning?: boolean;
-  /** Enable Bundle Mode. */
-  bundleMode?: boolean;
-  /** Release builds skip debug info such as stack details, version, and location. */
+  /** Release builds skip debug metadata. */
   isRelease?: boolean;
-  /** Version string emitted as `__pluginVersion` (the installed `react-native-worklets` version). */
-  pluginVersion?: string;
+  /** Fold web platform checks in host code. */
+  substituteWebPlatformChecks?: boolean;
 }
+
+/**
+ * Select the installed runtime explicitly; omit `worklets` to skip the transform.
+ * Package detection belongs to the caller. JavaScript callers passing both version
+ * fields select Worklets, matching `swc-react-native`.
+ */
+export type RollipopReactNativeWorkletsConfig =
+  | (WorkletOptions & {
+      /** Installed `react-native-worklets` package version. */
+      pluginVersion: string;
+      reanimatedVersion?: never;
+      /** Capture only explicitly configured unbound globals. */
+      strictGlobal?: boolean;
+      disableWorkletClasses?: boolean;
+      /** Enable Worklets Bundle Mode. */
+      bundleMode?: boolean;
+    })
+  | (WorkletOptions & {
+      /** Installed `react-native-reanimated` version. Only 3.x is supported. */
+      reanimatedVersion: string;
+      pluginVersion?: never;
+      /** Transform nested worklets before serializing their parent. */
+      processNestedWorklets?: boolean;
+    });
 
 /**
  * Flow handling configuration. Mirrors Babel's
@@ -138,7 +151,7 @@ export interface RollipopReactNativePluginConfig {
    * to the value of `SWC_ENV`, or else `NODE_ENV`, or else `"development"`.
    */
   envName?: string;
-  /** `react-native-worklets` transform. Visitor is skipped when omitted. */
+  /** Worklets or Reanimated 3 transform. Visitor is skipped when omitted. */
   worklets?: RollipopReactNativeWorkletsConfig;
   /** Flow handling configuration. Defaults match Metro / Babel behavior. */
   flow?: RollipopReactNativeFlowConfig;

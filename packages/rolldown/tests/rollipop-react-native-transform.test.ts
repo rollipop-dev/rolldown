@@ -106,9 +106,13 @@ describe.each([
   );
 });
 
-describe.each(['bundle', 'sync', 'async'] as const)('native Worklets captures: %s', (mode) => {
+describe.each(['bundle', 'sync', 'async'] as const)('native worklet captures: %s', (mode) => {
   describe.each(['hermes', 'hermes-v1'] as const)('%s', (runtimeTarget) => {
-    describe.each(['0.7.4', '0.13.0'])('Worklets %s', (pluginVersion) => {
+    describe.each([
+      { name: 'Worklets 0.7.4', version: { pluginVersion: '0.7.4' } },
+      { name: 'Worklets 0.13.0', version: { pluginVersion: '0.13.0' } },
+      { name: 'Reanimated 3.19.5', version: { reanimatedVersion: '3.19.5' } },
+    ] as const)('$name', ({ version }) => {
       test.each([
         {
           name: 'unresolved global with a default parameter',
@@ -122,8 +126,12 @@ describe.each(['bundle', 'sync', 'async'] as const)('native Worklets captures: %
           name: 'import capture',
           source: `import { offset } from 'worklet-offset'; export function probe(value: number) { 'worklet'; return customFlag ? offset + value : 0; }`,
         },
+        {
+          name: 'object spread with a local capture',
+          source: `const captured = { offset: 40 }; export function probe(value: number) { 'worklet'; const clone = { ...captured }; return customFlag ? clone.offset + value : 0; }`,
+        },
       ])('$name', async ({ source }) => {
-        const worklets = { pluginVersion, disableSourceMaps: true };
+        const worklets = { ...version, disableSourceMaps: true };
         let code: string;
         if (mode === 'bundle') {
           const bundle = await rolldown({
@@ -480,3 +488,123 @@ describe.skipIf(unsupportedWasmPlugins).each([undefined, false, true])(
     });
   },
 );
+
+describe('Reanimated 3 worklets', () => {
+  test.each([false, true])(
+    'keeps spread inside serialized worklets with isRelease=%s',
+    (isRelease) => {
+      const transformer = new RollipopReactNativeTransformer({
+        runtimeTarget: 'hermes',
+        worklets: { reanimatedVersion: '3.19.5', disableSourceMaps: true, isRelease },
+      });
+      const { code } = transformer.transformSync(
+        '/src/worklet.ts',
+        `
+      const captured: number = 42;
+      function worklet(value: object) { 'worklet'; return { ...value, captured }; }
+      globalThis.result = worklet;
+    `,
+      );
+      const sandbox = { result: undefined as any };
+      runInNewContext('globalThis.global = globalThis;\n' + code, sandbox);
+      const worklet = sandbox.result;
+      expect(Object.keys(worklet.__closure)).toEqual(['captured']);
+      expect(worklet.__initData.code).not.toMatch(/_object_spread/);
+      expect(worklet.__initData.version).toBe(isRelease ? undefined : '3.19.5');
+      expect(worklet.__pluginVersion).toBeUndefined();
+      const uiFunction = runInNewContext(`(${worklet.__initData.code})`);
+      expect(uiFunction.call({ __closure: worklet.__closure }, { original: true })).toEqual({
+        original: true,
+        captured: 42,
+      });
+    },
+  );
+
+  test('emits empty object closures for legacy automatic callbacks', () => {
+    const transformer = new RollipopReactNativeTransformer({
+      worklets: { reanimatedVersion: '3.19.5', disableSourceMaps: true },
+    });
+    const { code } = transformer.transformSync(
+      '/src/hooks.js',
+      `
+      useWorkletCallback(() => 42);
+      useAnimatedGestureHandler({ onStart() { return 7; } });
+    `,
+    );
+    const callbacks: any[] = [];
+    runInNewContext('globalThis.global = globalThis;\n' + code, {
+      useWorkletCallback: (fn: any) => callbacks.push(fn),
+      useAnimatedGestureHandler: (handlers: any) => callbacks.push(handlers.onStart),
+    });
+    expect(callbacks).toHaveLength(2);
+    for (const callback of callbacks) {
+      expect(callback.__closure).toEqual({});
+      expect(Array.isArray(callback.__closure)).toBe(false);
+      expect(callback.__initData.code).toBeTypeOf('string');
+    }
+  });
+
+  test.each(['2.17.0', '4.0.0', 'invalid'])('rejects unsupported legacy version %s', (version) => {
+    expect(
+      () =>
+        new RollipopReactNativeTransformer({
+          worklets: { reanimatedVersion: version },
+        }),
+    ).toThrow(/Unsupported Reanimated version/);
+  });
+
+  test('rejects Bundle Mode in legacy JavaScript configuration', () => {
+    expect(
+      () =>
+        new RollipopReactNativeTransformer({
+          // @ts-expect-error Bundle Mode is available only for Worklets.
+          worklets: { reanimatedVersion: '3.19.5', bundleMode: true },
+        }),
+    ).toThrow(/Reanimated 3 does not support bundleMode/);
+  });
+
+  test.each([false, true])('forwards processNestedWorklets=%s', (processNestedWorklets) => {
+    const transformer = new RollipopReactNativeTransformer({
+      worklets: { reanimatedVersion: '3.19.5', processNestedWorklets, disableSourceMaps: true },
+    });
+    const { code } = transformer.transformSync(
+      '/src/nested.js',
+      `globalThis.result = function outer() { 'worklet'; return function inner() { 'worklet'; return 42; }; };`,
+    );
+    const sandbox = { result: undefined as any };
+    runInNewContext('globalThis.global = globalThis;\n' + code, sandbox);
+    const outer = sandbox.result;
+    const uiOuter = runInNewContext(`globalThis.global = globalThis;\n(${outer.__initData.code})`);
+    const inner = uiOuter.call({ __closure: outer.__closure });
+    expect(inner()).toBe(42);
+    expect(typeof inner.__workletHash).toBe(processNestedWorklets ? 'number' : 'undefined');
+  });
+
+  test('pluginVersion takes precedence for JavaScript callers passing both fields', () => {
+    const transformer = new RollipopReactNativeTransformer({
+      // @ts-expect-error The public union keeps the runtime choices exclusive.
+      worklets: { pluginVersion: '0.7.4', reanimatedVersion: '4.0.0', disableSourceMaps: true },
+    });
+    const { code } = transformer.transformSync(
+      '/src/current.js',
+      `
+      const captured = 42;
+      globalThis.result = function() { 'worklet'; return captured; };
+    `,
+    );
+    const sandbox = { result: undefined as any };
+    runInNewContext('globalThis.global = globalThis;\n' + code, sandbox);
+    expect(Array.isArray(sandbox.result.__closure)).toBe(true);
+    expect(sandbox.result.__pluginVersion).toBe('0.7.4');
+  });
+
+  test('requires a runtime version in the native API', () => {
+    expect(
+      () =>
+        new RollipopReactNativeTransformer({
+          // @ts-expect-error Native callers must specify the runtime discriminator.
+          worklets: {},
+        }),
+    ).toThrow(/pluginVersion or reanimatedVersion/);
+  });
+});

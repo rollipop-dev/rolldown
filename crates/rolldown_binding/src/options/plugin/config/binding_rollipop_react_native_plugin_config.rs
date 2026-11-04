@@ -6,7 +6,10 @@ use rolldown_plugin_rollipop_react_native::{
   SwcConfig, SwcModuleType, SwcWasmPlugin, WorkletsConfig,
 };
 use rolldown_utils::filter_expression::{self, FilterExpr, FilterExprKind};
-use rollipop_react_native_transform::{SwcWasmPluginFilter, TransformerOptions};
+use rollipop_react_native_transform::{
+  SwcCommonOptions, SwcReanimatedOptions, SwcWasmPluginFilter, SwcWorkletOptions,
+  SwcWorkletsOptions, TransformerOptions,
+};
 use rustc_hash::FxBuildHasher;
 
 use super::binding_rollipop_react_native_compiler_options::BindingRollipopReactNativeCompilerOptions;
@@ -28,7 +31,7 @@ pub struct BindingRollipopReactNativePluginConfig {
   /// `@babel/plugin-transform-flow-strip-types` semantics. When omitted,
   /// every JS module is parsed as Flow (Metro / Babel default).
   pub flow: Option<BindingRollipopReactNativeFlowConfig>,
-  /// `react-native-worklets` transform configuration. Visitor is skipped
+  /// Worklets or Reanimated 3 transform configuration. Visitor is skipped
   /// entirely when omitted.
   pub worklets: Option<BindingRollipopReactNativeWorkletsConfig>,
   /// SWC pipeline configuration — wasm plugins and helper emission.
@@ -171,7 +174,7 @@ pub struct BindingRollipopReactNativeFlowConfig {
   pub require_directive: Option<bool>,
 }
 
-/// Mirrors `WorkletsOptions` from `swc_react_native::worklets::options`,
+/// Flat JavaScript configuration lowered into the native `Options` enum,
 /// minus the rolldown-managed fields (`filename`, `cwd`).
 #[napi_derive::napi(object, object_to_js = false)]
 #[derive(Debug)]
@@ -199,6 +202,16 @@ pub struct BindingRollipopReactNativeWorkletsConfig {
   /// Version string emitted as `__pluginVersion`. Callers should supply the
   /// installed `react-native-worklets` package version.
   pub plugin_version: Option<String>,
+  /// Installed Reanimated version. Selects the legacy transform (3.x only)
+  /// when `plugin_version` is absent.
+  pub reanimated_version: Option<String>,
+  /// Transform nested Reanimated 3 worklets before their parent.
+  pub process_nested_worklets: Option<bool>,
+  /// Fold web platform checks in host code.
+  pub substitute_web_platform_checks: Option<bool>,
+  /// Babel-only extensions; nonempty lists are rejected in Reanimated mode.
+  pub extra_plugins: Option<Vec<String>>,
+  pub extra_presets: Option<Vec<String>>,
 }
 
 impl From<BindingRollipopReactNativeRuntimeTarget> for RuntimeTarget {
@@ -216,41 +229,46 @@ impl From<BindingRollipopReactNativeFlowConfig> for FlowConfig {
   }
 }
 
-impl From<BindingRollipopReactNativeWorkletsConfig> for WorkletsConfig {
-  fn from(value: BindingRollipopReactNativeWorkletsConfig) -> Self {
-    let mut config = WorkletsConfig::default();
-    let opts = &mut config.options;
-    if let Some(globals) = value.globals {
-      opts.globals = globals;
-    }
-    if let Some(v) = value.strict_global {
-      opts.strict_global = v;
-    }
-    if let Some(v) = value.omit_native_only_data {
-      opts.omit_native_only_data = v;
-    }
-    if let Some(v) = value.disable_source_maps {
-      opts.disable_source_maps = v;
-    }
-    if let Some(v) = value.relative_source_location {
-      opts.relative_source_location = v;
-    }
-    if let Some(v) = value.disable_worklet_classes {
-      opts.disable_worklet_classes = v;
-    }
-    if let Some(v) = value.disable_inline_styles_warning {
-      opts.disable_inline_styles_warning = v;
-    }
-    if let Some(v) = value.bundle_mode {
-      opts.bundle_mode = v;
-    }
-    if let Some(v) = value.is_release {
-      opts.is_release = v;
-    }
-    if let Some(v) = value.plugin_version {
-      opts.plugin_version = v;
-    }
-    config
+impl TryFrom<BindingRollipopReactNativeWorkletsConfig> for WorkletsConfig {
+  type Error = anyhow::Error;
+
+  fn try_from(value: BindingRollipopReactNativeWorkletsConfig) -> Result<Self, Self::Error> {
+    let common = SwcCommonOptions {
+      globals: value.globals.unwrap_or_default(),
+      omit_native_only_data: value.omit_native_only_data.unwrap_or(false),
+      disable_source_maps: value.disable_source_maps.unwrap_or(false),
+      relative_source_location: value.relative_source_location.unwrap_or(false),
+      disable_inline_styles_warning: value.disable_inline_styles_warning.unwrap_or(false),
+      is_release: value.is_release.unwrap_or(false),
+      substitute_web_platform_checks: value.substitute_web_platform_checks.unwrap_or(false),
+      ..Default::default()
+    };
+    let options = if let Some(plugin_version) = value.plugin_version {
+      SwcWorkletOptions::Worklets(SwcWorkletsOptions {
+        common,
+        plugin_version,
+        strict_global: value.strict_global.unwrap_or(false),
+        disable_worklet_classes: value.disable_worklet_classes.unwrap_or(false),
+        bundle_mode: value.bundle_mode.unwrap_or(false),
+        ..Default::default()
+      })
+    } else {
+      anyhow::ensure!(
+        !value.bundle_mode.unwrap_or(false),
+        "Reanimated 3 does not support bundleMode"
+      );
+      SwcWorkletOptions::Reanimated(SwcReanimatedOptions {
+        common,
+        reanimated_version: value.reanimated_version.ok_or_else(|| {
+          anyhow::anyhow!("Either pluginVersion or reanimatedVersion is required")
+        })?,
+        process_nested_worklets: value.process_nested_worklets.unwrap_or(false),
+        extra_plugins: value.extra_plugins.unwrap_or_default(),
+        extra_presets: value.extra_presets.unwrap_or_default(),
+      })
+    };
+    options.validate().map_err(anyhow::Error::msg)?;
+    Ok(WorkletsConfig { options })
   }
 }
 
@@ -332,7 +350,7 @@ impl BindingRollipopReactNativePluginConfig {
   pub fn into_parts(self) -> Result<(Option<String>, TransformerOptions), anyhow::Error> {
     let swc = self.swc.map(SwcConfig::try_from).transpose()?;
     let runtime_target = self.runtime_target.map(RuntimeTarget::from).unwrap_or_default();
-    let worklets = self.worklets.map(WorkletsConfig::from);
+    let worklets = self.worklets.map(WorkletsConfig::try_from).transpose()?;
     let flow = self.flow.map(FlowConfig::from);
 
     Ok((self.env_name, TransformerOptions { runtime_target, worklets, flow, swc }))
