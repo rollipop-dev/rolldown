@@ -1,4 +1,15 @@
 
+## [1.2.0] - 2026-11-04
+
+### 🚀 Features
+
+- react-native: support Reanimated 3 worklets (#61) by `@leegeunhyeok`
+
+### 🐛 Bug Fixes
+
+- preserve Rollipop module initialization errors (#60) by `@leegeunhyeok`
+
+
 ## [1.1.1] - 2026-10-26
 
 ### ⚡ Performance
