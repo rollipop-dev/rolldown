@@ -1,4 +1,15 @@
 
+## [1.2.1] - 2026-11-12
+
+### 🐛 Bug Fixes
+
+- rollipop: separate ESM namespaces from CommonJS markers (#63) by `@leegeunhyeok`
+
+### ⚙️ Miscellaneous Tasks
+
+- deps: update swc-react-native to 0.4.1 by `@leegeunhyeok`
+
+
 ## [1.2.0] - 2026-11-04
 
 ### 🚀 Features
