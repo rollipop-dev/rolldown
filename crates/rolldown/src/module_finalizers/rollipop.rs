@@ -9,9 +9,9 @@ use oxc::{
 };
 use oxc_traverse::{Ancestor, Traverse};
 use rolldown_common::{
-  ExternalModule, ImportKind, ImportRecordIdx, IndexModules, Interop, Module, ModuleIdx,
-  ModuleType, NormalModule, Specifier, StmtInfoIdx, StmtInfos, StrictMode, SymbolRef, SymbolRefDb,
-  ThisExprReplaceKind,
+  ExternalModule, ImportKind, ImportRecordIdx, ImportRecordMeta, IndexModules, Interop, Module,
+  ModuleIdx, ModuleType, NormalModule, Specifier, StmtInfoIdx, StmtInfos, StrictMode, SymbolRef,
+  SymbolRefDb, ThisExprReplaceKind,
 };
 use rolldown_ecmascript::CJS_REQUIRE_REF_STR;
 use rolldown_ecmascript_utils::{
@@ -490,15 +490,33 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     for (name, _) in scoping.iter_bindings().flat_map(|(_, bindings)| bindings) {
       used_names.insert(name.to_string());
     }
+    used_names.extend(scoping.root_unresolved_references().keys().map(ToString::to_string));
 
     let has_dynamic_import =
       self.ctx.module.import_records.iter().any(|record| record.kind == ImportKind::DynamicImport);
+    let to_commonjs_name = self
+      .ctx
+      .module
+      .import_records
+      .iter()
+      .any(|record| {
+        record.kind == ImportKind::Require
+          && !record.meta.contains(ImportRecordMeta::IsRequireUnused)
+          && record.resolved_module.is_some_and(|module_idx| {
+            self.modules()[module_idx]
+              .as_normal()
+              .is_some_and(|module| module.exports_kind.is_esm())
+          })
+      })
+      .then(|| self.ctx.link_output.runtime.resolve_symbol("__toCommonJS").name(self.symbol_db()));
 
     for (name, symbol_id) in scoping.iter_bindings().flat_map(|(_, bindings)| bindings) {
       if self.is_runtime_module && name == HMR_RUNTIME_NAME {
         continue;
       }
-      if !(FACTORY_PARAM_NAMES.contains(&name.as_str()) || has_dynamic_import && name == "Promise")
+      if !(FACTORY_PARAM_NAMES.contains(&name.as_str())
+        || has_dynamic_import && name == "Promise"
+        || to_commonjs_name == Some(name.as_str()))
       {
         continue;
       }
@@ -1078,7 +1096,20 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     let Some(importee_idx) = rec.resolved_module else { return };
     let importee = &self.modules()[importee_idx];
     *node = match importee {
-      Module::Normal(_) => self.require_call_for_module(importee),
+      Module::Normal(module) => {
+        let require_expr = self.require_call_for_module(importee);
+        if module.exports_kind.is_esm() && !rec.meta.contains(ImportRecordMeta::IsRequireUnused) {
+          let helper_name =
+            self.ctx.link_output.runtime.resolve_symbol("__toCommonJS").name(self.symbol_db());
+          self.ast_factory.make_call_with_arg(
+            self.ast_factory.make_id_ref_expr(SPAN, helper_name),
+            require_expr,
+            false,
+          )
+        } else {
+          require_expr
+        }
+      }
       Module::External(importee) => self.require_call_for_external(importee),
     };
   }
