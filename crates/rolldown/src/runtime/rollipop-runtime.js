@@ -33,7 +33,6 @@ __rollipop_require__.r = function(exports) {
   if (typeof Symbol !== 'undefined' && Symbol.toStringTag) {
     Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
   }
-  Object.defineProperty(exports, '__esModule', { value: true });
 };
 __rollipop_require__.t = function(mod, nodeMode) {
   var target = mod != null ? Object.create(Object.getPrototypeOf(mod)) : {};
