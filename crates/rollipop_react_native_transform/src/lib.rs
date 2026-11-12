@@ -395,10 +395,12 @@ impl Transformer {
 
           // Codegen must run before TS strip — it relies on the type annotations.
           if is_codegen_required(module_kind, input.code, is_flow) {
-            program.visit_mut_with(&mut CodegenVisitor::new(
+            let mut visitor = CodegenVisitor::new(
               Arc::clone(&cm),
               CodegenOptions { filename: input.filename.to_string() },
-            ));
+            );
+            program.visit_mut_with(&mut visitor);
+            visitor.into_result()?;
           }
 
           if is_flow {

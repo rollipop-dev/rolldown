@@ -6319,9 +6319,9 @@ dependencies = [
 
 [[package]]
 name = "swc_react_native"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b276bf5e5b7687feba4c5ca65ed6044207fc7f7c53f1932460acc7ed4a180286"
+checksum = "19101f2bd036b34bf3c7cc3cd4a52a59519cf1e3d00db1f762be0d3560641113"
 dependencies = [
  "swc_react_native_codegen",
  "swc_react_native_hermes_v1_fixes",
@@ -6330,9 +6330,9 @@ dependencies = [
 
 [[package]]
 name = "swc_react_native_codegen"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "183292bd57ccf34c3d7d753160d9659d198c38ef4134dba9c04dbcc965d44345"
+checksum = "5c3aeeb459e9d97200e8c56928a5e9cb6437c1ea68515e5d62882f18eb26a02f"
 dependencies = [
  "anyhow",
  "serde",
@@ -6347,9 +6347,9 @@ dependencies = [
 
 [[package]]
 name = "swc_react_native_hermes_v1_fixes"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e48bec1af220d3e88f22c2a5fb6284962499000674036b333a245bf4534d992"
+checksum = "d7588fff60c34a9c37d517df4a544ce23dd10ab8eba71e49c0f76f0f57fe055d"
 dependencies = [
  "swc_common",
  "swc_ecma_ast",
@@ -6360,9 +6360,9 @@ dependencies = [
 
 [[package]]
 name = "swc_react_native_worklets"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7bac2b1fbbf7986b14de75496aa578ae56353063e39c4c80942b448df01df967"
+checksum = "a3b13c2cf4e8448933626ab40fe0ca321273a486810345192d49ed3f2ed8ad80"
 dependencies = [
  "indexmap",
  "once_cell",
