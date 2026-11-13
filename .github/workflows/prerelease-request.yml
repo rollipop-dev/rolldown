@@ -1,0 +1,30 @@
+name: PR Dev Release Request
+
+permissions: {}
+
+on:
+  pull_request:
+    types: [labeled, synchronize]
+
+jobs:
+  request:
+    if: >-
+      github.repository == 'rollipop-dev/rolldown' &&
+      github.event.pull_request.state == 'open' &&
+      ((github.event.action == 'labeled' && github.event.label.name == 'prerelease') ||
+       (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'prerelease')))
+    name: Request PR dev release
+    runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      # Fork approval applies here; no PR code or write token is needed.
+      - name: Record release request
+        run: jq '{number}' "$GITHUB_EVENT_PATH" > "$RUNNER_TEMP/request.json"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: prerelease-request-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/request.json
+          if-no-files-found: error

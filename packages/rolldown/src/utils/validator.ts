@@ -1088,9 +1088,23 @@ const OutputOptionsSchema = v.strictObject({
     v.optional(v.union([v.boolean(), v.literal('auto')])),
     v.description('Whether to always output `"use strict"` directive in non-ES module outputs.'),
   ),
+  // MARK: - Rollipop
   persistentCache: v.pipe(
     v.optional(v.boolean()),
     v.description('Enable persistent transform cache to disk.'),
+  ),
+  lazyImports: v.pipe(
+    v.optional(
+      v.union([
+        v.boolean(),
+        v.strictObject({
+          exclude: v.optional(v.union([StringOrRegExpSchema, v.array(StringOrRegExpSchema)])),
+        }),
+      ]),
+    ),
+    v.description(
+      'Defer evaluating statically imported modules until first binding access (rollipop format only).',
+    ),
   ),
 });
 isTypeTrue<IsSchemaSubType<typeof OutputOptionsSchema, OutputOptions>>();
@@ -1171,6 +1185,14 @@ const OutputCliOverrideSchema = v.strictObject({
     v.description('Deprecated: use codeSplitting instead'),
   ),
   minify: v.pipe(v.optional(v.boolean()), v.description('Minify the bundled file')),
+  // MARK: - Rollipop
+  // `exclude` takes RegExps, so the CLI only exposes the boolean form.
+  lazyImports: v.pipe(
+    v.optional(v.boolean()),
+    v.description(
+      'Defer evaluating statically imported modules until first binding access (rollipop format only).',
+    ),
+  ),
 });
 
 const OutputCliOptionsSchema = v.omit(

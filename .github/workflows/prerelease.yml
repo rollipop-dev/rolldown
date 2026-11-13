@@ -3,33 +3,82 @@ name: PR Dev Release
 permissions: {}
 
 on:
-  pull_request_target:
-    branches: [main]
-    types: [labeled, synchronize]
+  workflow_run:
+    workflows: [PR Dev Release Request]
+    types: [completed]
 
 jobs:
-  dispatch:
+  request:
     if: >-
       github.repository == 'rollipop-dev/rolldown' &&
-      github.event.pull_request.state == 'open' &&
-      ((github.event.action == 'labeled' && github.event.label.name == 'prerelease') ||
-       (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'prerelease')))
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.path == '.github/workflows/prerelease-request.yml' &&
+      github.event.workflow_run.conclusion == 'success'
+    name: Validate PR dev release request
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      pull-requests: read
+    outputs:
+      pr: ${{ steps.request.outputs.pr }}
+      base_ref: ${{ steps.request.outputs.base_ref }}
+      base_sha: ${{ steps.request.outputs.base_sha }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      REQUEST_RUN_ID: ${{ github.event.workflow_run.id }}
+      REQUEST_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+      PR_SHA: ${{ github.event.workflow_run.head_sha }}
+      HEAD_REPO_ID: ${{ github.event.workflow_run.head_repository.id }}
+      HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+    steps:
+      - name: Validate request
+        id: request
+        run: |
+          artifact_name="prerelease-request-${REQUEST_ATTEMPT}"
+          artifact_id=$(gh api --paginate "repos/${GH_REPO}/actions/runs/${REQUEST_RUN_ID}/artifacts" \
+            --jq ".artifacts[] | select(.name == \"${artifact_name}\") | .id")
+          # A workflow whose request job was skipped can still finish successfully.
+          if [ -z "$artifact_id" ]; then
+            echo 'No release request was recorded.'
+            exit 0
+          fi
+          gh run download "$REQUEST_RUN_ID" --name "$artifact_name" --dir "$RUNNER_TEMP/prerelease-request"
+          pr_number=$(jq -er '.number | select(type == "number" and . > 0 and floor == .)' "$RUNNER_TEMP/prerelease-request/request.json")
+          pr=$(gh api "repos/${GH_REPO}/pulls/${pr_number}")
+          # Artifact data only identifies a PR; GitHub's run metadata pins its source.
+          if ! jq -e '
+            .state == "open" and .base.repo.full_name == env.GH_REPO and
+            .head.sha == env.PR_SHA and .head.repo.id == (env.HEAD_REPO_ID | tonumber) and
+            .head.ref == env.HEAD_BRANCH and any(.labels[]; .name == "prerelease")
+          ' <<< "$pr" > /dev/null; then
+            echo 'Skipping release: the request no longer matches an eligible PR.'
+            exit 0
+          fi
+          echo "pr=$pr_number" >> "$GITHUB_OUTPUT"
+          jq -r '"base_ref=\(.base.ref)\nbase_sha=\(.base.sha)"' <<< "$pr" >> "$GITHUB_OUTPUT"
+
+  dispatch:
+    needs: request
+    if: needs.request.outputs.pr != ''
     name: Prepare PR dev release
     runs-on: ubuntu-latest
     concurrency:
-      group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+      group: ${{ github.workflow }}-${{ needs.request.outputs.pr }}
       cancel-in-progress: true
     permissions:
       contents: write # create the temporary release branch
       actions: write # dispatch the existing trusted publisher workflow
-      pull-requests: read # verify the current PR state, label, and head
+      pull-requests: write # verify the PR and comment when publishing is triggered
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      PR_NUMBER: ${{ github.event.pull_request.number }}
-      PR_SHA: ${{ github.event.pull_request.head.sha }}
-      BASE_SHA: ${{ github.sha }}
-      DEV_BRANCH: prerelease-${{ github.event.pull_request.number }}-${{ github.run_id }}-${{ github.run_attempt }}
+      PR_NUMBER: ${{ needs.request.outputs.pr }}
+      PR_SHA: ${{ github.event.workflow_run.head_sha }}
+      BASE_REF: ${{ needs.request.outputs.base_ref }}
+      BASE_SHA: ${{ needs.request.outputs.base_sha }}
+      WORKFLOW_SHA: ${{ github.sha }}
+      DEV_BRANCH: prerelease-${{ needs.request.outputs.pr }}-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
@@ -44,20 +93,26 @@ jobs:
           git merge --no-ff --no-commit "$PR_SHA"
 
           # Use main's workflows even when the PR changes CI definitions.
-          git restore --source="$BASE_SHA" --staged --worktree -- .github
+          git restore --source="$WORKFLOW_SHA" --staged --worktree -- .github
           git commit --allow-empty -m "ci: prepare dev release for PR #${PR_NUMBER}"
           gh auth setup-git
           git push origin "HEAD:refs/heads/$DEV_BRANCH"
 
       - name: Trigger dev release
         run: |
-          current_sha=$(gh api "repos/${GH_REPO}/pulls/${PR_NUMBER}" \
-            --jq 'select(.state == "open" and any(.labels[]; .name == "prerelease")) | .head.sha')
-          if [ "$current_sha" != "$PR_SHA" ]; then
+          current_pr=$(gh api "repos/${GH_REPO}/pulls/${PR_NUMBER}")
+          if ! jq -e '
+            .state == "open" and .head.sha == env.PR_SHA and .base.ref == env.BASE_REF and
+            any(.labels[]; .name == "prerelease")
+          ' <<< "$current_pr" > /dev/null; then
             echo 'Skipping release: the PR changed or prereleases were disabled.'
             exit 0
           fi
+          triggered_at=$(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M:%S %Z')
           gh workflow run publish-to-npm.yml --ref "$DEV_BRANCH" --field dev=true --field pr="$PR_NUMBER"
+          body_file="$RUNNER_TEMP/prerelease-trigger-comment.md"
+          printf '🚀 Prerelease deployment triggered.\n\nTriggered at: `%s`\n' "$triggered_at" > "$body_file"
+          gh pr comment "$PR_NUMBER" --body-file "$body_file"
           {
             echo "Dev release requested for PR #${PR_NUMBER} at \`${PR_SHA}\`."
             echo
