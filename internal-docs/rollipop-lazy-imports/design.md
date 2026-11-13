@@ -75,7 +75,9 @@ details.
   read as dead code (for example an unused `x.y;` statement), the importee is
   no longer evaluated through that binding.
 - Eager wins: if one module imports the same importee both lazily and eagerly,
-  the single generated declaration is eager.
+  the single generated declaration is eager. This includes `import './x'` next
+  to `import { a } from './x'`, which tree-shaking merges into one declaration
+  before the finalizer sees it.
 - Initialization errors are rethrown on every read, matching the eager
   rethrow semantics from #60. A namespace only becomes "initialized" once its
   module finished loading successfully.

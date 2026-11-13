@@ -41,7 +41,12 @@ it runtime helpers.
   - `eager_targets`: importees reached through a bare import, a namespace
     import, `export {} from`, `export *` / `export * as`, or a binding whose
     imported specifier resolves to a whole namespace (`Specifier::Star`, set in
-    `create_import_binding_for_module`).
+    `create_import_binding_for_module`). Records flagged
+    `ImportRecordMeta::HasSideEffectImport` are eager too: the DCE step in
+    `pre_process_ecma_ast.rs` merges `import './x'` into a named import of the
+    same request, so the requests of side-effect-only imports are collected
+    before it (`collect_side_effect_import_requests`, lazy mode only) and the
+    flag is set in `ecma_module_view_factory.rs`.
   - `read_bindings`: binding names that are actually emitted as reads.
     These come from identifier rewrites in `exit_expression`, re-export getters
     and `create_define_exports_stmt`. A getter counts only when
@@ -135,6 +140,8 @@ ordinary prototype. Reads are then indistinguishable from the eager path.
 - `lazy_imports_reexport_namespace`: re-exports behind a namespace import, a
   namespace through `export *`, `export *`, `require()` and `import()` stay
   eager when only other exports are read; `ns.x` and `export *` reads stay lazy.
+- `lazy_imports_merged_side_effect_import`: `import './x'` plus a named import
+  of `./x` in the same file stays eager after tree-shaking merges them.
 - `lazy_imports_cycle_exclude`: `exclude` restores the eager entry point of an
   import cycle that would otherwise hit a TDZ error.
 - `lazy_imports_entry_reexport`: a user-defined entry's re-exports stay eager.

@@ -1,8 +1,9 @@
 use oxc::span::Span;
 use oxc_index::IndexVec;
 use rolldown_common::{
-  EcmaModuleAstUsage, EcmaRelated, EcmaView, EcmaViewMeta, FlatOptions, ImportRecordIdx,
-  RawImportRecord, ResolvedId, SharedNormalizedBundlerOptions, StmtEvalFlags,
+  EcmaModuleAstUsage, EcmaRelated, EcmaView, EcmaViewMeta, FlatOptions, ImportKind,
+  ImportRecordIdx, ImportRecordMeta, RawImportRecord, ResolvedId, SharedNormalizedBundlerOptions,
+  StmtEvalFlags,
   side_effects::{DeterminedSideEffects, HookSideEffects},
 };
 use rolldown_error::BuildResult;
@@ -36,6 +37,7 @@ pub async fn create_ecma_view(
     warnings,
     preserve_jsx,
     enum_member_value_map,
+    side_effect_import_requests,
   } = parse_to_ecma_ast(ctx, source).await?;
   ctx.flat_options.set(FlatOptions::JsxPreserve, preserve_jsx);
   ctx.warnings.extend(warnings);
@@ -67,7 +69,7 @@ pub async fn create_ecma_view(
     named_imports,
     mut named_exports,
     stmt_infos,
-    import_records: raw_import_records,
+    import_records: mut raw_import_records,
     default_export_ref,
     namespace_object_ref,
     imports,
@@ -95,6 +97,16 @@ pub async fn create_ecma_view(
     cjs_reexport_require_node_ids: _,
     cjs_reexport_import_record_ids,
   } = scan_result;
+  // MARK: - Rollipop
+  if !side_effect_import_requests.is_empty() {
+    for record in &mut raw_import_records {
+      if record.kind == ImportKind::Import
+        && side_effect_import_requests.contains(&record.module_request)
+      {
+        record.meta.insert(ImportRecordMeta::HasSideEffectImport);
+      }
+    }
+  }
   // If a export symbol in commonjs defined in multiple time, we just bailout treeshake it.
   for (k, v) in commonjs_exports {
     if v.len() == 1 {

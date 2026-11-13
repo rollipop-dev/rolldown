@@ -763,6 +763,10 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
             let Some(importee_idx) = rec.resolved_module else {
               return;
             };
+            // An explicit `import './x'` merged into this declaration keeps it eager.
+            if rec.meta.contains(ImportRecordMeta::HasSideEffectImport) {
+              self.mark_import_target_eager(importee_idx);
+            }
             let binding_name = self.binding_name_for_import(importee_idx, rec_id).to_string();
             let mut needs_importee_binding =
               import_decl.specifiers.as_ref().is_none_or(|specifiers| specifiers.is_empty());
