@@ -808,6 +808,7 @@ export interface OutputOptions {
    * @default 'auto'
    */
   strict?: boolean | 'auto';
+  // MARK: - Rollipop
   /**
    * Enable persistent transform cache to disk.
    * @default false
@@ -833,6 +834,7 @@ export interface OutputOptions {
   lazyImports?: boolean | LazyImportsOptions;
 }
 
+// MARK: - Rollipop
 /** @see {@linkcode OutputOptions.lazyImports | lazyImports} */
 export interface LazyImportsOptions {
   /**

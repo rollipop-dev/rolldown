@@ -16,7 +16,6 @@ pub mod inline_common_chunks_options;
 pub mod input_item;
 pub mod invalidate_js_side_cache;
 pub mod is_external;
-pub mod lazy_imports_option;
 pub mod legal_comments;
 pub mod log_level;
 pub mod make_absolute_externals_relative;
@@ -45,3 +44,6 @@ pub mod treeshake;
 pub mod tsconfig;
 pub mod tsconfig_merge;
 pub mod watch_option;
+
+// MARK: - Rollipop
+pub mod lazy_imports_option;

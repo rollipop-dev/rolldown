@@ -52,7 +52,6 @@ import type {
   GeneratedCodeOptions,
   GeneratedCodePreset,
   GlobalsFunction,
-  LazyImportsOptions,
   ManglePropertiesOptions,
   MinifyOptions,
   ModuleFormat,
@@ -168,7 +167,6 @@ export type {
   InputOption,
   InputOptions,
   InternalModuleFormat,
-  LazyImportsOptions,
   LoadResult,
   LoggingFunction,
   LogLevel,
@@ -237,3 +235,6 @@ export type {
   WatcherOptions,
   WatchOptions,
 };
+
+// MARK: - Rollipop
+export type { LazyImportsOptions } from './options/output-options';

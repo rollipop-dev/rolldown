@@ -192,6 +192,7 @@ export async function bindingifyOutputOptions(
     cleanDir,
     strictExecutionOrder,
     strict: outputOptions.strict,
+    // MARK: - Rollipop
     persistentCache: outputOptions.persistentCache,
     lazyImports:
       typeof outputOptions.lazyImports === 'object'
