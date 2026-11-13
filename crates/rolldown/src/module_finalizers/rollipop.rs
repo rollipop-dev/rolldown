@@ -1,3 +1,4 @@
+use oxc::ast_visit::{VisitMut, walk_mut};
 use oxc::{
   allocator::{Allocator, Box as ArenaBox, GetAllocator, TakeIn},
   ast::{
@@ -422,12 +423,17 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     }
   }
 
-  /// Turns eligible generated import declarations into lazy namespaces.
-  /// Runs after traversal, when every read of the generated bindings is known.
-  fn apply_lazy_imports(&self, body: &mut oxc::allocator::Vec<'ast, Statement<'ast>>) {
-    let Some(lazy) = &self.lazy_imports else { return };
+  /// Turns eligible generated import declarations into lazy holders and returns
+  /// their binding names. Runs after traversal, when every read of the generated
+  /// bindings is known.
+  fn apply_lazy_imports(
+    &self,
+    body: &mut oxc::allocator::Vec<'ast, Statement<'ast>>,
+  ) -> FxHashSet<String> {
+    let mut lazy_bindings = FxHashSet::default();
+    let Some(lazy) = &self.lazy_imports else { return lazy_bindings };
     if lazy.candidates.is_empty() {
-      return;
+      return lazy_bindings;
     }
     for stmt in body.iter_mut() {
       let Statement::VariableDeclaration(decl) = stmt else { continue };
@@ -442,10 +448,12 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
         {
           continue;
         }
-        // A lazy namespace evaluates the importee on first property access.
+        // A lazy holder evaluates the importee on the first read of its `a` property.
         declarator.init = Some(self.lazy_namespace_call(&self.modules()[*importee_idx], *mode));
+        lazy_bindings.insert(ident.name.to_string());
       }
     }
+    lazy_bindings
   }
 
   fn create_import_binding_stmt(
@@ -1396,7 +1404,7 @@ impl<'ast> Traverse<'ast, ()> for RollipopAstFinalizer<'_, 'ast> {
         next_body.push(stmt);
       }
     }
-    self.apply_lazy_imports(&mut body);
+    let lazy_bindings = self.apply_lazy_imports(&mut body);
     if self.uses_import_meta_hot && self.is_dev_mode {
       next_body.push(self.create_module_hot_context_initializer_stmt());
     }
@@ -1404,6 +1412,14 @@ impl<'ast> Traverse<'ast, ()> for RollipopAstFinalizer<'_, 'ast> {
       next_body.push(self.create_register_module_stmt());
     }
     next_body.extend(body);
+    if !lazy_bindings.is_empty() {
+      // Reads of a lazy binding go through its holder: `import_x.foo` -> `import_x.a.foo`.
+      let mut rewriter =
+        LazyHolderAccessRewriter { bindings: &lazy_bindings, ast: &self.ast_factory };
+      for stmt in &mut next_body {
+        rewriter.visit_statement(stmt);
+      }
+    }
     node.body = next_body;
   }
 
@@ -1590,4 +1606,45 @@ fn make_import_access_expr_for_object<'ast>(
 
 fn is_export_specifier_declaration(stmt: &Statement<'_>) -> bool {
   matches!(stmt, Statement::ExportNamedDeclaration(_))
+}
+
+// See internal-docs/rollipop-lazy-imports/implementation.md
+/// Rewrites member reads of lazy import bindings to go through the holder's `a`
+/// property. Generated reads of an import binding are always member expressions
+/// (`import_x.foo`, `import_x["foo"]`); namespace bindings are never lazy.
+struct LazyHolderAccessRewriter<'me, 'ast> {
+  bindings: &'me FxHashSet<String>,
+  ast: &'me AstFactory<'ast>,
+}
+
+impl<'ast> LazyHolderAccessRewriter<'_, 'ast> {
+  /// Replaces `import_x` with `import_x.a`. Returns whether it did.
+  fn wrap_object(&self, object: &mut Expression<'ast>) -> bool {
+    let Expression::Identifier(ident) = object else { return false };
+    if !self.bindings.contains(ident.name.as_str()) {
+      return false;
+    }
+    let name = ident.name.to_string();
+    *object = self.ast.make_member_access_expr(&name, "a");
+    true
+  }
+}
+
+impl<'ast> VisitMut<'ast> for LazyHolderAccessRewriter<'_, 'ast> {
+  fn visit_expression(&mut self, expr: &mut Expression<'ast>) {
+    match expr {
+      Expression::StaticMemberExpression(member) => {
+        if !self.wrap_object(&mut member.object) {
+          self.visit_expression(&mut member.object);
+        }
+      }
+      Expression::ComputedMemberExpression(member) => {
+        if !self.wrap_object(&mut member.object) {
+          self.visit_expression(&mut member.object);
+        }
+        self.visit_expression(&mut member.expression);
+      }
+      _ => walk_mut::walk_expression(self, expr),
+    }
+  }
 }

@@ -45,11 +45,12 @@ source: crates/rolldown_testing/src/integration_test.rs
 	    Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 	  }
 	};
+	// `target` is a namespace built earlier for the same `mod`; only missing keys are added.
 	__rollipop_require__.t = function(mod, nodeMode, target) {
-	  var proto = mod != null ? Object.getPrototypeOf(mod) : Object.prototype;
-	  if (target === undefined) target = Object.create(proto);
-	  else Object.setPrototypeOf(target, proto);
-	  if (nodeMode || !mod || !mod.__esModule) Object.defineProperty(target, 'default', { value: mod, enumerable: true });
+	  if (target === undefined) {
+	    target = mod != null ? Object.create(Object.getPrototypeOf(mod)) : {};
+	    if (nodeMode || !mod || !mod.__esModule) Object.defineProperty(target, 'default', { value: mod, enumerable: true });
+	  }
 	  if (mod != null) {
 	    var keys = Object.getOwnPropertyNames(mod);
 	    for (var i = 0; i < keys.length; i++) {
@@ -63,7 +64,7 @@ source: crates/rolldown_testing/src/integration_test.rs
 	  }
 	  return target;
 	};
-	__rollipop_require__.i = function(id, nodeMode, target) {
+	__rollipop_require__.i = function(id, nodeMode) {
 	  var mod = __rollipop_require__(id);
 	  var module = __rollipop_module_cache[id];
 	  // A module that is still initializing (circular import) can gain exports later.
@@ -87,8 +88,8 @@ source: crates/rolldown_testing/src/integration_test.rs
 	  }
 	  module.nsKeyCount = keyCount;
 	  return nodeMode
-	    ? module.nodeNs || (module.nodeNs = __rollipop_require__.t(mod, nodeMode, target))
-	    : module.ns || (module.ns = __rollipop_require__.t(mod, nodeMode, target));
+	    ? module.nodeNs || (module.nodeNs = __rollipop_require__.t(mod, nodeMode))
+	    : module.ns || (module.ns = __rollipop_require__.t(mod, nodeMode));
 	};
 	__rollipop_require__.re = function(exports, ns) {
 	  for (var key in ns) {
@@ -101,45 +102,26 @@ source: crates/rolldown_testing/src/integration_test.rs
 	__rollipop_require__.e = function(id) {
 	  throw new Error('External module ' + id + ' is not available');
 	};
-	var __rollipop_lazy_namespaces = [{}, {}, {}];
+	// `__rollipop_require__.l(id, mode)` returns a holder whose `a` property is the
+	// importee's namespace; generated code reads `holder.a.name`. `mode` is omitted for
+	// ESM importees, `0` for Babel interop and `1` for Node interop.
+	// See internal-docs/rollipop-lazy-imports/implementation.md
 	function __rollipop_lazy_load(id, mode) {
-	  return mode === 2 ? __rollipop_require__(id) : __rollipop_require__.i(id, mode);
+	  return mode === undefined ? __rollipop_require__(id) : __rollipop_require__.i(id, mode);
 	}
-	function __rollipop_lazy_resolve(state) {
-	  var target = state.target;
-	  // CommonJS namespaces are built directly on the facade when it is the first one.
-	  var ns = state.mode === 2
-	    ? __rollipop_require__(state.id)
-	    : __rollipop_require__.i(state.id, state.mode, target);
-	  if (ns !== target && __rollipop_module_cache[state.id].loaded === true) {
-	    Object.setPrototypeOf(target, Object.getPrototypeOf(ns));
-	    var keys = Object.getOwnPropertyNames(ns);
-	    for (var i = 0; i < keys.length; i++) {
-	      Object.defineProperty(target, keys[i], Object.getOwnPropertyDescriptor(ns, keys[i]));
-	    }
-	  }
-	  return ns;
-	}
-	var __rollipop_lazy_handler = {
-	  get: function(state, key) {
-	    return __rollipop_lazy_resolve(state)[key];
-	  },
-	  has: function(state, key) {
-	    return key in __rollipop_lazy_resolve(state);
-	  }
-	};
 	__rollipop_require__.l = function(id, mode) {
-	  if (mode === undefined) mode = 2;
-	  if (__rollipop_module_cache[id] !== undefined || typeof Proxy !== 'function') {
-	    return __rollipop_lazy_load(id, mode);
-	  }
-	  var namespaces = __rollipop_lazy_namespaces[mode];
-	  var ns = namespaces[id];
-	  if (ns === undefined) {
-	    var state = { id: id, mode: mode, target: undefined };
-	    ns = namespaces[id] = state.target = Object.create(new Proxy(state, __rollipop_lazy_handler));
-	  }
-	  return ns;
+	  var record = __rollipop_module_cache[id];
+	  if (record !== undefined && record.loaded === true) return { a: __rollipop_lazy_load(id, mode) };
+	  return {
+	    get a() {
+	      var ns = __rollipop_lazy_load(id, mode);
+	      // Replace the getter only once the module finished loading and interop succeeded.
+	      // A module still loading (a cycle) is read through to its partial exports, and a
+	      // throw leaves the getter in place, so every later read throws again.
+	      if (__rollipop_module_cache[id].loaded === true) Object.defineProperty(this, 'a', { value: ns });
+	      return ns;
+	    }
+	  };
 	};
 	//#endregion
 	var __rollipop_modules__ = __rollipop_require__.m = {
@@ -156,14 +138,14 @@ source: crates/rolldown_testing/src/integration_test.rs
 		// side.js
 			__rollipop_require__.r(__rollipop_exports__);
 			var import_log_2_0_11 = __rollipop_lazy__(11);
-			(0, import_log_2_0_11.log)("side");
+			(0, import_log_2_0_11.a.log)("side");
 
 		},
 		3: function(global, module, __rollipop_exports__, __rollipop_require__, __rollipop_lazy__) {
 		// effect.js
 			__rollipop_require__.r(__rollipop_exports__);
 			var import_log_3_0_11 = __rollipop_lazy__(11);
-			(0, import_log_3_0_11.log)("effect");
+			(0, import_log_3_0_11.a.log)("effect");
 
 		},
 		4: function(global, module, __rollipop_exports__, __rollipop_require__, __rollipop_lazy__) {
@@ -171,7 +153,7 @@ source: crates/rolldown_testing/src/integration_test.rs
 			__rollipop_require__.r(__rollipop_exports__);
 			__rollipop_require__.d(__rollipop_exports__, { fromNamespace: () => fromNamespace });
 			var import_log_4_0_11 = __rollipop_lazy__(11);
-			(0, import_log_4_0_11.log)("namespace");
+			(0, import_log_4_0_11.a.log)("namespace");
 			const fromNamespace = "namespace-value";
 
 		},
@@ -180,7 +162,7 @@ source: crates/rolldown_testing/src/integration_test.rs
 			__rollipop_require__.r(__rollipop_exports__);
 			__rollipop_require__.d(__rollipop_exports__, { fromStar: () => fromStar });
 			var import_log_12_0_11 = __rollipop_lazy__(11);
-			(0, import_log_12_0_11.log)("star");
+			(0, import_log_12_0_11.a.log)("star");
 			const fromStar = "star-value";
 
 		},
@@ -192,7 +174,7 @@ source: crates/rolldown_testing/src/integration_test.rs
 				default: () => lazyDefault
 			});
 			var import_log_6_0_11 = __rollipop_lazy__(11);
-			(0, import_log_6_0_11.log)("lazy");
+			(0, import_log_6_0_11.a.log)("lazy");
 			const lazyValue = "lazy-value";
 			function lazyDefault() {
 				return "lazy-default";
@@ -203,7 +185,7 @@ source: crates/rolldown_testing/src/integration_test.rs
 		// reexport.js
 			__rollipop_require__.r(__rollipop_exports__);
 			__rollipop_require__.d(__rollipop_exports__, {
-				reexportedLazy: () => import_lazy_5_1_6.lazyValue,
+				reexportedLazy: () => import_lazy_5_1_6.a.lazyValue,
 				fromStar: () => __rollipop_require__(12).fromStar
 			});
 			var import_star_5_0_12 = __rollipop_require__(12);
@@ -216,7 +198,7 @@ source: crates/rolldown_testing/src/integration_test.rs
 			__rollipop_require__.r(__rollipop_exports__);
 			__rollipop_require__.d(__rollipop_exports__, { neverValue: () => neverValue });
 			var import_log_7_0_11 = __rollipop_lazy__(11);
-			(0, import_log_7_0_11.log)("never");
+			(0, import_log_7_0_11.a.log)("never");
 			const neverValue = "never";
 
 		},
@@ -231,7 +213,7 @@ source: crates/rolldown_testing/src/integration_test.rs
 			__rollipop_require__.r(__rollipop_exports__);
 			__rollipop_require__.d(__rollipop_exports__, { unreachable: () => unreachable });
 			var import_log_9_0_11 = __rollipop_lazy__(11);
-			(0, import_log_9_0_11.log)("throws");
+			(0, import_log_9_0_11.a.log)("throws");
 			throw new Error("boom");
 			const unreachable = "unreachable";
 
@@ -242,7 +224,7 @@ source: crates/rolldown_testing/src/integration_test.rs
 			__rollipop_require__.d(__rollipop_exports__, { b: () => b });
 			var import_log_13_0_11 = __rollipop_lazy__(11);
 			var import_cycle_a_13_1_10 = __rollipop_require__(10);
-			(0, import_log_13_0_11.log)("cycle_b");
+			(0, import_log_13_0_11.a.log)("cycle_b");
 			const b = "b";
 
 		},
@@ -252,9 +234,9 @@ source: crates/rolldown_testing/src/integration_test.rs
 			__rollipop_require__.d(__rollipop_exports__, { readB: () => readB });
 			var import_log_10_0_11 = __rollipop_lazy__(11);
 			var import_cycle_b_10_1_13 = __rollipop_lazy__(13);
-			(0, import_log_10_0_11.log)("cycle_a");
+			(0, import_log_10_0_11.a.log)("cycle_a");
 			function readB() {
-				return import_cycle_b_10_1_13.b;
+				return import_cycle_b_10_1_13.a.b;
 			}
 
 		},
@@ -272,21 +254,21 @@ source: crates/rolldown_testing/src/integration_test.rs
 			var import_throws_1_7_9 = __rollipop_lazy__(9);
 			var import_cycle_a_1_8_10 = __rollipop_lazy__(10);
 			var import_log_1_9_11 = __rollipop_lazy__(11);
-			(0, import_log_1_9_11.log)("main");
+			(0, import_log_1_9_11.a.log)("main");
 			const result = {};
 			result.beforeAccess = globalThis.__rollipop_lazy_log.slice();
-			result.lazyValue = import_lazy_1_4_6.lazyValue;
-			result.lazyDefault = (0, import_lazy_1_4_6.default)();
+			result.lazyValue = import_lazy_1_4_6.a.lazyValue;
+			result.lazyDefault = (0, import_lazy_1_4_6.a.default)();
 			result.afterLazy = globalThis.__rollipop_lazy_log.slice();
 			result.namespace = import_namespace_1_2_4.fromNamespace;
-			result.fromStar = import_reexport_1_3_5.fromStar;
-			result.reexportedLazy = import_reexport_1_3_5.reexportedLazy;
-			result.cjsDefault = import_cjs_1_6_8.default.named;
-			result.cjsNamed = import_cjs_1_6_8.named;
-			result.cycle = (0, import_cycle_a_1_8_10.readB)();
+			result.fromStar = import_reexport_1_3_5.a.fromStar;
+			result.reexportedLazy = import_reexport_1_3_5.a.reexportedLazy;
+			result.cjsDefault = import_cjs_1_6_8.a.default.named;
+			result.cjsNamed = import_cjs_1_6_8.a.named;
+			result.cycle = (0, import_cycle_a_1_8_10.a.readB)();
 			const errors = [];
 			for (let i = 0; i < 2; i++) try {
-				errors.push(import_throws_1_7_9.unreachable);
+				errors.push(import_throws_1_7_9.a.unreachable);
 			} catch (error) {
 				errors.push(error.message);
 			}
@@ -294,7 +276,7 @@ source: crates/rolldown_testing/src/integration_test.rs
 			result.final = globalThis.__rollipop_lazy_log.slice();
 			globalThis.__rollipop_lazy_imports_result = result;
 			function useNever() {
-				return import_never_1_5_7.neverValue;
+				return import_never_1_5_7.a.neverValue;
 			}
 
 		}

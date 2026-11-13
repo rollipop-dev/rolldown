@@ -7,7 +7,9 @@ const code = await readFile(new URL('main.js', dist), 'utf8');
 const map = new SourceMap(JSON.parse(await readFile(new URL('main.js.map', dist), 'utf8')));
 const generatedLines = code.split('\n');
 // The lazy loader is in the bundle, so the mapped modules went through it.
-assert.match(code, /new Proxy\(/);
+// Lazy imports use getter holders, not Proxy facades.
+assert.match(code, /get a\(\)/);
+assert.doesNotMatch(code, /__rollipop_lazy_(resolve|namespaces)/);
 
 function originalPosition(marker) {
   const line = generatedLines.findIndex((text) => text.includes(marker));

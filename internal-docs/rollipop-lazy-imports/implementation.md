@@ -17,6 +17,7 @@ off.
 | ESM → ESM named/default           | `var a = r(5)`            | `var a = r(5)`      | `var a = l(5)`    |
 | ESM → CJS (Babel interop)         | `var a = r.t(r(5))`       | `var a = r.i(5)`    | `var a = l(5, 0)` |
 | ESM → CJS (Node interop, `.mjs`)  | `var a = r.t(r(5), 1)`    | `var a = r.i(5, 1)` | `var a = l(5, 1)` |
+| reads of a lazy binding           | `a.x`                     | `a.x`               | `a.a.x`           |
 | inline access / `import()` of CJS | `r.t(r(5)).x`             | `r.i(5).x`          | same as off       |
 | bare, namespace, `export *`       | `var a = r(5)` / `r.t(…)` | `r(5)` / `r.i(5)`   | same as off       |
 
@@ -25,8 +26,9 @@ parameter that is only declared on modules with static import records
 (`ecmascript/format/rollipop.rs`). The runtime passes `__rollipop_require__.l`
 for it (`rollipop_runtime(lazy)` patches the `factory.call` line). A parameter
 instead of `r.l(5)` keeps the Hermes bytecode for a lazy declaration identical
-to an eager one. In the example app the lazy bundle grew by +0.04% HBC, all of
-it runtime helpers.
+to an eager one. Every read of a lazy binding loads the holder's `a` property
+first; in the example app that is about 2,100 reads and +16 KB HBC (+1.45%)
+over the earlier Proxy facade design.
 
 ## Finalizer (`module_finalizers/rollipop.rs`)
 
@@ -67,7 +69,11 @@ it runtime helpers.
     Only provable reads make a re-exported import lazy.
 - `exit_program` calls `apply_lazy_imports` after `create_define_exports_stmt`.
   It rewrites the initializer of each top-level candidate declaration that is
-  read and not eager to `__rollipop_lazy__(id[, mode])`. Deciding at the end
+  read and not eager to `__rollipop_lazy__(id[, mode])`, and returns those
+  binding names. `LazyHolderAccessRewriter` then rewrites every member read of
+  them (`import_x.foo`, `import_x["foo"]`, including the export getters) to
+  `import_x.a.foo`. Generated reads of an import binding are always member
+  expressions; namespace bindings, the only bare ones, are never lazy. Deciding at the end
   makes "eager wins" independent of statement order, and it keeps imports
   retained only for side effects (bindings tree-shaken away) eager.
 - `__rollipop_lazy__` is in `FACTORY_PARAM_NAMES`, so a user binding with that
@@ -83,9 +89,10 @@ it runtime helpers.
 
 `runtime/rollipop-runtime.js` (always emitted):
 
-- `.t(mod, nodeMode, target?)`: the interop wrapper. When given `target`, it
-  sets that object's prototype and fills it in place.
-- `.i(id, nodeMode, target?)`: cached interop namespace on the module record
+- `.t(mod, nodeMode, target?)`: the interop wrapper. Without `target` it is
+  unchanged from before. With `target`, a namespace it built earlier for the
+  same `mod`, it only adds the keys `target` doesn't have yet.
+- `.i(id, nodeMode)`: cached interop namespace on the module record
   (`ns` / `nodeNs`, invalidated when `nsSource !== module.exports`). It caches
   only when `record.loaded === true`. Records that are still loading (cycles)
   or that came from the HMR holder fall back to a fresh `.t`. `nsKeyCount`
@@ -96,24 +103,17 @@ it runtime helpers.
 
 `runtime/rollipop-runtime-lazy.js` (appended when lazy mode is on):
 
-- `.l(id, mode)`: mode `2` (omitted) means ESM, `0` Babel, `1` Node. If the
-  module already has a cache record, or there is no `Proxy`, it returns the
-  eager value. Otherwise it returns a facade, shared per (module, mode), whose
-  prototype is `new Proxy(state, handler)`.
-- Proxy `get` / `has` call `__rollipop_lazy_resolve`, which requires the
-  module:
-  - ESM: once the module has loaded, it copies the export descriptors onto the
-    facade and sets the facade's real prototype.
-  - CJS: it calls `.i(id, mode, facade)`. When the facade is the first
-    namespace for that module, `.t` builds it in place and the record caches
-    the facade itself, so there is no copy. Otherwise it copies from the cached
-    namespace.
-  - While the module is still loading, or after its factory threw, the facade
-    keeps its `Proxy` prototype. Reads go through to the partial exports, or
-    rethrow the cached error.
-
-After resolution, the facade is a plain object with own accessors and an
-ordinary prototype. Reads are then indistinguishable from the eager path.
+- `.l(id, mode)` returns a holder, one per import declaration. Mode is omitted
+  for ESM (`r(id)`), `0` for Babel and `1` for Node interop (`.i(id, mode)`).
+  - If the module already finished loading, the holder is `{ a: namespace }`.
+  - Otherwise it is `{ get a() { … } }`. The getter loads the module and
+    builds the namespace. Only when the module has finished loading does it
+    replace itself with a data property (`Object.defineProperty(this, 'a', …)`).
+  - A module still loading (a cycle) is read through to its partial exports on
+    every read. A throw, from the factory or from interop construction, leaves
+    the getter in place, so every later read throws again.
+- This follows Rspack's optimized deferred namespace object (`.zO`). It needs no
+  `Proxy`, copies no descriptors, and has no partially resolved state.
 
 ## Tests
 
@@ -123,7 +123,10 @@ ordinary prototype. Reads are then indistinguishable from the eager path.
   getters, CJS interop, cycles, and error rethrow on repeated reads.
 - `lazy_imports_minify`: minified output; the parameter is declared only on
   modules with imports.
-- `lazy_imports_no_proxy`: eager fallback without `Proxy`.
+- `lazy_imports_no_proxy`: lazy holders work without `Proxy`.
+- `lazy_imports_interop_failure`: an interop failure, immediate (`__esModule`
+  getter throws) or after an earlier export descriptor was processed, rethrows
+  on every read.
 - `lazy_imports_sourcemap{,_minify}`: lazily evaluated modules keep exact
   original line and column mappings.
 - `lazy_imports_exclude` (plus `packages/rolldown/tests/rollipop-lazy-imports.test.ts`

@@ -1,40 +1,21 @@
-var __rollipop_lazy_namespaces = [{}, {}, {}];
+// `__rollipop_require__.l(id, mode)` returns a holder whose `a` property is the
+// importee's namespace; generated code reads `holder.a.name`. `mode` is omitted for
+// ESM importees, `0` for Babel interop and `1` for Node interop.
+// See internal-docs/rollipop-lazy-imports/implementation.md
 function __rollipop_lazy_load(id, mode) {
-  return mode === 2 ? __rollipop_require__(id) : __rollipop_require__.i(id, mode);
+  return mode === undefined ? __rollipop_require__(id) : __rollipop_require__.i(id, mode);
 }
-function __rollipop_lazy_resolve(state) {
-  var target = state.target;
-  // CommonJS namespaces are built directly on the facade when it is the first one.
-  var ns = state.mode === 2
-    ? __rollipop_require__(state.id)
-    : __rollipop_require__.i(state.id, state.mode, target);
-  if (ns !== target && __rollipop_module_cache[state.id].loaded === true) {
-    Object.setPrototypeOf(target, Object.getPrototypeOf(ns));
-    var keys = Object.getOwnPropertyNames(ns);
-    for (var i = 0; i < keys.length; i++) {
-      Object.defineProperty(target, keys[i], Object.getOwnPropertyDescriptor(ns, keys[i]));
-    }
-  }
-  return ns;
-}
-var __rollipop_lazy_handler = {
-  get: function(state, key) {
-    return __rollipop_lazy_resolve(state)[key];
-  },
-  has: function(state, key) {
-    return key in __rollipop_lazy_resolve(state);
-  }
-};
 __rollipop_require__.l = function(id, mode) {
-  if (mode === undefined) mode = 2;
-  if (__rollipop_module_cache[id] !== undefined || typeof Proxy !== 'function') {
-    return __rollipop_lazy_load(id, mode);
-  }
-  var namespaces = __rollipop_lazy_namespaces[mode];
-  var ns = namespaces[id];
-  if (ns === undefined) {
-    var state = { id: id, mode: mode, target: undefined };
-    ns = namespaces[id] = state.target = Object.create(new Proxy(state, __rollipop_lazy_handler));
-  }
-  return ns;
+  var record = __rollipop_module_cache[id];
+  if (record !== undefined && record.loaded === true) return { a: __rollipop_lazy_load(id, mode) };
+  return {
+    get a() {
+      var ns = __rollipop_lazy_load(id, mode);
+      // Replace the getter only once the module finished loading and interop succeeded.
+      // A module still loading (a cycle) is read through to its partial exports, and a
+      // throw leaves the getter in place, so every later read throws again.
+      if (__rollipop_module_cache[id].loaded === true) Object.defineProperty(this, 'a', { value: ns });
+      return ns;
+    }
+  };
 };

@@ -818,10 +818,9 @@ export interface OutputOptions {
    * Defer evaluating statically imported modules until one of their imported
    * bindings is first read, similar to Metro's `inlineRequires`.
    *
-   * Only applies to `format: 'rollipop'` and is ignored in dev mode. Use sites
-   * are left untouched: each import declaration yields a lazy namespace that
-   * evaluates the module on first property access and then reads exactly like
-   * an eagerly imported one.
+   * Only applies to `format: 'rollipop'` and is ignored in dev mode. Each import
+   * declaration yields a lazy holder that evaluates the module on the first read
+   * of one of its bindings; reads then cost one extra property load.
    *
    * Side-effect-only imports, namespace imports, `export * from` and imports
    * whose bindings are never read are still evaluated eagerly. Enabling this

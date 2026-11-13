@@ -3,7 +3,9 @@ import { readFile } from 'node:fs/promises';
 
 const code = await readFile(new URL('./dist/main.js', import.meta.url), 'utf8');
 // The lazy loader is passed as the fifth factory parameter.
-assert.match(code, /new Proxy\(/);
+// Lazy imports use getter holders, not Proxy facades.
+assert.match(code, /get a\(\)/);
+assert.doesNotMatch(code, /__rollipop_lazy_(resolve|namespaces)/);
 assert.match(code, /:function\(\w+,\w+,\w+,\w+,(\w+)\)\{[^}]*\b\1\(\d+,0\)/);
 
 await import('./dist/main.js');
