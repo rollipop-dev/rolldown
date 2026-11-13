@@ -1,0 +1,71 @@
+name: PR Dev Release
+
+permissions: {}
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [labeled]
+
+jobs:
+  dispatch:
+    if: >-
+      github.repository == 'rollipop-dev/rolldown' &&
+      github.event.label.name == 'prerelease' &&
+      github.event.pull_request.state == 'open'
+    name: Prepare PR dev release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the temporary release branch
+      actions: write # dispatch the existing trusted publisher workflow
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PR_SHA: ${{ github.event.pull_request.head.sha }}
+      BASE_SHA: ${{ github.sha }}
+      DEV_BRANCH: codex/prerelease-${{ github.event.pull_request.number }}-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      # Adding this label authorizes publishing this exact PR commit, including forks.
+      # Later PR commits require the label to be removed and added again.
+      - name: Check trigger permission
+        env:
+          ACTOR: ${{ github.actor }}
+        run: |
+          permission=$(gh api "repos/${GH_REPO}/collaborators/${ACTOR}/permission" --jq .permission)
+          case "$permission" in
+            admin|maintain|write) ;;
+            *)
+              echo '::error::The prerelease label must be added by someone with write access.'
+              exit 1
+              ;;
+          esac
+
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      # Only Git operations run here; PR build scripts run in the dispatched workflow.
+      - name: Prepare release branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git config core.hooksPath /dev/null
+          git fetch --no-tags --unshallow origin "$BASE_SHA" "$PR_SHA"
+          git switch -c "$DEV_BRANCH" "$BASE_SHA"
+          git merge --no-ff --no-commit "$PR_SHA"
+
+          # Use main's workflows even when the PR changes CI definitions.
+          git restore --source="$BASE_SHA" --staged --worktree -- .github
+          git commit --allow-empty -m "ci: prepare dev release for PR #${PR_NUMBER}"
+          gh auth setup-git
+          git push origin "HEAD:refs/heads/$DEV_BRANCH"
+
+      - name: Trigger dev release
+        run: |
+          gh workflow run publish-to-npm.yml --ref "$DEV_BRANCH" --field dev=true
+          {
+            echo "Dev release requested for PR #${PR_NUMBER} at \`${PR_SHA}\`."
+            echo
+            echo "[Release branch](https://github.com/${GH_REPO}/tree/${DEV_BRANCH})"
+            echo
+            echo "[Publish workflow](https://github.com/${GH_REPO}/actions/workflows/publish-to-npm.yml)"
+          } >> "$GITHUB_STEP_SUMMARY"
