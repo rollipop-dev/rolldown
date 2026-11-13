@@ -87,6 +87,12 @@ explicit side-effect import.
   prototype**: exports have to exist before the factory runs, and a failed
   factory leaves own getters behind, so later reads would not rethrow. The
   separate facade avoids both problems.
+- **Deferring only side-effect-free modules**: this could never change
+  behavior, but Rolldown's analysis is conservative. Top-level calls without
+  `/*#__PURE__*/` (`StyleSheet.create(...)`, `createContext(...)`) and most
+  CommonJS modules count as side-effectful, so little React Native code would
+  be deferred. Like Metro, we defer all modules instead, decide the unsafe
+  cases from the graph, and leave `exclude` as the escape hatch. Not measured.
 
 ## Interop cache trade-off
 
@@ -134,14 +140,6 @@ template enables `inlineRequires` by default, but this feature changes
 evaluation order, so it stays opt-in until it has been stabilized on real apps.
 Turning it on by default for Rollipop production builds should be revisited
 then.
-
-## Unresolved questions
-
-- A stricter mode that only defers modules without side effects (from
-  `sideEffects` and Rolldown's own analysis) would never change behavior. Most
-  React Native modules probably count as side-effectful (top-level
-  `StyleSheet.create(...)` calls, for example), so the startup win could
-  shrink. This hasn't been measured.
 
 ## Related
 
