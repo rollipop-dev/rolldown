@@ -70,6 +70,12 @@ details.
   Symbol usage can't decide this: the linker binds importers straight to the
   canonical symbol, so a module that imports `x` from its own module retains it
   even when nothing goes through the barrel.
+- `import 'pkg'` runs pkg's whole graph eagerly, as without lazy imports:
+  re-export getters of a side-effect-imported module, and of every barrel it
+  reaches through re-exports and `export *`, don't count as reads, so the
+  modules they re-export (often ones that register themselves at load, as in
+  `import 'react-native-gesture-handler'`) run with it. Otherwise another file
+  reading `a` through pkg would silently change what `import 'pkg'` does.
 - Nothing in the bundle reads a user-defined entry's exports, so its re-exports
   stay eager. With tree-shaking off, every statement is included and nothing
   tells which re-exports are imported, so re-exported modules stay eager too.
@@ -79,7 +85,8 @@ details.
 - Eager wins: if one module imports the same importee both lazily and eagerly,
   the single generated declaration is eager. This includes `import './x'` next
   to `import { a } from './x'`, which tree-shaking merges into one declaration
-  before the finalizer sees it.
+  before the finalizer sees it, and into `export { a } from './x'` when the
+  module also re-exports `a`.
 - Initialization errors, from the factory or from interop construction, are
   rethrown on every read, matching the eager rethrow semantics from #60. A
   holder only resolves once its module finished loading successfully.

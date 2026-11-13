@@ -846,6 +846,14 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
           }
           ast::ModuleDeclaration::ExportFromDeclaration(decl) => {
             let rec_id = self.ctx.module.imports[&decl.node_id()];
+            // Tree-shaking also folds `import './x'; import { a } from './x'; export { a }`
+            // into `export { a } from './x'`; the explicit side-effect import keeps it eager.
+            let rec = &self.ctx.module.import_records[rec_id];
+            if rec.meta.contains(ImportRecordMeta::HasSideEffectImport)
+              && let Some(importee_idx) = rec.resolved_module
+            {
+              self.mark_import_target_eager(importee_idx);
+            }
             if decl.specifiers.is_empty() {
               let rec = &self.ctx.module.import_records[rec_id];
               let Some(importee_idx) = rec.resolved_module else {

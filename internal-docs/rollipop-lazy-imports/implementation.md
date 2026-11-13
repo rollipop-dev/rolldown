@@ -48,7 +48,10 @@ over the earlier Proxy facade design.
     `pre_process_ecma_ast.rs` merges `import './x'` into a named import of the
     same request, so the requests of side-effect-only imports are collected
     before it (`collect_side_effect_import_requests`, lazy mode only) and the
-    flag is set in `ecma_module_view_factory.rs`.
+    flag is set in `ecma_module_view_factory.rs`. Both the `ImportDeclaration`
+    and the `ExportFromDeclaration` arms check it, because DCE's
+    `merge_import_export` can fold the merged import plus `export { a }` into
+    `export { a } from './x'`.
   - `read_bindings`: binding names that are actually emitted as reads.
     These come from identifier rewrites in `exit_expression`, re-export getters
     and `create_define_exports_stmt`. A getter counts only when
@@ -67,6 +70,11 @@ over the earlier Proxy facade design.
   - Escaping namespace objects (bare `ns`, `import()`, `require()`,
     `export * as ns`) mark nothing, so the re-exports behind them stay eager.
     Only provable reads make a re-exported import lazy.
+  - `side_effect_imported_barrels` then removes the entries of modules that are
+    side-effect imported (a static import record no named import uses, or one
+    flagged `HasSideEffectImport`) and of every barrel reachable from them
+    through re-exports and `export *`, so `import 'pkg'` keeps pkg's re-exported
+    modules eager.
 - `exit_program` calls `apply_lazy_imports` after `create_define_exports_stmt`.
   It rewrites the initializer of each top-level candidate declaration that is
   read and not eager to `__rollipop_lazy__(id[, mode])`, and returns those
@@ -144,7 +152,11 @@ over the earlier Proxy facade design.
   namespace through `export *`, `export *`, `require()` and `import()` stay
   eager when only other exports are read; `ns.x` and `export *` reads stay lazy.
 - `lazy_imports_merged_side_effect_import`: `import './x'` plus a named import
-  of `./x` in the same file stays eager after tree-shaking merges them.
+  of `./x` in the same file stays eager after tree-shaking merges them, also
+  when the merged import is re-exported and read through the barrel.
+- `lazy_imports_side_effect_import_barrel`: `import './pkg/index.js'` runs the
+  modules pkg re-exports, through a nested barrel, even when another file reads
+  them through the index.
 - `lazy_imports_cycle_exclude`: `exclude` restores the eager entry point of an
   import cycle that would otherwise hit a TDZ error.
 - `lazy_imports_entry_reexport`: a user-defined entry's re-exports stay eager.

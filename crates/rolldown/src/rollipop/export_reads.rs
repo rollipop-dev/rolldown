@@ -14,7 +14,9 @@
 //! See internal-docs/rollipop-lazy-imports/implementation.md
 
 use oxc_str::CompactStr;
-use rolldown_common::{ModuleIdx, Specifier, SymbolOrMemberExprRef, SymbolRef};
+use rolldown_common::{
+  ImportKind, ImportRecordMeta, ModuleIdx, Specifier, SymbolOrMemberExprRef, SymbolRef,
+};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::stages::link_stage::LinkStageOutput;
@@ -141,5 +143,59 @@ pub fn compute_export_reads(link_output: &LinkStageOutput) -> ExportReadsMap {
   }
 
   graph.propagate(link_output);
-  graph.reads
+  let mut reads = graph.reads;
+  // `import 'pkg'` runs pkg's whole graph eagerly, including what its index
+  // re-exports, so re-export getters of side-effect-imported barrels don't count.
+  for module in side_effect_imported_barrels(link_output, &is_included) {
+    reads.remove(&module);
+  }
+  reads
+}
+
+/// Modules imported for their side effects (`import './x'`, also when merged into a
+/// named import), plus every barrel they reach through re-exports and `export *`.
+fn side_effect_imported_barrels(
+  link_output: &LinkStageOutput,
+  is_included: &impl Fn(ModuleIdx) -> bool,
+) -> FxHashSet<ModuleIdx> {
+  let mut seen = FxHashSet::default();
+  let mut stack = vec![];
+  for module in link_output.module_table.modules.iter().filter_map(|module| module.as_normal()) {
+    if module.idx == link_output.runtime.id() || !is_included(module.idx) {
+      continue;
+    }
+    let named_records =
+      module.named_imports.values().map(|named| named.record_idx).collect::<FxHashSet<_>>();
+    for (record_idx, record) in module.import_records.iter_enumerated() {
+      if record.kind != ImportKind::Import || record.meta.contains(ImportRecordMeta::IsExportStar) {
+        continue;
+      }
+      let is_side_effect_import = record.meta.contains(ImportRecordMeta::HasSideEffectImport)
+        || !named_records.contains(&record_idx);
+      if is_side_effect_import
+        && let Some(importee) = record.resolved_module
+        && is_included(importee)
+        && seen.insert(importee)
+      {
+        stack.push(importee);
+      }
+    }
+  }
+  while let Some(module_idx) = stack.pop() {
+    let Some(module) = link_output.module_table[module_idx].as_normal() else { continue };
+    let re_exported =
+      module.named_exports.values().map(|local| local.referenced).collect::<FxHashSet<_>>();
+    let targets = module
+      .named_imports
+      .iter()
+      .filter(|(local, _)| re_exported.contains(*local))
+      .filter_map(|(_, named)| module.import_records[named.record_idx].resolved_module)
+      .chain(module.star_export_module_ids());
+    for target in targets {
+      if is_included(target) && seen.insert(target) {
+        stack.push(target);
+      }
+    }
+  }
+  seen
 }

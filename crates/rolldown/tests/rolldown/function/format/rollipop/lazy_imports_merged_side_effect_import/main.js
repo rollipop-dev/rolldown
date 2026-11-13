@@ -6,12 +6,14 @@ import './polyfill.js';
 import { setupPolyfill } from './polyfill.js';
 import './registry.js';
 import registryDefault from './registry.js';
-import { barrelValue } from './barrel.js';
+import { barrelValue, setupRanWithBarrel, setupValue as viaBarrel } from './barrel.js';
 
 globalThis.__rollipop_merged_side_effect_result = {
   polyfill: typeof globalThis.__rollipop_merged_polyfill,
   registered: globalThis.__rollipop_merged_registered === true,
   barrelValue,
+  setupRanWithBarrel,
 };
 
-export const later = () => [setupPolyfill, registryDefault];
+// Reads the barrel's re-export later, so the barrel's getter is a real read.
+export const later = () => [setupPolyfill, registryDefault, viaBarrel];
