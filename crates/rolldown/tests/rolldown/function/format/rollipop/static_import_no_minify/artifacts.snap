@@ -74,8 +74,15 @@ source: crates/rolldown_testing/src/integration_test.rs
 	  } else if (module.nsKeyCount !== keyCount) {
 	    // Keys added after load (an `init()` or a monkeypatch) must reach later importers.
 	    // `.t` skips keys the target already has, so this extends the shared objects in place.
-	    if (module.ns) __rollipop_require__.t(mod, 0, module.ns);
-	    if (module.nodeNs) __rollipop_require__.t(mod, 1, module.nodeNs);
+	    // A frozen or sealed namespace can't take keys; later importers get a new one.
+	    if (module.ns) {
+	      if (Object.isExtensible(module.ns)) __rollipop_require__.t(mod, 0, module.ns);
+	      else module.ns = undefined;
+	    }
+	    if (module.nodeNs) {
+	      if (Object.isExtensible(module.nodeNs)) __rollipop_require__.t(mod, 1, module.nodeNs);
+	      else module.nodeNs = undefined;
+	    }
 	  }
 	  module.nsKeyCount = keyCount;
 	  return nodeMode
