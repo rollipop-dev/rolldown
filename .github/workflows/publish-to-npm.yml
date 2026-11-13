@@ -192,3 +192,23 @@ jobs:
     permissions:
       id-token: write # inherited by the reusable publish job
     uses: ./.github/workflows/reusable-publish-dev-to-npm.yml
+
+  dev-comment:
+    needs: dev
+    if: inputs.dev && inputs.pr != ''
+    name: Comment dev release on PR
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Comment published version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ inputs.pr }}
+          VERSION: ${{ needs.dev.outputs.version }}
+        run: |
+          body_file="$RUNNER_TEMP/dev-release-comment.md"
+          printf '🚀 Dev release is ready!\n\n[`@rollipop/rolldown@%s`](https://www.npmjs.com/package/@rollipop/rolldown/v/%s) (`dev` tag)\n' \
+            "$VERSION" "$VERSION" > "$body_file"
+          gh pr comment "$PR_NUMBER" --body-file "$body_file"

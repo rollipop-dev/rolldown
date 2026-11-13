@@ -5,6 +5,10 @@ permissions: {}
 
 on:
   workflow_call:
+    outputs:
+      version:
+        description: Published dev version
+        value: ${{ jobs.publish.outputs.version }}
 
 jobs:
   build:
@@ -18,6 +22,8 @@ jobs:
     name: Publish dev npm packages
     runs-on: ubuntu-latest
     environment: release
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     permissions:
       id-token: write # for npm trusted publishing
     steps:
@@ -34,7 +40,11 @@ jobs:
           cache: true
 
       - name: Set dev version
-        run: node --import @oxc-node/core/register ./scripts/misc/bump-version.js "0.0.0-dev-$(date -u +%Y%m%d%H%M%S)"
+        id: version
+        run: |
+          version="0.0.0-dev-$(date -u +%Y%m%d%H%M%S)"
+          node --import @oxc-node/core/register ./scripts/misc/bump-version.js "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Build dev node package
         # Rebuild after versioning so the generated loader checks the dev version.
