@@ -4,5 +4,6 @@
     "minify": false,
     "lazyImports": true
   },
-  "snapshot": false
+  "snapshot": false,
+  "configVariants": [{ "treeshake": false, "_configName": "no-tree-shaking" }]
 }

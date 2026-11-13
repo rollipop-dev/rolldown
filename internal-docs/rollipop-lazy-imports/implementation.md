@@ -45,8 +45,9 @@ it runtime helpers.
   - `read_bindings`: binding names that are actually emitted as reads.
     These come from identifier rewrites in `exit_expression`, re-export getters
     and `create_define_exports_stmt`. A getter counts only when
-    `is_export_getter_read` holds: the module is not a user-defined entry, and
-    the export's canonical symbol is in `link_output.retained_export_symbols`.
+    `is_export_getter_read` holds: tree-shaking is on, the module is not a
+    user-defined entry, and the export's canonical symbol is in
+    `link_output.retained_export_symbols`.
 - `exit_program` calls `apply_lazy_imports` after `create_define_exports_stmt`.
   It rewrites the initializer of each top-level candidate declaration that is
   read and not eager to `__rollipop_lazy__(id[, mode])`. Deciding at the end
@@ -115,7 +116,8 @@ ordinary prototype. Reads are then indistinguishable from the eager path.
 - `topics/hmr/rollipop_lazy_imports_dev_mode`: dev mode ignores the flag.
 - `lazy_imports_unused_reexport`: re-exports whose binding was tree-shaken
   (direct, `import` + `export`, through two barrels, CommonJS importee) keep
-  their module eager. A re-export that is read stays lazy.
+  their module eager. A re-export that is read stays lazy, except in the
+  `no-tree-shaking` variant, where every re-exported module stays eager.
 - `lazy_imports_entry_reexport`: a user-defined entry's re-exports stay eager.
 - `lazy_imports_exclude_barrel`: `exclude` reaches a module behind a package
   index only when the pattern also matches the index.
