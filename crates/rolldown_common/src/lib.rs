@@ -47,7 +47,6 @@ pub mod bundler_options {
       input_item::InputItem,
       invalidate_js_side_cache::InvalidateJsSideCache,
       is_external::IsExternal,
-      lazy_imports_option::{LazyImportsOption, LazyImportsOptions, NormalizedLazyImportsOptions},
       legal_comments::LegalComments,
       log_level::LogLevel,
       make_absolute_externals_relative::MakeAbsoluteExternalsRelative,
@@ -107,6 +106,11 @@ pub mod bundler_options {
       tsconfig_merge::merge_transform_options_with_tsconfig as merge_tsconfig,
       watch_option::{OnInvalidate, WatchOption},
     },
+  };
+
+  // MARK: - Rollipop
+  pub use crate::inner_bundler_options::types::lazy_imports_option::{
+    LazyImportsOption, LazyImportsOptions, NormalizedLazyImportsOptions,
   };
 
   pub use crate::utils::enhanced_transform::{

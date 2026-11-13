@@ -1088,6 +1088,7 @@ const OutputOptionsSchema = v.strictObject({
     v.optional(v.union([v.boolean(), v.literal('auto')])),
     v.description('Whether to always output `"use strict"` directive in non-ES module outputs.'),
   ),
+  // MARK: - Rollipop
   persistentCache: v.pipe(
     v.optional(v.boolean()),
     v.description('Enable persistent transform cache to disk.'),
