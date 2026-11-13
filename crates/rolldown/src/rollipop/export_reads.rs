@@ -1,109 +1,66 @@
-//! Which exports of a module the generated Rollipop code reads through that module.
+//! Which exports of a module the generated Rollipop code provably reads through that module.
 //!
 //! A lazy import binding is only worth keeping lazy when something reads it. For a
 //! re-export (`export { x } from './y'`, or `import { x }` plus `export { x }`), the
 //! read is a call of the re-exporting module's getter, which happens only when another
-//! module imports `x` *through* it. The linker binds importers straight to the
-//! canonical symbol, so symbol usage can't answer this. Instead this walks the
-//! import graph the way Rollipop codegen routes it: an import of an included module
-//! goes through that module.
+//! module reads `x` *through* it. The linker binds importers straight to the canonical
+//! symbol, so symbol usage can't answer this. Instead this walks the import graph the
+//! way Rollipop codegen routes it: an import of an included module goes through it.
+//!
+//! Only reads that are visible statically count. When a namespace object escapes (a bare
+//! `ns`, `import()`, `require()`, `export * as ns`), nothing is recorded, so re-exported
+//! modules behind it stay eager. Eager is always correct; it only costs laziness.
 //!
 //! See internal-docs/rollipop-lazy-imports/implementation.md
 
 use oxc_str::CompactStr;
-use rolldown_common::{ImportKind, ModuleIdx, Specifier, StmtInfos, SymbolRef};
+use rolldown_common::{ModuleIdx, Specifier, SymbolOrMemberExprRef, SymbolRef};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::stages::link_stage::LinkStageOutput;
 
-/// Exports of one module that some emitted code can read through it.
-pub enum ExportReads {
-  /// The module's namespace object is reachable, so any export can be read.
-  All,
-  Names(FxHashSet<CompactStr>),
-}
-
-impl ExportReads {
-  pub fn contains(&self, name: &str) -> bool {
-    match self {
-      ExportReads::All => true,
-      ExportReads::Names(names) => names.contains(name),
-    }
-  }
-}
-
-pub type ExportReadsMap = FxHashMap<ModuleIdx, ExportReads>;
-
-#[derive(Clone)]
-enum Target {
-  Named(ModuleIdx, CompactStr),
-  All(ModuleIdx),
-}
+/// Per module, the exports that emitted code reads through that module.
+pub type ExportReadsMap = FxHashMap<ModuleIdx, FxHashSet<CompactStr>>;
 
 #[derive(Default)]
 struct Graph {
   reads: ExportReadsMap,
-  /// `(exported name, target)`: reading this module's export reads the target.
-  re_exports: FxHashMap<ModuleIdx, Vec<(CompactStr, Target)>>,
+  /// `(exported name, importee, imported name)`: reading this module's export reads
+  /// the importee's export.
+  re_exports: FxHashMap<ModuleIdx, Vec<(CompactStr, ModuleIdx, CompactStr)>>,
   /// `export * from` targets: names this module doesn't declare come from them.
   star_exports: FxHashMap<ModuleIdx, Vec<ModuleIdx>>,
-  queue: Vec<Target>,
+  queue: Vec<(ModuleIdx, CompactStr)>,
 }
 
 impl Graph {
-  fn mark(&mut self, target: Target) {
-    let changed = match &target {
-      Target::All(module) => {
-        let reads = self.reads.entry(*module).or_insert(ExportReads::Names(FxHashSet::default()));
-        let changed = !matches!(reads, ExportReads::All);
-        *reads = ExportReads::All;
-        changed
-      }
-      Target::Named(module, name) => {
-        match self.reads.entry(*module).or_insert(ExportReads::Names(FxHashSet::default())) {
-          ExportReads::All => false,
-          ExportReads::Names(names) => names.insert(name.clone()),
-        }
-      }
-    };
-    if changed {
-      self.queue.push(target);
+  fn mark(&mut self, module: ModuleIdx, name: CompactStr) {
+    if self.reads.entry(module).or_default().insert(name.clone()) {
+      self.queue.push((module, name));
     }
   }
 
   fn propagate(&mut self, link_output: &LinkStageOutput) {
-    while let Some(target) = self.queue.pop() {
-      let module = match &target {
-        Target::All(module) | Target::Named(module, _) => *module,
-      };
+    while let Some((module, name)) = self.queue.pop() {
       let mut next = vec![];
       if let Some(edges) = self.re_exports.get(&module) {
-        for (exported, edge_target) in edges {
-          if matches!(&target, Target::All(_))
-            || matches!(&target, Target::Named(_, name) if name == exported)
-          {
-            next.push(edge_target.clone());
-          }
-        }
+        next.extend(
+          edges
+            .iter()
+            .filter(|(exported, ..)| *exported == name)
+            .map(|(_, importee, imported)| (*importee, imported.clone())),
+        );
       }
       if let Some(star_targets) = self.star_exports.get(&module) {
-        let declares = |name: &str| {
-          link_output.module_table[module]
-            .as_normal()
-            .is_some_and(|module| module.named_exports.contains_key(name))
-        };
-        for star_target in star_targets {
-          match &target {
-            Target::All(_) => next.push(Target::All(*star_target)),
-            Target::Named(_, name) if !declares(name) => {
-              next.push(Target::Named(*star_target, name.clone()));
-            }
-            Target::Named(..) => {}
-          }
+        let declares = link_output.module_table[module]
+          .as_normal()
+          .is_some_and(|module| module.named_exports.contains_key(&name));
+        if !declares {
+          next.extend(star_targets.iter().map(|target| (*target, name.clone())));
         }
       }
-      for target in next {
-        self.mark(target);
+      for (module, name) in next {
+        self.mark(module, name);
       }
     }
   }
@@ -119,23 +76,6 @@ pub fn compute_export_reads(link_output: &LinkStageOutput) -> ExportReadsMap {
     if module.idx == link_output.runtime.id() || !is_included(module.idx) {
       continue;
     }
-    let meta = &link_output.metas[module.idx];
-    let stmt_infos = &link_output.stmt_infos[module.idx];
-
-    // An included namespace statement means the namespace object is built.
-    if meta.stmt_info_included.has_bit(StmtInfos::NAMESPACE_STMT_IDX) {
-      graph.mark(Target::All(module.idx));
-    }
-
-    // `import()` and `require()` hand out the whole exports object.
-    for record in &module.import_records {
-      if matches!(record.kind, ImportKind::DynamicImport | ImportKind::Require)
-        && let Some(importee) = record.resolved_module
-        && is_included(importee)
-      {
-        graph.mark(Target::All(importee));
-      }
-    }
 
     for importee in module.star_export_module_ids() {
       if is_included(importee) {
@@ -146,12 +86,24 @@ pub fn compute_export_reads(link_output: &LinkStageOutput) -> ExportReadsMap {
     if module.named_imports.is_empty() {
       continue;
     }
-    // Symbols read by the statements that end up in the output.
-    let referenced = stmt_infos
+    let meta = &link_output.metas[module.idx];
+    // Symbols read by the statements that end up in the output, and for member
+    // expressions (`ns.x`), the first property read from each object.
+    let mut referenced = FxHashSet::<SymbolRef>::default();
+    let mut member_reads = FxHashMap::<SymbolRef, FxHashSet<&CompactStr>>::default();
+    for (_, info) in link_output.stmt_infos[module.idx]
       .iter_enumerated_without_namespace_stmt()
       .filter(|(idx, _)| meta.stmt_info_included.has_bit(*idx))
-      .flat_map(|(_, info)| info.referenced_symbols.iter().map(|symbol| *symbol.symbol_ref()))
-      .collect::<FxHashSet<SymbolRef>>();
+    {
+      for symbol in &info.referenced_symbols {
+        referenced.insert(*symbol.symbol_ref());
+        if let SymbolOrMemberExprRef::MemberExpr(member) = symbol
+          && let Some(prop) = member.prop_and_span_list.first()
+        {
+          member_reads.entry(member.object_ref).or_default().insert(&prop.name);
+        }
+      }
+    }
     let mut exported_as = FxHashMap::<SymbolRef, Vec<&CompactStr>>::default();
     for (exported, local) in &module.named_exports {
       exported_as.entry(local.referenced).or_default().push(exported);
@@ -166,16 +118,24 @@ pub fn compute_export_reads(link_output: &LinkStageOutput) -> ExportReadsMap {
       if !is_included(importee) {
         continue;
       }
-      let target = match &named_import.imported {
-        Specifier::Star => Target::All(importee),
-        Specifier::Literal(name) => Target::Named(importee, name.clone()),
-      };
-      if let Some(exported) = exported_as.get(local) {
-        let edges = graph.re_exports.entry(module.idx).or_default();
-        edges.extend(exported.iter().map(|exported| ((*exported).clone(), target.clone())));
-      }
-      if referenced.contains(local) {
-        graph.mark(target);
+      match &named_import.imported {
+        Specifier::Literal(imported) => {
+          if let Some(exported) = exported_as.get(local) {
+            let edges = graph.re_exports.entry(module.idx).or_default();
+            edges.extend(
+              exported.iter().map(|exported| ((*exported).clone(), importee, imported.clone())),
+            );
+          }
+          if referenced.contains(local) {
+            graph.mark(importee, imported.clone());
+          }
+        }
+        // `ns.x` reads `x`. A bare `ns` escapes, so nothing is known about it.
+        Specifier::Star => {
+          for prop in member_reads.get(local).into_iter().flatten() {
+            graph.mark(importee, (*prop).clone());
+          }
+        }
       }
     }
   }

@@ -59,9 +59,12 @@ details.
 - A re-export getter (`export { x } from`, or `import { x }` plus
   `export { x }`) is a read only if some emitted code reads `x` _through_ the
   re-exporting module: an importer of `x` from it that references the binding,
-  a further re-export that is itself read, or its namespace object (namespace
-  import, `import()`, `require()`, `export *`). Otherwise the importee is kept
-  only for its side effects and stays eager, as it would without lazy imports.
+  a namespace member read `ns.x`, a further re-export or `export *` that is
+  itself read. Otherwise the importee is kept only for its side effects and
+  stays eager, as it would without lazy imports. Only reads visible in the
+  source count: when the namespace object escapes (a bare `ns`, `import()`,
+  `require()`, `export * as ns`), its re-exported modules stay eager. That
+  costs laziness, never correctness.
   Symbol usage can't decide this: the linker binds importers straight to the
   canonical symbol, so a module that imports `x` from its own module retains it
   even when nothing goes through the barrel.

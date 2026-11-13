@@ -413,7 +413,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
       .ctx
       .lazy_export_reads
       .get(&self.ctx.module.idx)
-      .is_some_and(|reads| reads.contains(exported))
+      .is_some_and(|names| names.contains(exported))
   }
 
   fn mark_import_target_eager(&mut self, importee_idx: ModuleIdx) {
