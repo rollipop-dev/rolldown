@@ -73,6 +73,9 @@ pub fn compute_export_reads(link_output: &LinkStageOutput) -> ExportReadsMap {
   let is_included = |idx: ModuleIdx| {
     link_output.module_table[idx].as_normal().is_some() && link_output.metas[idx].is_included
   };
+  // Modules loaded for their side effects or whose namespace object escapes. Their
+  // re-exported modules must run with them, as they do eagerly.
+  let mut pinned_roots = vec![];
 
   for module in link_output.module_table.modules.iter().filter_map(|module| module.as_normal()) {
     if module.idx == link_output.runtime.id() || !is_included(module.idx) {
@@ -85,6 +88,25 @@ pub fn compute_export_reads(link_output: &LinkStageOutput) -> ExportReadsMap {
       }
     }
 
+    // `import './x'` (also when tree-shaking merged it into a named import),
+    // `require('./x')` and `import('./x')`.
+    let named_records =
+      module.named_imports.values().map(|named| named.record_idx).collect::<FxHashSet<_>>();
+    for (record_idx, record) in module.import_records.iter_enumerated() {
+      let pins = match record.kind {
+        ImportKind::Import => {
+          !record.meta.contains(ImportRecordMeta::IsExportStar)
+            && (record.meta.contains(ImportRecordMeta::HasSideEffectImport)
+              || !named_records.contains(&record_idx))
+        }
+        ImportKind::Require | ImportKind::DynamicImport => true,
+        _ => false,
+      };
+      if pins && let Some(importee) = record.resolved_module {
+        pinned_roots.push(importee);
+      }
+    }
+
     if module.named_imports.is_empty() {
       continue;
     }
@@ -92,6 +114,7 @@ pub fn compute_export_reads(link_output: &LinkStageOutput) -> ExportReadsMap {
     // Symbols read by the statements that end up in the output, and for member
     // expressions (`ns.x`), the first property read from each object.
     let mut referenced = FxHashSet::<SymbolRef>::default();
+    let mut bare_references = FxHashSet::<SymbolRef>::default();
     let mut member_reads = FxHashMap::<SymbolRef, FxHashSet<&CompactStr>>::default();
     for (_, info) in link_output.stmt_infos[module.idx]
       .iter_enumerated_without_namespace_stmt()
@@ -99,10 +122,15 @@ pub fn compute_export_reads(link_output: &LinkStageOutput) -> ExportReadsMap {
     {
       for symbol in &info.referenced_symbols {
         referenced.insert(*symbol.symbol_ref());
-        if let SymbolOrMemberExprRef::MemberExpr(member) = symbol
-          && let Some(prop) = member.prop_and_span_list.first()
-        {
-          member_reads.entry(member.object_ref).or_default().insert(&prop.name);
+        match symbol {
+          SymbolOrMemberExprRef::Symbol(symbol) => {
+            bare_references.insert(*symbol);
+          }
+          SymbolOrMemberExprRef::MemberExpr(member) => {
+            if let Some(prop) = member.prop_and_span_list.first() {
+              member_reads.entry(member.object_ref).or_default().insert(&prop.name);
+            }
+          }
         }
       }
     }
@@ -132,10 +160,14 @@ pub fn compute_export_reads(link_output: &LinkStageOutput) -> ExportReadsMap {
             graph.mark(importee, imported.clone());
           }
         }
-        // `ns.x` reads `x`. A bare `ns` escapes, so nothing is known about it.
+        // `ns.x` reads `x`. A bare `ns`, or re-exporting it (`export * as ns`),
+        // lets the namespace escape, so any export may be read.
         Specifier::Star => {
           for prop in member_reads.get(local).into_iter().flatten() {
             graph.mark(importee, (*prop).clone());
+          }
+          if bare_references.contains(local) || exported_as.contains_key(local) {
+            pinned_roots.push(importee);
           }
         }
       }
@@ -144,41 +176,26 @@ pub fn compute_export_reads(link_output: &LinkStageOutput) -> ExportReadsMap {
 
   graph.propagate(link_output);
   let mut reads = graph.reads;
-  // `import 'pkg'` runs pkg's whole graph eagerly, including what its index
-  // re-exports, so re-export getters of side-effect-imported barrels don't count.
-  for module in side_effect_imported_barrels(link_output, &is_included) {
+  // `import 'pkg'`, `require('pkg')` and an escaping namespace run or expose pkg's
+  // whole graph eagerly, including what its index re-exports, so re-export getters
+  // of those barrels don't count as reads.
+  for module in pinned_barrels(link_output, &is_included, pinned_roots) {
     reads.remove(&module);
   }
   reads
 }
 
-/// Modules imported for their side effects (`import './x'`, also when merged into a
-/// named import), plus every barrel they reach through re-exports and `export *`.
-fn side_effect_imported_barrels(
+/// `roots` plus every barrel they reach through re-exports and `export *`.
+fn pinned_barrels(
   link_output: &LinkStageOutput,
   is_included: &impl Fn(ModuleIdx) -> bool,
+  roots: Vec<ModuleIdx>,
 ) -> FxHashSet<ModuleIdx> {
   let mut seen = FxHashSet::default();
   let mut stack = vec![];
-  for module in link_output.module_table.modules.iter().filter_map(|module| module.as_normal()) {
-    if module.idx == link_output.runtime.id() || !is_included(module.idx) {
-      continue;
-    }
-    let named_records =
-      module.named_imports.values().map(|named| named.record_idx).collect::<FxHashSet<_>>();
-    for (record_idx, record) in module.import_records.iter_enumerated() {
-      if record.kind != ImportKind::Import || record.meta.contains(ImportRecordMeta::IsExportStar) {
-        continue;
-      }
-      let is_side_effect_import = record.meta.contains(ImportRecordMeta::HasSideEffectImport)
-        || !named_records.contains(&record_idx);
-      if is_side_effect_import
-        && let Some(importee) = record.resolved_module
-        && is_included(importee)
-        && seen.insert(importee)
-      {
-        stack.push(importee);
-      }
+  for root in roots {
+    if is_included(root) && seen.insert(root) {
+      stack.push(root);
     }
   }
   while let Some(module_idx) = stack.pop() {

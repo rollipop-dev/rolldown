@@ -64,18 +64,19 @@ details.
   a namespace member read `ns.x`, a further re-export or `export *` that is
   itself read. Otherwise the importee is kept only for its side effects and
   stays eager, as it would without lazy imports. Only reads visible in the
-  source count: when the namespace object escapes (a bare `ns`, `import()`,
-  `require()`, `export * as ns`), its re-exported modules stay eager. That
-  costs laziness, never correctness.
+  source count; escaping namespaces are covered by the next rule.
   Symbol usage can't decide this: the linker binds importers straight to the
   canonical symbol, so a module that imports `x` from its own module retains it
   even when nothing goes through the barrel.
-- `import 'pkg'` runs pkg's whole graph eagerly, as without lazy imports:
-  re-export getters of a side-effect-imported module, and of every barrel it
-  reaches through re-exports and `export *`, don't count as reads, so the
-  modules they re-export (often ones that register themselves at load, as in
-  `import 'react-native-gesture-handler'`) run with it. Otherwise another file
-  reading `a` through pkg would silently change what `import 'pkg'` does.
+- `import 'pkg'` runs pkg's whole graph eagerly, as without lazy imports. So
+  do `require('pkg')` (what Babel emits for `import 'pkg'` in CommonJS),
+  `import('pkg')`, and a namespace import whose object escapes (a bare `ns`,
+  or re-exported as `export * as ns`). Re-export getters of such a module, and
+  of every barrel it reaches through re-exports and `export *`, don't count as
+  reads, so the modules they re-export (often ones that register themselves at
+  load, as in `import 'react-native-gesture-handler'`) run with it. Otherwise
+  another file reading `a` through pkg would silently change what loading pkg
+  does. That costs laziness, never correctness.
 - Nothing in the bundle reads a user-defined entry's exports, so its re-exports
   stay eager. With tree-shaking off, every statement is included and nothing
   tells which re-exports are imported, so re-exported modules stay eager too.
@@ -90,6 +91,11 @@ details.
 - Initialization errors, from the factory or from interop construction, are
   rethrown on every read, matching the eager rethrow semantics from #60. A
   holder only resolves once its module finished loading successfully.
+- A lazily imported module's load error surfaces at the first read, not when
+  its importer runs. Feature detection such as
+  `try { require('./wrapper') } catch {}`, where the wrapper imports a module
+  that throws at load, no longer catches it; `exclude` the module that may
+  throw, or read one of its bindings inside the `try`.
 - In a circular import, a lazy holder of a module that is still loading reads
   through to its partially-initialized exports, like an eager import. It
   resolves once that module has loaded.

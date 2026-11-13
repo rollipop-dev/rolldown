@@ -67,14 +67,12 @@ over the earlier Proxy facade design.
   - Edges, walked with a worklist: a re-exported import makes `(importee, name)`
     read when the re-export is read, and `export * from` passes on names the
     module doesn't declare itself.
-  - Escaping namespace objects (bare `ns`, `import()`, `require()`,
-    `export * as ns`) mark nothing, so the re-exports behind them stay eager.
-    Only provable reads make a re-exported import lazy.
-  - `side_effect_imported_barrels` then removes the entries of modules that are
-    side-effect imported (a static import record no named import uses, or one
-    flagged `HasSideEffectImport`) and of every barrel reachable from them
-    through re-exports and `export *`, so `import 'pkg'` keeps pkg's re-exported
-    modules eager.
+  - Pinned roots: importees of a static import record no named import uses (or
+    one flagged `HasSideEffectImport`), of `require()` and `import()`, and of a
+    namespace import whose local is referenced bare or re-exported.
+    `pinned_barrels` adds every barrel reachable from them through re-exports
+    and `export *`, and their entries are removed from the map, so loading pkg
+    in any of those ways keeps pkg's re-exported modules eager.
 - `exit_program` calls `apply_lazy_imports` after `create_define_exports_stmt`.
   It rewrites the initializer of each top-level candidate declaration that is
   read and not eager to `__rollipop_lazy__(id[, mode])`, and returns those
@@ -154,6 +152,8 @@ over the earlier Proxy facade design.
 - `lazy_imports_merged_side_effect_import`: `import './x'` plus a named import
   of `./x` in the same file stays eager after tree-shaking merges them, also
   when the merged import is re-exported and read through the barrel.
+- `lazy_imports_escaped_barrel`: the same through `require()`, `import()`, an
+  escaping `import * as` and `export * as`.
 - `lazy_imports_side_effect_import_barrel`: `import './pkg/index.js'` runs the
   modules pkg re-exports, through a nested barrel, even when another file reads
   them through the index.
