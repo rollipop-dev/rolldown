@@ -44,7 +44,9 @@ it runtime helpers.
     `create_import_binding_for_module`).
   - `read_bindings`: binding names that are actually emitted as reads.
     These come from identifier rewrites in `exit_expression`, re-export getters
-    and `create_define_exports_stmt`.
+    and `create_define_exports_stmt`. A getter counts only when
+    `is_export_getter_read` holds: the module is not a user-defined entry, and
+    the export's canonical symbol is in `link_output.retained_export_symbols`.
 - `exit_program` calls `apply_lazy_imports` after `create_define_exports_stmt`.
   It rewrites the initializer of each top-level candidate declaration that is
   read and not eager to `__rollipop_lazy__(id[, mode])`. Deciding at the end
@@ -68,7 +70,10 @@ it runtime helpers.
 - `.i(id, nodeMode, target?)`: cached interop namespace on the module record
   (`ns` / `nodeNs`, invalidated when `nsSource !== module.exports`). It caches
   only when `record.loaded === true`. Records that are still loading (cycles)
-  or that came from the HMR holder fall back to a fresh `.t`.
+  or that came from the HMR holder fall back to a fresh `.t`. `nsKeyCount`
+  holds the own key count of `module.exports` at the last call. When it
+  changes, `.t` is called again with each cached namespace as `target`, which
+  adds only the missing keys.
 
 `runtime/rollipop-runtime-lazy.js` (appended when lazy mode is on):
 
@@ -108,9 +113,18 @@ ordinary prototype. Reads are then indistinguishable from the eager path.
 - `lazy_imports_namespace_binding`: whole-namespace bindings through a removed
   barrel stay eager, so they can be enumerated and compared.
 - `topics/hmr/rollipop_lazy_imports_dev_mode`: dev mode ignores the flag.
+- `lazy_imports_unused_reexport`: re-exports whose binding was tree-shaken
+  (direct, `import` + `export`, through two barrels, CommonJS importee) keep
+  their module eager. A re-export that is read stays lazy.
+- `lazy_imports_entry_reexport`: a user-defined entry's re-exports stay eager.
+- `lazy_imports_exclude_barrel`: `exclude` reaches a module behind a package
+  index only when the pattern also matches the index.
 - `cjs_interop_namespace`: one namespace per module and interop mode, shared
   with `import()`; not cached during a cycle; `module.exports` reassignment;
   `__esModule` handling.
+- `cjs_interop_late_keys` / `lazy_imports_cjs_late_keys`: keys added to a
+  CommonJS module after load (an `init()` call, a monkeypatch) reach importers
+  evaluated later, in both interop modes, and the namespace stays shared.
 
 ## Related
 

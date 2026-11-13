@@ -388,6 +388,28 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     }
   }
 
+  /// Whether the getter for this module's export `exported` can ever be called, so
+  /// that it counts as a read of the import binding behind it. When it can't, a
+  /// re-exported importee is only kept for its side effects and stays eager.
+  /// See internal-docs/rollipop-lazy-imports/implementation.md
+  fn is_export_getter_read(&self, exported: &str) -> bool {
+    // Nothing in the bundle reads a user-defined entry's exports.
+    let is_user_defined_entry = self
+      .ctx
+      .link_output
+      .entries
+      .get(&self.ctx.module.idx)
+      .is_some_and(|entries| entries.iter().any(|entry| entry.kind.is_user_defined()));
+    if is_user_defined_entry {
+      return false;
+    }
+    // The linker removed exports that no module imports.
+    self.linking_info().resolved_exports.get(exported).is_some_and(|resolved_export| {
+      let canonical_ref = self.symbol_db().canonical_ref_for(resolved_export.symbol_ref);
+      self.ctx.link_output.retained_export_symbols.contains(&canonical_ref)
+    })
+  }
+
   fn mark_import_target_eager(&mut self, importee_idx: ModuleIdx) {
     if let Some(lazy) = &mut self.lazy_imports {
       lazy.eager_targets.insert(importee_idx);
@@ -847,7 +869,9 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
               if let Some(stmt) = stmt {
                 program_body.push(stmt);
               }
-              self.mark_import_binding_read(&import_binding.binding_name);
+              if self.lazy_imports.is_some() && self.is_export_getter_read(&exported) {
+                self.mark_import_binding_read(&import_binding.binding_name);
+              }
               props.push(self.ast_factory.make_lazy_export_property(
                 &exported,
                 import_binding.to_expression(&self.ast_factory),
@@ -1048,7 +1072,9 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     for (exported, named_export) in &self.named_exports {
       let expr = if let Some(import_binding) = self.import_bindings.get(&named_export.local_binding)
       {
-        if let Some(lazy) = &mut self.lazy_imports
+        let is_read = self.lazy_imports.is_some() && self.is_export_getter_read(exported.as_str());
+        if is_read
+          && let Some(lazy) = &mut self.lazy_imports
           && !lazy.read_bindings.contains(&import_binding.binding_name)
         {
           lazy.read_bindings.insert(import_binding.binding_name.clone());

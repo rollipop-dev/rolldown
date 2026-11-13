@@ -56,6 +56,11 @@ details.
   which a facade can't support before it initializes. Imports with unread
   bindings are kept only for the importee's side effects, so deferring them
   would drop those effects.
+- A re-export getter (`export { x } from`, or `import { x }` plus
+  `export { x }`) is a read only if something can call it. Exports the linker
+  removed are never imported, and nothing in the bundle reads a user-defined
+  entry's exports. In both cases the importee is kept only for its side effects
+  and stays eager, as it would without lazy imports.
 - "Read" means read in the finalized module. If the minifier later removes a
   read as dead code (for example an unused `x.y;` statement), the importee is
   no longer evaluated through that binding.
@@ -96,14 +101,25 @@ explicit side-effect import.
 
 ## Interop cache trade-off
 
-The cached namespace snapshots the export keys when it is first built after the
-module finished loading. Previously each importer snapshotted at its own import
-time. The two differ only when a CommonJS module adds export keys
-asynchronously after loading, which already broke named imports for earlier
-importers. Namespaces are never cached while a module is still loading
-(circular imports), and they are rebuilt if `module.exports` is reassigned.
-Sharing one namespace per module is closer to ESM, where a module has a single
-namespace object.
+Previously each importer built its own namespace, with the export keys present
+at its import time. A CommonJS module can add keys after it finished loading,
+synchronously (`exports.init = () => { exports.client = … }`, or another module
+monkeypatching it) or asynchronously. Importers evaluated after that point saw
+the new keys. To keep that, `.i` compares the number of own keys of
+`module.exports` on every call and extends the cached namespaces in place when
+it changed. This costs one `Object.getOwnPropertyNames` per import site, which
+is still far cheaper than defining a getter per key.
+
+Remaining differences from per-importer namespaces:
+
+- Earlier importers now also see the new keys, because the object is shared.
+  This is closer to ESM, where a module has a single namespace object.
+- A delete plus an add that leaves the key count unchanged is not detected.
+- A lazy facade that had to copy descriptors from an already cached namespace
+  keeps the keys it copied.
+
+Namespaces are never cached while a module is still loading (circular imports),
+and they are rebuilt if `module.exports` is reassigned.
 
 ## Configuration surface
 
@@ -132,6 +148,14 @@ Source code can express this with a side-effect import (`import './setup'`).
 the imported module. A single pattern then applies at every import site, unlike
 Metro's importer-keyed `blockList`. Patterns use the same string-glob/RegExp
 semantics as other Rolldown module filters (`pattern_filter::filter`).
+
+`exclude` is decided per import edge. When the module is reached through a
+package index (`import { x } from 'pkg'` → `pkg/index.js` →
+`export { x } from './register.js'`), the index itself is a lazy facade, and
+the excluded module runs only when the index does. The pattern has to match the
+index as well, for example `'**/node_modules/pkg/**'`. Propagating `exclude`
+backwards along re-export edges was not done: it would turn whole package
+entries eager without the user asking for it.
 
 ## Default
 

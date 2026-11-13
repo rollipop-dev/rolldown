@@ -77,10 +77,17 @@ source: crates/rolldown_testing/src/integration_test.rs
 	  var module = __rollipop_module_cache[id];
 	  // A module that is still initializing (circular import) can gain exports later.
 	  if (module === undefined || module.loaded !== true) return __rollipop_require__.t(mod, nodeMode);
+	  var keyCount = mod != null ? Object.getOwnPropertyNames(mod).length : 0;
 	  if (module.nsSource !== mod) {
 	    module.nsSource = mod;
 	    module.ns = module.nodeNs = undefined;
+	  } else if (module.nsKeyCount !== keyCount) {
+	    // Keys added after load (an `init()` or a monkeypatch) must reach later importers.
+	    // `.t` skips keys the target already has, so this extends the shared objects in place.
+	    if (module.ns) __rollipop_require__.t(mod, 0, module.ns);
+	    if (module.nodeNs) __rollipop_require__.t(mod, 1, module.nodeNs);
 	  }
+	  module.nsKeyCount = keyCount;
 	  return nodeMode
 	    ? module.nodeNs || (module.nodeNs = __rollipop_require__.t(mod, nodeMode, target))
 	    : module.ns || (module.ns = __rollipop_require__.t(mod, nodeMode, target));
@@ -117,7 +124,7 @@ source: crates/rolldown_testing/src/integration_test.rs
 			var import_plain_2_0_7 = __rollipop_require__.i(7);
 
 		},
-		9: function(global, module, __rollipop_exports__, __rollipop_require__) {
+		8: function(global, module, __rollipop_exports__, __rollipop_require__) {
 		// esmodule.cjs
 			Object.defineProperty(__rollipop_exports__, "__esModule", { value: true });
 			__rollipop_exports__.default = "esmodule-default";
@@ -128,22 +135,22 @@ source: crates/rolldown_testing/src/integration_test.rs
 		// b.js
 			__rollipop_require__.r(__rollipop_exports__);
 			__rollipop_require__.d(__rollipop_exports__, {
-				esmodule: () => import_esmodule_3_1_9,
+				esmodule: () => import_esmodule_3_1_8,
 				plain: () => import_plain_3_0_7,
-				esmoduleDefault: () => import_esmodule_3_1_9.default
+				esmoduleDefault: () => import_esmodule_3_1_8.default
 			});
 			var import_plain_3_0_7 = __rollipop_require__.i(7);
-			var import_esmodule_3_1_9 = __rollipop_require__.i(9);
+			var import_esmodule_3_1_8 = __rollipop_require__.i(8);
 
 		},
 		4: function(global, module, __rollipop_exports__, __rollipop_require__) {
 		// node_mode.mjs
 			__rollipop_require__.r(__rollipop_exports__);
 			__rollipop_require__.d(__rollipop_exports__, {
-				esmoduleDefault: () => import_esmodule_4_0_9.default,
-				esmodule: () => import_esmodule_4_0_9
+				esmoduleDefault: () => import_esmodule_4_0_8.default,
+				esmodule: () => import_esmodule_4_0_8
 			});
-			var import_esmodule_4_0_9 = __rollipop_require__.i(9, 1);
+			var import_esmodule_4_0_8 = __rollipop_require__.i(8, 1);
 
 		},
 		5: function(global, module, __rollipop_exports__, __rollipop_require__) {
@@ -154,17 +161,17 @@ source: crates/rolldown_testing/src/integration_test.rs
 			module.exports.extra = "extra";
 
 		},
-		8: function(global, module, __rollipop_exports__, __rollipop_require__) {
+		9: function(global, module, __rollipop_exports__, __rollipop_require__) {
 		// cycle_importer.js
 			__rollipop_require__.r(__rollipop_exports__);
-			var import_cycle_8_0_6 = __rollipop_require__.i(6);
-			globalThis.__rollipop_cjs_cycle_keys_during_load = Object.keys(import_cycle_8_0_6).sort();
+			var import_cycle_9_0_6 = __rollipop_require__.i(6);
+			globalThis.__rollipop_cjs_cycle_keys_during_load = Object.keys(import_cycle_9_0_6).sort();
 
 		},
 		6: function(global, module, __rollipop_exports__, __rollipop_require__) {
 		// cycle.cjs
 			__rollipop_exports__.early = "early";
-			__rollipop_require__(8);
+			__rollipop_require__(9);
 			__rollipop_exports__.late = "late";
 
 		},

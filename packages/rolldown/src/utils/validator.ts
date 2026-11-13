@@ -1185,6 +1185,14 @@ const OutputCliOverrideSchema = v.strictObject({
     v.description('Deprecated: use codeSplitting instead'),
   ),
   minify: v.pipe(v.optional(v.boolean()), v.description('Minify the bundled file')),
+  // MARK: - Rollipop
+  // `exclude` takes RegExps, so the CLI only exposes the boolean form.
+  lazyImports: v.pipe(
+    v.optional(v.boolean()),
+    v.description(
+      'Defer evaluating statically imported modules until first binding access (rollipop format only).',
+    ),
+  ),
 });
 
 const OutputCliOptionsSchema = v.omit(
