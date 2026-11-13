@@ -4,6 +4,11 @@ permissions: {}
 
 on:
   workflow_dispatch:
+    inputs:
+      dev:
+        description: Publish a temporary version with the dev tag
+        type: boolean
+        default: false
   push:
     branches:
       - main
@@ -11,11 +16,12 @@ on:
       - packages/rolldown/package.json
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ inputs.dev && 'dev' || github.ref }}
+  cancel-in-progress: ${{ !inputs.dev }}
 
 jobs:
   check:
+    if: ${{ !inputs.dev }}
     name: Check version
     runs-on: ubuntu-latest
     outputs:
@@ -175,3 +181,10 @@ jobs:
             --notes "$NOTES" \
             debuginfo/*.debuginfo.tar.zst)
           echo "url=$url" >> "$GITHUB_OUTPUT"
+
+  dev:
+    if: github.repository == 'rollipop-dev/rolldown' && github.event_name == 'workflow_dispatch' && inputs.dev
+    name: Publish dev version
+    permissions:
+      id-token: write # inherited by the reusable publish job
+    uses: ./.github/workflows/reusable-publish-dev-to-npm.yml
