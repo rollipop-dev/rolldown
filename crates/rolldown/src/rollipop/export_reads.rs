@@ -24,6 +24,12 @@ use crate::stages::link_stage::LinkStageOutput;
 /// Per module, the exports that emitted code reads through that module.
 pub type ExportReadsMap = FxHashMap<ModuleIdx, FxHashSet<CompactStr>>;
 
+/// Per pinned module (loaded for its side effects or with an escaping namespace),
+/// the importees it re-exports. Imports of them stay eager in that module, even when
+/// the module also reads them locally (`import i18n from './i18n'; export { i18n };
+/// export const t = (k) => i18n.t(k)`).
+pub type PinnedReExportsMap = FxHashMap<ModuleIdx, FxHashSet<ModuleIdx>>;
+
 #[derive(Default)]
 struct Graph {
   reads: ExportReadsMap,
@@ -68,7 +74,7 @@ impl Graph {
   }
 }
 
-pub fn compute_export_reads(link_output: &LinkStageOutput) -> ExportReadsMap {
+pub fn compute_export_reads(link_output: &LinkStageOutput) -> (ExportReadsMap, PinnedReExportsMap) {
   let mut graph = Graph::default();
   let is_included = |idx: ModuleIdx| {
     link_output.module_table[idx].as_normal().is_some() && link_output.metas[idx].is_included
@@ -179,22 +185,25 @@ pub fn compute_export_reads(link_output: &LinkStageOutput) -> ExportReadsMap {
   // `import 'pkg'`, `require('pkg')` and an escaping namespace run or expose pkg's
   // whole graph eagerly, including what its index re-exports, so re-export getters
   // of those barrels don't count as reads.
-  for module in pinned_barrels(link_output, &is_included, pinned_roots) {
-    reads.remove(&module);
+  let pinned = pinned_barrels(link_output, &is_included, pinned_roots);
+  for module in pinned.keys() {
+    reads.remove(module);
   }
-  reads
+  (reads, pinned)
 }
 
-/// `roots` plus every barrel they reach through re-exports and `export *`.
+/// `roots` plus every barrel they reach through re-exports and `export *`, each with
+/// the importees it re-exports.
 fn pinned_barrels(
   link_output: &LinkStageOutput,
   is_included: &impl Fn(ModuleIdx) -> bool,
   roots: Vec<ModuleIdx>,
-) -> FxHashSet<ModuleIdx> {
-  let mut seen = FxHashSet::default();
+) -> PinnedReExportsMap {
+  let mut pinned = PinnedReExportsMap::default();
   let mut stack = vec![];
   for root in roots {
-    if is_included(root) && seen.insert(root) {
+    if is_included(root) && !pinned.contains_key(&root) {
+      pinned.insert(root, FxHashSet::default());
       stack.push(root);
     }
   }
@@ -208,11 +217,14 @@ fn pinned_barrels(
       .filter(|(local, _)| re_exported.contains(*local))
       .filter_map(|(_, named)| module.import_records[named.record_idx].resolved_module)
       .chain(module.star_export_module_ids());
-    for target in targets {
-      if is_included(target) && seen.insert(target) {
-        stack.push(target);
+    let targets = targets.filter(|target| is_included(*target)).collect::<FxHashSet<_>>();
+    for target in &targets {
+      if !pinned.contains_key(target) {
+        pinned.insert(*target, FxHashSet::default());
+        stack.push(*target);
       }
     }
+    pinned.insert(module_idx, targets);
   }
-  seen
+  pinned
 }

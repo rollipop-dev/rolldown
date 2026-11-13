@@ -68,15 +68,18 @@ details.
   Symbol usage can't decide this: the linker binds importers straight to the
   canonical symbol, so a module that imports `x` from its own module retains it
   even when nothing goes through the barrel.
-- `import 'pkg'` runs pkg's whole graph eagerly, as without lazy imports. So
-  do `require('pkg')` (what Babel emits for `import 'pkg'` in CommonJS),
-  `import('pkg')`, and a namespace import whose object escapes (a bare `ns`,
-  or re-exported as `export * as ns`). Re-export getters of such a module, and
-  of every barrel it reaches through re-exports and `export *`, don't count as
-  reads, so the modules they re-export (often ones that register themselves at
-  load, as in `import 'react-native-gesture-handler'`) run with it. Otherwise
-  another file reading `a` through pkg would silently change what loading pkg
-  does. That costs laziness, never correctness.
+- `import 'pkg'` runs pkg and every module pkg re-exports eagerly, as without
+  lazy imports. So do `require('pkg')` (what Babel emits for `import 'pkg'` in
+  CommonJS), `import('pkg')`, and a namespace import whose object escapes (a
+  bare `ns`, or re-exported as `export * as ns`). Such a module, and every
+  barrel it reaches through re-exports and `export *`, keeps its imports of the
+  modules it re-exports eager, even when it also reads them locally (an i18n
+  index doing `export { i18n }` and `export const t = (k) => i18n.t(k)`). The
+  re-exported modules are often ones that register themselves at load, as in
+  `import 'react-native-gesture-handler'`. Otherwise another file reading `a`
+  through pkg would silently change what loading pkg does. That costs
+  laziness, never correctness. Imports pkg only reads (not re-exports) follow
+  the usual rule: read inside a function, they stay lazy.
 - Nothing in the bundle reads a user-defined entry's exports, so its re-exports
   stay eager. With tree-shaking off, every statement is included and nothing
   tells which re-exports are imported, so re-exported modules stay eager too.

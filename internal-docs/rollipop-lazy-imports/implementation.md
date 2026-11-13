@@ -71,7 +71,10 @@ over the earlier Proxy facade design.
     one flagged `HasSideEffectImport`), of `require()` and `import()`, and of a
     namespace import whose local is referenced bare or re-exported.
     `pinned_barrels` adds every barrel reachable from them through re-exports
-    and `export *`, and their entries are removed from the map, so loading pkg
+    and `export *`, and their entries are removed from the map. It also returns,
+    per pinned module, the importees it re-exports (`PinnedReExportsMap`,
+    passed as `lazy_pinned_re_exports`); `apply_lazy_imports` keeps those
+    imports eager even when the module also reads them locally. So loading pkg
     in any of those ways keeps pkg's re-exported modules eager.
 - `exit_program` calls `apply_lazy_imports` after `create_define_exports_stmt`.
   It rewrites the initializer of each top-level candidate declaration that is
@@ -154,9 +157,9 @@ over the earlier Proxy facade design.
   when the merged import is re-exported and read through the barrel.
 - `lazy_imports_escaped_barrel`: the same through `require()`, `import()`, an
   escaping `import * as` and `export * as`.
-- `lazy_imports_side_effect_import_barrel`: `import './pkg/index.js'` runs the
-  modules pkg re-exports, through a nested barrel, even when another file reads
-  them through the index.
+- `lazy_imports_side_effect_import_barrel`: `import './lib/index.js'` runs the
+  modules the index re-exports, through a nested barrel and when the index also
+  reads one locally, even when another file reads them through the index.
 - `lazy_imports_cycle_exclude`: `exclude` restores the eager entry point of an
   import cycle that would otherwise hit a TDZ error.
 - `lazy_imports_entry_reexport`: a user-defined entry's re-exports stay eager.

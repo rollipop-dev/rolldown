@@ -28,7 +28,8 @@ use crate::{
   hmr::utils::HmrAstBuilder,
   rollipop::{
     HMR_RUNTIME_NAME, ROLLIPOP_EXPORTS_NAME, ROLLIPOP_GLOBAL_NAME, ROLLIPOP_LAZY_NAME,
-    ROLLIPOP_MODULE_NAME, ROLLIPOP_REQUIRE_NAME, export_reads::ExportReadsMap,
+    ROLLIPOP_MODULE_NAME, ROLLIPOP_REQUIRE_NAME,
+    export_reads::{ExportReadsMap, PinnedReExportsMap},
     is_lazy_imports_enabled,
   },
   stages::link_stage::LinkStageOutput,
@@ -156,6 +157,8 @@ pub struct RollipopAstFinalizerContext<'me> {
   pub lazy_import_excluded: &'me FxHashSet<ModuleIdx>,
   /// Exports read through each module. Empty unless lazy imports are enabled.
   pub lazy_export_reads: &'me ExportReadsMap,
+  /// Importees a pinned module re-exports; its imports of them stay eager.
+  pub lazy_pinned_re_exports: &'me PinnedReExportsMap,
 }
 
 pub struct RollipopAstFinalizer<'me, 'ast> {
@@ -444,6 +447,11 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
         };
         if lazy.eager_targets.contains(importee_idx)
           || self.ctx.lazy_import_excluded.contains(importee_idx)
+          || self
+            .ctx
+            .lazy_pinned_re_exports
+            .get(&self.ctx.module.idx)
+            .is_some_and(|re_exported| re_exported.contains(importee_idx))
           || !lazy.read_bindings.contains(ident.name.as_str())
         {
           continue;

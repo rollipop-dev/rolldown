@@ -10,7 +10,7 @@ use tracing::debug_span;
 use crate::{
   chunk_graph::ChunkGraph,
   module_finalizers::rollipop::{RollipopAstFinalizer, RollipopAstFinalizerContext},
-  rollipop::export_reads::{ExportReadsMap, compute_export_reads},
+  rollipop::export_reads::{ExportReadsMap, PinnedReExportsMap, compute_export_reads},
   type_alias::IndexEcmaAst,
 };
 
@@ -51,12 +51,14 @@ impl GenerateStage<'_> {
         .unwrap_or_default();
       let lazy_import_excluded = &lazy_import_excluded;
       // Re-export getters that are read decide whether re-exported imports can be lazy.
-      let lazy_export_reads = if crate::rollipop::is_lazy_imports_enabled(options) {
-        compute_export_reads(link_output)
-      } else {
-        ExportReadsMap::default()
-      };
+      let (lazy_export_reads, lazy_pinned_re_exports) =
+        if crate::rollipop::is_lazy_imports_enabled(options) {
+          compute_export_reads(link_output)
+        } else {
+          (ExportReadsMap::default(), PinnedReExportsMap::default())
+        };
       let lazy_export_reads = &lazy_export_reads;
+      let lazy_pinned_re_exports = &lazy_pinned_re_exports;
       ast_table
         .par_iter_mut_enumerated()
         .filter(|(idx, _ast)| {
@@ -81,6 +83,7 @@ impl GenerateStage<'_> {
                 unique_index,
                 lazy_import_excluded,
                 lazy_export_reads,
+                lazy_pinned_re_exports,
               },
             );
             traverse_mut(&mut finalizer, fields.allocator, fields.program, scoping, ());

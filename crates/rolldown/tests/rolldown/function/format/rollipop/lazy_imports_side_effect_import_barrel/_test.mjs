@@ -5,4 +5,4 @@ const result = globalThis.__rollipop_side_effect_barrel_result;
 
 assert.equal(result.later, 'function');
 // Both re-exported modules ran with the side-effect import, also through `sub.js`.
-assert.deepEqual([...result.atLoad].sort(), ['nested', 'register']);
+assert.deepEqual([...result.atLoad].sort(), ['i18n', 'nested', 'register']);
