@@ -21,6 +21,8 @@ jobs:
       pull-requests: read
     outputs:
       pr: ${{ steps.request.outputs.pr }}
+      base_ref: ${{ steps.request.outputs.base_ref }}
+      base_sha: ${{ steps.request.outputs.base_sha }}
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
@@ -46,7 +48,7 @@ jobs:
           pr=$(gh api "repos/${GH_REPO}/pulls/${pr_number}")
           # Artifact data only identifies a PR; GitHub's run metadata pins its source.
           if ! jq -e '
-            .state == "open" and .base.repo.full_name == env.GH_REPO and .base.ref == "main" and
+            .state == "open" and .base.repo.full_name == env.GH_REPO and
             .head.sha == env.PR_SHA and .head.repo.id == (env.HEAD_REPO_ID | tonumber) and
             .head.ref == env.HEAD_BRANCH and any(.labels[]; .name == "prerelease")
           ' <<< "$pr" > /dev/null; then
@@ -54,6 +56,7 @@ jobs:
             exit 0
           fi
           echo "pr=$pr_number" >> "$GITHUB_OUTPUT"
+          jq -r '"base_ref=\(.base.ref)\nbase_sha=\(.base.sha)"' <<< "$pr" >> "$GITHUB_OUTPUT"
 
   dispatch:
     needs: request
@@ -72,7 +75,9 @@ jobs:
       GH_REPO: ${{ github.repository }}
       PR_NUMBER: ${{ needs.request.outputs.pr }}
       PR_SHA: ${{ github.event.workflow_run.head_sha }}
-      BASE_SHA: ${{ github.sha }}
+      BASE_REF: ${{ needs.request.outputs.base_ref }}
+      BASE_SHA: ${{ needs.request.outputs.base_sha }}
+      WORKFLOW_SHA: ${{ github.sha }}
       DEV_BRANCH: prerelease-${{ needs.request.outputs.pr }}-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
@@ -88,16 +93,18 @@ jobs:
           git merge --no-ff --no-commit "$PR_SHA"
 
           # Use main's workflows even when the PR changes CI definitions.
-          git restore --source="$BASE_SHA" --staged --worktree -- .github
+          git restore --source="$WORKFLOW_SHA" --staged --worktree -- .github
           git commit --allow-empty -m "ci: prepare dev release for PR #${PR_NUMBER}"
           gh auth setup-git
           git push origin "HEAD:refs/heads/$DEV_BRANCH"
 
       - name: Trigger dev release
         run: |
-          current_sha=$(gh api "repos/${GH_REPO}/pulls/${PR_NUMBER}" \
-            --jq 'select(.state == "open" and any(.labels[]; .name == "prerelease")) | .head.sha')
-          if [ "$current_sha" != "$PR_SHA" ]; then
+          current_pr=$(gh api "repos/${GH_REPO}/pulls/${PR_NUMBER}")
+          if ! jq -e '
+            .state == "open" and .head.sha == env.PR_SHA and .base.ref == env.BASE_REF and
+            any(.labels[]; .name == "prerelease")
+          ' <<< "$current_pr" > /dev/null; then
             echo 'Skipping release: the PR changed or prereleases were disabled.'
             exit 0
           fi
