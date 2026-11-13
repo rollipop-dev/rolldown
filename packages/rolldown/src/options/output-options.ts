@@ -841,6 +841,11 @@ export interface LazyImportsOptions {
    * Modules that are always evaluated eagerly when imported, matched against
    * module ids. Strings are glob patterns resolved against `cwd`.
    *
+   * Matching is per import. If the module is reached through a package index
+   * that re-exports it, the index is still lazy and the module runs only when
+   * the index does, so the pattern has to match the index too (for example the
+   * whole package directory).
+   *
    * @example
    * ```js
    * lazyImports: { exclude: [/[\\/]src[\\/]setup[\\/]/, '**\/node_modules/some-polyfill/**'] }

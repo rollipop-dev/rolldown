@@ -57,10 +57,17 @@ __rollipop_require__.i = function(id, nodeMode, target) {
   var module = __rollipop_module_cache[id];
   // A module that is still initializing (circular import) can gain exports later.
   if (module === undefined || module.loaded !== true) return __rollipop_require__.t(mod, nodeMode);
+  var keyCount = mod != null ? Object.getOwnPropertyNames(mod).length : 0;
   if (module.nsSource !== mod) {
     module.nsSource = mod;
     module.ns = module.nodeNs = undefined;
+  } else if (module.nsKeyCount !== keyCount) {
+    // Keys added after load (an `init()` or a monkeypatch) must reach later importers.
+    // `.t` skips keys the target already has, so this extends the shared objects in place.
+    if (module.ns) __rollipop_require__.t(mod, 0, module.ns);
+    if (module.nodeNs) __rollipop_require__.t(mod, 1, module.nodeNs);
   }
+  module.nsKeyCount = keyCount;
   return nodeMode
     ? module.nodeNs || (module.nodeNs = __rollipop_require__.t(mod, nodeMode, target))
     : module.ns || (module.ns = __rollipop_require__.t(mod, nodeMode, target));
