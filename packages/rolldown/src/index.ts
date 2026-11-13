@@ -235,3 +235,6 @@ export type {
   WatcherOptions,
   WatchOptions,
 };
+
+// MARK: - Rollipop
+export type { LazyImportsOptions } from './options/output-options';
