@@ -27,7 +27,8 @@ use crate::{
   hmr::utils::HmrAstBuilder,
   rollipop::{
     HMR_RUNTIME_NAME, ROLLIPOP_EXPORTS_NAME, ROLLIPOP_GLOBAL_NAME, ROLLIPOP_LAZY_NAME,
-    ROLLIPOP_MODULE_NAME, ROLLIPOP_REQUIRE_NAME, is_lazy_imports_enabled,
+    ROLLIPOP_MODULE_NAME, ROLLIPOP_REQUIRE_NAME, export_reads::ExportReadsMap,
+    is_lazy_imports_enabled,
   },
   stages::link_stage::LinkStageOutput,
   types::linking_metadata::{LinkingMetadata, LinkingMetadataVec},
@@ -152,6 +153,8 @@ pub struct RollipopAstFinalizerContext<'me> {
   pub unique_index: usize,
   /// Importees matched by `lazyImports.exclude`.
   pub lazy_import_excluded: &'me FxHashSet<ModuleIdx>,
+  /// Exports read through each module. Empty unless lazy imports are enabled.
+  pub lazy_export_reads: &'me ExportReadsMap,
 }
 
 pub struct RollipopAstFinalizer<'me, 'ast> {
@@ -404,11 +407,13 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     if is_user_defined_entry || self.ctx.options.treeshake.is_none() {
       return false;
     }
-    // The linker removed exports that no module imports.
-    self.linking_info().resolved_exports.get(exported).is_some_and(|resolved_export| {
-      let canonical_ref = self.symbol_db().canonical_ref_for(resolved_export.symbol_ref);
-      self.ctx.link_output.retained_export_symbols.contains(&canonical_ref)
-    })
+    // Some emitted code has to read the export through this module. Symbol usage
+    // can't tell: another module importing the same symbol directly retains it too.
+    self
+      .ctx
+      .lazy_export_reads
+      .get(&self.ctx.module.idx)
+      .is_some_and(|reads| reads.contains(exported))
   }
 
   fn mark_import_target_eager(&mut self, importee_idx: ModuleIdx) {

@@ -46,8 +46,19 @@ it runtime helpers.
     These come from identifier rewrites in `exit_expression`, re-export getters
     and `create_define_exports_stmt`. A getter counts only when
     `is_export_getter_read` holds: tree-shaking is on, the module is not a
-    user-defined entry, and the export's canonical symbol is in
-    `link_output.retained_export_symbols`.
+    user-defined entry, and the export is in `lazy_export_reads`.
+- `lazy_export_reads` (`rollipop/export_reads.rs`, computed once per build in
+  `finalize_rollipop_modules` when lazy mode is on) holds, per module, the
+  exports that emitted code reads through that module. It follows codegen
+  routing: an import of an included module goes through it.
+  - Seeds: a named import whose local symbol is referenced by an included
+    statement marks `(importee, name)`; a namespace import marks the whole
+    importee. An included namespace statement, `import()` and `require()` also
+    mark the whole module.
+  - Edges, walked with a worklist: a re-exported import makes `(importee, name)`
+    read when the re-export is read, and `export * from` passes on names the
+    module doesn't declare itself (or everything, when the whole module is
+    read).
 - `exit_program` calls `apply_lazy_imports` after `create_define_exports_stmt`.
   It rewrites the initializer of each top-level candidate declaration that is
   read and not eager to `__rollipop_lazy__(id[, mode])`. Deciding at the end
@@ -74,7 +85,8 @@ it runtime helpers.
   or that came from the HMR holder fall back to a fresh `.t`. `nsKeyCount`
   holds the own key count of `module.exports` at the last call. When it
   changes, `.t` is called again with each cached namespace as `target`, which
-  adds only the missing keys.
+  adds only the missing keys. A namespace that is no longer extensible (frozen
+  or sealed by an importer) is dropped from the cache instead.
 
 `runtime/rollipop-runtime-lazy.js` (appended when lazy mode is on):
 
@@ -114,8 +126,9 @@ ordinary prototype. Reads are then indistinguishable from the eager path.
 - `lazy_imports_namespace_binding`: whole-namespace bindings through a removed
   barrel stay eager, so they can be enumerated and compared.
 - `topics/hmr/rollipop_lazy_imports_dev_mode`: dev mode ignores the flag.
-- `lazy_imports_unused_reexport`: re-exports whose binding was tree-shaken
-  (direct, `import` + `export`, through two barrels, CommonJS importee) keep
+- `lazy_imports_unused_reexport`: re-exports that nothing reads through the
+  barrel (direct, `import` + `export`, through two barrels, CommonJS importee,
+  and the same symbols imported directly elsewhere or named but unused) keep
   their module eager. A re-export that is read stays lazy, except in the
   `no-tree-shaking` variant, where every re-exported module stays eager.
 - `lazy_imports_entry_reexport`: a user-defined entry's re-exports stay eager.
@@ -127,6 +140,9 @@ ordinary prototype. Reads are then indistinguishable from the eager path.
 - `cjs_interop_late_keys` / `lazy_imports_cjs_late_keys`: keys added to a
   CommonJS module after load (an `init()` call, a monkeypatch) reach importers
   evaluated later, in both interop modes, and the namespace stays shared.
+- `cjs_interop_frozen_namespace` / `lazy_imports_cjs_frozen_namespace`: a
+  frozen shared namespace doesn't break importers evaluated after a key is
+  added.
 
 ## Related
 

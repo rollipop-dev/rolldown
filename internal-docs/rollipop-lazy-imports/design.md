@@ -57,12 +57,17 @@ details.
   bindings are kept only for the importee's side effects, so deferring them
   would drop those effects.
 - A re-export getter (`export { x } from`, or `import { x }` plus
-  `export { x }`) is a read only if something can call it. Exports the linker
-  removed are never imported, and nothing in the bundle reads a user-defined
-  entry's exports. In both cases the importee is kept only for its side effects
-  and stays eager, as it would without lazy imports. With tree-shaking off,
-  every export is retained and nothing tells which ones are imported, so no
-  re-export getter counts as a read and re-exported modules stay eager.
+  `export { x }`) is a read only if some emitted code reads `x` _through_ the
+  re-exporting module: an importer of `x` from it that references the binding,
+  a further re-export that is itself read, or its namespace object (namespace
+  import, `import()`, `require()`, `export *`). Otherwise the importee is kept
+  only for its side effects and stays eager, as it would without lazy imports.
+  Symbol usage can't decide this: the linker binds importers straight to the
+  canonical symbol, so a module that imports `x` from its own module retains it
+  even when nothing goes through the barrel.
+- Nothing in the bundle reads a user-defined entry's exports, so its re-exports
+  stay eager. With tree-shaking off, every statement is included and nothing
+  tells which re-exports are imported, so re-exported modules stay eager too.
 - "Read" means read in the finalized module. If the minifier later removes a
   read as dead code (for example an unused `x.y;` statement), the importee is
   no longer evaluated through that binding.
@@ -120,6 +125,9 @@ Remaining differences from per-importer namespaces:
 - A delete plus an add that leaves the key count unchanged is not detected.
 - A lazy facade that had to copy descriptors from an already cached namespace
   keeps the keys it copied.
+- A namespace that an importer froze, sealed or made non-extensible can't take
+  new keys. It is dropped from the cache instead, so later importers get a new
+  object and stop sharing it with earlier ones.
 
 Namespaces are never cached while a module is still loading (circular imports),
 and they are rebuilt if `module.exports` is reassigned.
