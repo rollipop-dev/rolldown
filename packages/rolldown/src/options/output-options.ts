@@ -828,7 +828,10 @@ export interface OutputOptions {
    * changes module evaluation order: a module that must run as soon as it is
    * imported (for example one that registers itself somewhere at load time)
    * can be imported for its side effects (`import './setup'`) or listed in
-   * `exclude`.
+   * `exclude`. Import cycles can also be entered at a different module than
+   * with eager evaluation (the first one whose binding is read), which can
+   * surface TDZ errors in code that relied on the eager order; `exclude` the
+   * module that has to run first.
    * @default false
    */
   lazyImports?: boolean | LazyImportsOptions;
