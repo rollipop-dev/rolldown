@@ -186,6 +186,24 @@ index as well, for example `'**/node_modules/pkg/**'`. Propagating `exclude`
 backwards along re-export edges was not done: it would turn whole package
 entries eager without the user asking for it.
 
+## Relation to `import defer`
+
+`lazyImports` is non-standard. It ports Metro's `inlineRequires`: the bundler
+decides for every static import whether to defer it, so existing React Native
+code benefits without changes. The standard mechanism is TC39
+[`import defer`](https://github.com/tc39/proposal-defer-import-eval)
+(`import defer * as ns from './x'`), where the importer opts in per import and
+only namespace imports can be deferred. Rolldown tracks it in
+[rolldown/rolldown#4857](https://github.com/rolldown/rolldown/issues/4857) and
+currently lowers it to a normal import with a warning
+(`pre_process_ecma_ast.rs`).
+
+`lazyImports` is meant as an interim feature. Once Rolldown supports
+`import defer`, Rollipop should move to it. The holder runtime has the same
+shape as Rspack's `import defer` runtime (`.zO`), so it can back both; at that
+point `lazyImports` can become a compatibility option on top of it or be
+removed.
+
 ## Default
 
 `lazyImports` is off by default, both here and in Rollipop. React Native's Metro
