@@ -1,1 +1,1 @@
-import './pkg/index.js';
+import './lib/index.js';

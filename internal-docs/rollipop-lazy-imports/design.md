@@ -154,7 +154,11 @@ re-measured.
 Remaining differences from per-importer namespaces:
 
 - Earlier importers now also see the new keys, because the object is shared.
-  This is closer to ESM, where a module has a single namespace object.
+  This is closer to ESM, where a module has a single namespace object. For the
+  same reason, a property one importer adds to the namespace (for example with
+  `Object.assign`), or a `this` write by a method of a class-instance
+  `module.exports` called through the namespace, is seen by every importer, and
+  `import()` returns the same object as `import * as`.
 - A delete plus an add that leaves the key count unchanged is not detected.
 - A namespace that an importer froze, sealed or made non-extensible can't take
   new keys. It is dropped from the cache instead, so later importers get a new

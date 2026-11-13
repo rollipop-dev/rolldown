@@ -4,6 +4,14 @@ import { readFile } from 'node:fs/promises';
 const code = await readFile(new URL('./dist/main.js', import.meta.url), 'utf8');
 assert.match(code, /__rollipop_lazy__\(\d+\)/);
 assert.match(code, /__rollipop_lazy__\(\d+, 0\)/);
+// Reads of lazy bindings go through the holder, including re-export getters.
+assert.match(code, /\(0, import_log_\w+\.a\.log\)\("main"\)/);
+assert.match(code, /reexportedLazy: \(\) => import_lazy_\w+\.a\.lazyValue/);
+// Eager bindings are read directly.
+assert.match(
+  code,
+  /var import_star_\w+ = __rollipop_require__\(\d+\);\n\s*__rollipop_require__\.re\(__rollipop_exports__, import_star_\w+\);/,
+);
 
 await import('./dist/main.js');
 const result = globalThis.__rollipop_lazy_imports_result;

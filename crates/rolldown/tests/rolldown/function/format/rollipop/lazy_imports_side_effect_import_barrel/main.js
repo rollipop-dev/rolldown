@@ -1,4 +1,4 @@
-// `import './pkg/index.js'` must run the package's whole graph at load, as it does
+// `import './lib/index.js'` must run the package's whole graph at load, as it does
 // eagerly, even though another file reads the package's exports through the index.
 import './setup.js';
 import { later } from './screen.js';
