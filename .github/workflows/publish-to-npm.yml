@@ -9,6 +9,10 @@ on:
         description: Publish a temporary version with the dev tag
         type: boolean
         default: false
+      pr:
+        description: PR number for automatic dev releases
+        type: string
+        default: ''
   push:
     branches:
       - main
@@ -16,8 +20,8 @@ on:
       - packages/rolldown/package.json
 
 concurrency:
-  group: ${{ github.workflow }}-${{ inputs.dev && 'dev' || github.ref }}
-  cancel-in-progress: ${{ !inputs.dev }}
+  group: ${{ github.workflow }}-${{ inputs.dev && (inputs.pr && format('dev-pr-{0}', inputs.pr) || 'dev') || github.ref }}
+  cancel-in-progress: ${{ !inputs.dev || inputs.pr != '' }}
 
 jobs:
   check:
