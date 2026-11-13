@@ -9,7 +9,7 @@ pub const ROLLIPOP_RUNTIME: &str = include_str!("../runtime/rollipop-runtime.js"
 // See internal-docs/rollipop-lazy-imports/implementation.md
 pub const ROLLIPOP_LAZY_RUNTIME: &str = include_str!("../runtime/rollipop-runtime-lazy.js");
 
-/// Whether import declarations should use lazy namespaces (`__rollipop_lazy__`).
+/// Whether import declarations should use lazy holders (`__rollipop_lazy__`).
 pub fn is_lazy_imports_enabled(options: &rolldown_common::NormalizedBundlerOptions) -> bool {
   options.lazy_imports.is_some()
     && matches!(options.format, rolldown_common::OutputFormat::Rollipop)

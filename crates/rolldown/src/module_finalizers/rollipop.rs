@@ -338,7 +338,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
   }
 
   /// `__rollipop_lazy__(id[, mode])`, the lazy loader passed as a factory parameter.
-  fn lazy_namespace_call(&self, importee: &Module, mode: Option<f64>) -> Expression<'ast> {
+  fn lazy_holder_call(&self, importee: &Module, mode: Option<f64>) -> Expression<'ast> {
     let mut arguments = oxc::allocator::Vec::with_capacity_in(2, &self.ast_factory);
     arguments.push(ast::Argument::from(self.runtime_id_expr_for(importee)));
     if let Some(mode) = mode {
@@ -376,7 +376,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
 
   /// The `mode` argument of `__rollipop_require__.l`: omitted for ESM importees,
   /// `0` for Babel interop and `1` for Node interop.
-  fn lazy_namespace_mode(interop: Option<&Interop>) -> Option<f64> {
+  fn lazy_holder_mode(interop: Option<&Interop>) -> Option<f64> {
     match interop {
       None => None,
       Some(Interop::Babel) => Some(0.0),
@@ -449,7 +449,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
           continue;
         }
         // A lazy holder evaluates the importee on the first read of its `a` property.
-        declarator.init = Some(self.lazy_namespace_call(&self.modules()[*importee_idx], *mode));
+        declarator.init = Some(self.lazy_holder_call(&self.modules()[*importee_idx], *mode));
         lazy_bindings.insert(ident.name.to_string());
       }
     }
@@ -469,7 +469,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
       Module::Normal(normal) => {
         let interop = self.ctx.module.interop(normal);
         if let Some(lazy) = &mut self.lazy_imports {
-          let mode = Self::lazy_namespace_mode(interop.as_ref());
+          let mode = Self::lazy_holder_mode(interop.as_ref());
           lazy.candidates.insert(binding_name.to_string(), (normal.idx, mode));
         }
         self.namespace_expr_for_module(importee, interop.as_ref())
