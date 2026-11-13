@@ -16,6 +16,7 @@ jobs:
        (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'prerelease')))
     name: Prepare PR dev release
     runs-on: ubuntu-latest
+    environment: prerelease
     concurrency:
       group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
       cancel-in-progress: true
