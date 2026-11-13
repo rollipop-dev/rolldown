@@ -1,0 +1,248 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## main.js
+
+```js
+(function(global) {
+// HIDDEN [\0rolldown/runtime.js]
+	//#region \0rollipop/runtime
+	var __rollipop_module_cache = {};
+	function __rollipop_require__(id) {
+	  var cached = __rollipop_module_cache[id];
+	  if (cached !== undefined) {
+	    if (cached.hasError) throw cached.error;
+	    return cached.exports;
+	  }
+	  var factory = __rollipop_modules__[id];
+	  if (factory === undefined) throw new Error('Module ' + id + ' is not registered');
+	  var module = __rollipop_module_cache[id] = { id: id, loaded: false, exports: {} };
+	  try {
+	    factory.call(module.exports, global, module, module.exports, __rollipop_require__);
+	  } catch (error) {
+	    module.hasError = true;
+	    module.error = error;
+	    throw error;
+	  }
+	  module.loaded = true;
+	  return module.exports;
+	}
+	__rollipop_require__.c = __rollipop_module_cache;
+	__rollipop_require__.o = function(obj, prop) {
+	  return Object.prototype.hasOwnProperty.call(obj, prop);
+	};
+	__rollipop_require__.d = function(exports, getters) {
+	  for (var key in getters) {
+	    if (__rollipop_require__.o(getters, key) && !__rollipop_require__.o(exports, key)) {
+	      Object.defineProperty(exports, key, { get: getters[key], enumerable: true });
+	    }
+	  }
+	};
+	__rollipop_require__.r = function(exports) {
+	  if (typeof Symbol !== 'undefined' && Symbol.toStringTag) {
+	    Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
+	  }
+	};
+	// `target` is a namespace built earlier for the same `mod`; only missing keys are added.
+	__rollipop_require__.t = function(mod, nodeMode, target) {
+	  if (target === undefined) {
+	    target = mod != null ? Object.create(Object.getPrototypeOf(mod)) : {};
+	    if (nodeMode || !mod || !mod.__esModule) Object.defineProperty(target, 'default', { value: mod, enumerable: true });
+	  }
+	  if (mod != null) {
+	    var keys = Object.getOwnPropertyNames(mod);
+	    for (var i = 0; i < keys.length; i++) {
+	      var key = keys[i];
+	      if (__rollipop_require__.o(target, key)) continue;
+	      (function(k) {
+	        var desc = Object.getOwnPropertyDescriptor(mod, k);
+	        Object.defineProperty(target, k, { get: function() { return mod[k] }, enumerable: !desc || desc.enumerable });
+	      })(key);
+	    }
+	  }
+	  return target;
+	};
+	__rollipop_require__.i = function(id, nodeMode) {
+	  var mod = __rollipop_require__(id);
+	  var module = __rollipop_module_cache[id];
+	  // A module that is still initializing (circular import) can gain exports later.
+	  if (module === undefined || module.loaded !== true) return __rollipop_require__.t(mod, nodeMode);
+	  var keyCount = mod != null ? Object.getOwnPropertyNames(mod).length : 0;
+	  if (module.nsSource !== mod) {
+	    module.nsSource = mod;
+	    module.ns = module.nodeNs = undefined;
+	  } else if (module.nsKeyCount !== keyCount) {
+	    // Keys added after load (an `init()` or a monkeypatch) must reach later importers.
+	    // `.t` skips keys the target already has, so this extends the shared objects in place.
+	    // A frozen or sealed namespace can't take keys; later importers get a new one.
+	    if (module.ns) {
+	      if (Object.isExtensible(module.ns)) __rollipop_require__.t(mod, 0, module.ns);
+	      else module.ns = undefined;
+	    }
+	    if (module.nodeNs) {
+	      if (Object.isExtensible(module.nodeNs)) __rollipop_require__.t(mod, 1, module.nodeNs);
+	      else module.nodeNs = undefined;
+	    }
+	  }
+	  module.nsKeyCount = keyCount;
+	  return nodeMode
+	    ? module.nodeNs || (module.nodeNs = __rollipop_require__.t(mod, nodeMode))
+	    : module.ns || (module.ns = __rollipop_require__.t(mod, nodeMode));
+	};
+	__rollipop_require__.re = function(exports, ns) {
+	  for (var key in ns) {
+	    if (key === 'default' || key === '__esModule' || __rollipop_require__.o(exports, key)) continue;
+	    (function(k) {
+	      Object.defineProperty(exports, k, { get: function() { return ns[k] }, enumerable: true });
+	    })(key);
+	  }
+	};
+	__rollipop_require__.e = function(id) {
+	  throw new Error('External module ' + id + ' is not available');
+	};
+	//#endregion
+	var __rollipop_modules__ = __rollipop_require__.m = {
+		10: function(global, module, __rollipop_exports__, __rollipop_require__) {
+		// cycle_importer.js
+			__rollipop_require__.r(__rollipop_exports__);
+			__rollipop_require__.d(__rollipop_exports__, { readLate: () => readLate });
+			var import_cycle_10_0_2 = __rollipop_require__(2);
+			globalThis.__rollipop_cjs_direct_cycle = {
+				early: import_cycle_10_0_2.early,
+				lateDuringLoad: import_cycle_10_0_2.late
+			};
+			function readLate() {
+				return import_cycle_10_0_2.late;
+			}
+
+		},
+		2: function(global, module, __rollipop_exports__, __rollipop_require__) {
+		// cycle.cjs
+			__rollipop_exports__.early = "early";
+			__rollipop_require__(10);
+			__rollipop_exports__.late = "late";
+
+		},
+		3: function(global, module, __rollipop_exports__, __rollipop_require__) {
+		// live.cjs
+			__rollipop_exports__.count = 0;
+			__rollipop_exports__.increment = function() {
+				__rollipop_exports__.count++;
+			};
+			__rollipop_exports__.addKey = function() {
+				__rollipop_exports__.addedLater = "added-later";
+			};
+
+		},
+		4: function(global, module, __rollipop_exports__, __rollipop_require__) {
+		// fn.cjs
+			module.exports = function fn() {
+				return "fn";
+			};
+			module.exports.helper = "helper";
+
+		},
+		5: function(global, module, __rollipop_exports__, __rollipop_require__) {
+		// esmodule.cjs
+			Object.defineProperty(__rollipop_exports__, "__esModule", { value: true });
+			__rollipop_exports__.default = "esmodule-default";
+			__rollipop_exports__.named = "esmodule-named";
+
+		},
+		6: function(global, module, __rollipop_exports__, __rollipop_require__) {
+		// default_only.js
+			__rollipop_require__.r(__rollipop_exports__);
+			__rollipop_require__.d(__rollipop_exports__, {
+				esmoduleDefault: () => import_esmodule_6_0_5.default,
+				fnDefault: () => import_fn_6_1_4.default
+			});
+			var import_esmodule_6_0_5 = __rollipop_require__.i(5);
+			var import_fn_6_1_4 = __rollipop_require__.i(4);
+
+		},
+		7: function(global, module, __rollipop_exports__, __rollipop_require__) {
+		// namespace.js
+			__rollipop_require__.r(__rollipop_exports__);
+			__rollipop_require__.d(__rollipop_exports__, { liveNamespace: () => liveNamespace });
+			var import_live_7_0_3 = __rollipop_require__.i(3);
+			const liveNamespace = import_live_7_0_3;
+
+		},
+		8: function(global, module, __rollipop_exports__, __rollipop_require__) {
+		// reexport.js
+			__rollipop_require__.r(__rollipop_exports__);
+			__rollipop_require__.d(__rollipop_exports__, { reexported: () => import_esmodule_8_0_5.named });
+			var import_esmodule_8_0_5 = __rollipop_require__(5);
+
+		},
+		9: function(global, module, __rollipop_exports__, __rollipop_require__) {
+		// node_mode.mjs
+			__rollipop_require__.r(__rollipop_exports__);
+			__rollipop_require__.d(__rollipop_exports__, { nodeNamed: () => nodeNamed });
+			var import_esmodule_9_0_5 = __rollipop_require__(5);
+			const nodeNamed = import_esmodule_9_0_5.named;
+
+		},
+		11: function(global, module, __rollipop_exports__, __rollipop_require__) {
+		// member_ns.js
+			__rollipop_require__.r(__rollipop_exports__);
+			__rollipop_require__.d(__rollipop_exports__, {
+				memberHelper: () => memberHelper,
+				computedHelper: () => computedHelper
+			});
+			var import_fn_11_0_4 = __rollipop_require__(4);
+			const memberHelper = import_fn_11_0_4.helper;
+			const computedHelper = import_fn_11_0_4["helper"];
+
+		},
+		12: function(global, module, __rollipop_exports__, __rollipop_require__) {
+		// default_member_ns.js
+			__rollipop_require__.r(__rollipop_exports__);
+			__rollipop_require__.d(__rollipop_exports__, { defaultMember: () => defaultMember });
+			var import_esmodule_12_0_5 = __rollipop_require__.i(5);
+			const defaultMember = import_esmodule_12_0_5.default;
+
+		},
+		1: function(global, module, __rollipop_exports__, __rollipop_require__) {
+		// main.js
+			__rollipop_require__.r(__rollipop_exports__);
+			var import_cycle_1_0_2 = __rollipop_require__(2);
+			var import_live_1_1_3 = __rollipop_require__(3);
+			var import_fn_1_2_4 = __rollipop_require__(4);
+			var import_esmodule_1_3_5 = __rollipop_require__(5);
+			var import_default_only_1_4_6 = __rollipop_require__(6);
+			var import_namespace_1_5_7 = __rollipop_require__(7);
+			var import_reexport_1_6_8 = __rollipop_require__(8);
+			var import_node_mode_1_7_9 = __rollipop_require__(9);
+			var import_cycle_importer_1_8_10 = __rollipop_require__(10);
+			var import_member_ns_1_9_11 = __rollipop_require__(11);
+			var import_default_member_ns_1_10_12 = __rollipop_require__(12);
+			const result = {};
+			result.countBefore = import_live_1_1_3.count;
+			(0, import_live_1_1_3.increment)();
+			result.countAfter = import_live_1_1_3.count;
+			result.addedBefore = import_live_1_1_3.addedLater;
+			(0, import_live_1_1_3.addKey)();
+			result.addedAfter = import_live_1_1_3.addedLater;
+			result.helper = import_fn_1_2_4.helper;
+			result.named = import_esmodule_1_3_5.named;
+			result.esmoduleDefault = import_default_only_1_4_6.esmoduleDefault;
+			result.fnDefault = (0, import_default_only_1_4_6.fnDefault)();
+			result.namespaceCount = import_namespace_1_5_7.liveNamespace.count;
+			result.namespaceDefaultIsExports = import_namespace_1_5_7.liveNamespace.default.count === import_namespace_1_5_7.liveNamespace.count;
+			result.reexported = import_reexport_1_6_8.reexported;
+			result.nodeNamed = import_node_mode_1_7_9.nodeNamed;
+			result.cycle = globalThis.__rollipop_cjs_direct_cycle;
+			result.cycleLate = (0, import_cycle_importer_1_8_10.readLate)();
+			result.memberHelper = import_member_ns_1_9_11.memberHelper;
+			result.computedHelper = import_member_ns_1_9_11.computedHelper;
+			result.defaultMember = import_default_member_ns_1_10_12.defaultMember;
+			globalThis.__rollipop_cjs_direct_reads_result = result;
+
+		}
+	};
+	__rollipop_require__(1);
+})(typeof globalThis !== 'undefined' ? globalThis : typeof global !== 'undefined' ? global : typeof window !== 'undefined' ? window : this);
+```

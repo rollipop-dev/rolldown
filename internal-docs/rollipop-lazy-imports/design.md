@@ -170,6 +170,35 @@ Remaining differences from per-importer namespaces:
 Namespaces are never cached while a module is still loading (circular imports),
 and they are rebuilt if `module.exports` is reassigned.
 
+## Direct CommonJS reads
+
+Most ESM imports of CommonJS only read named exports (`import { useState } from
+'react'`, `import * as React from 'react'` followed by `React.useState`). For a
+key other than `default`, the interop namespace's property is a getter that
+returns the same key of `module.exports`, in both Babel and Node interop. So
+those bindings skip the namespace and read `module.exports` directly
+(`var a = r(5)`), as webpack does. This avoids building the namespace (one getter
+per export key) and, more importantly, the extra getter call on every read. In
+Hermes, `(0, a.jsx)(...)` through the namespace was about 9× slower than a direct
+read, and react-native's own getters about 2.7× slower when wrapped again.
+
+The namespace is kept when the binding is read through `default` (which is
+`module.exports` itself unless `__esModule`, and always in Node interop), used as
+a value, or re-exported with `export *`. Lazy bindings also keep it, because the
+lazy facade is filled from the namespace.
+
+Behavior differences, all closer to Node and webpack:
+
+- Keys added after load (asynchronously, or after a circular import finished
+  loading) are visible right away. The cached namespace only picks them up the
+  next time some importer calls `.i`.
+- `ns.method()` on a member-only namespace import calls `method` with
+  `module.exports` as `this` instead of the namespace.
+- If `module.exports` is `null` or `undefined`, a named read throws instead of
+  returning `undefined`.
+
+Dev mode keeps the namespace, since the HMR runtime manages module records.
+
 ## Configuration surface
 
 `lazyImports: boolean | { exclude?: StringOrRegExp | StringOrRegExp[] }`.

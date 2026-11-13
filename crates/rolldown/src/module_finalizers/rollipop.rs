@@ -178,6 +178,77 @@ pub struct RollipopAstFinalizer<'me, 'ast> {
   used_binding_names: FxHashSet<String>,
   /// `None` unless lazy imports are enabled for this module.
   lazy_imports: Option<LazyImportsState>,
+  /// `None` in dev mode and for the runtime module.
+  direct_cjs_reads: Option<DirectCjsReadsState>,
+}
+
+// See internal-docs/rollipop-lazy-imports/implementation.md
+/// Tracks generated CommonJS import bindings that can read `module.exports`
+/// directly instead of the cached interop namespace (`__rollipop_require__.i`).
+#[derive(Default)]
+struct DirectCjsReadsState {
+  /// Generated bindings for bundled CommonJS importees, keyed by binding name.
+  candidates: FxHashMap<String, ModuleIdx>,
+  /// Bindings read as a namespace value or through `default`. These need `.i`.
+  namespace_reads: FxHashSet<String>,
+}
+
+/// Records a read of a generated import binding for the lazy and direct CommonJS
+/// read decisions made in `finalize_import_initializers`.
+///
+/// `lazy_read` is false for export getters that can never run (see
+/// `is_export_getter_read`). `needs_namespace` does not depend on that, so an
+/// unreachable getter still keeps the namespace it would read.
+fn note_import_binding_read(
+  lazy_imports: &mut Option<LazyImportsState>,
+  direct_cjs_reads: &mut Option<DirectCjsReadsState>,
+  binding_name: &str,
+  lazy_read: bool,
+  needs_namespace: bool,
+) {
+  if lazy_read
+    && let Some(lazy) = lazy_imports
+    && !lazy.read_bindings.contains(binding_name)
+  {
+    lazy.read_bindings.insert(binding_name.to_string());
+  }
+  if let Some(direct) = direct_cjs_reads
+    && needs_namespace
+    && !direct.namespace_reads.contains(binding_name)
+  {
+    direct.namespace_reads.insert(binding_name.to_string());
+  }
+}
+
+/// Whether reading `imported` needs the interop namespace rather than `module.exports`.
+/// `default` differs between the two (`module.exports` itself for non-`__esModule`
+/// modules and in Node interop), and `*` is the namespace object.
+fn reads_namespace(imported: &Specifier) -> bool {
+  match imported {
+    Specifier::Star => true,
+    Specifier::Literal(name) => name.as_str() == "default",
+  }
+}
+
+/// Whether the current node is only the object of a read like `ns.key` or `ns["key"]`
+/// with `key !== "default"`. Such a read of a namespace import gets the same value from
+/// `module.exports`, so the namespace object itself is not needed. Writes (`ns.key = v`,
+/// `ns.key++`, `delete ns.key`) keep the namespace, where they fail as in ESM.
+fn is_named_member_read(ctx: &oxc_traverse::TraverseCtx<'_, ()>) -> bool {
+  let is_named = match ctx.parent() {
+    Ancestor::StaticMemberExpressionObject(member) => member.property().name != "default",
+    Ancestor::ComputedMemberExpressionObject(member) => {
+      matches!(member.expression(), Expression::StringLiteral(lit) if lit.value != "default")
+    }
+    _ => false,
+  };
+  is_named
+    && !matches!(
+      ctx.ancestor(1),
+      Ancestor::AssignmentExpressionLeft(_)
+        | Ancestor::UpdateExpressionArgument(_)
+        | Ancestor::UnaryExpressionArgument(_)
+    )
 }
 
 // See internal-docs/rollipop-lazy-imports/implementation.md
@@ -202,6 +273,8 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     let is_runtime_module = ctx.link_output.runtime.id() == ctx.module.idx;
     let lazy_imports =
       (!is_runtime_module && is_lazy_imports_enabled(ctx.options)).then(LazyImportsState::default);
+    // The HMR runtime replaces module records in dev mode; keep the namespace there.
+    let direct_cjs_reads = (!is_runtime_module && !is_dev_mode).then(DirectCjsReadsState::default);
     let exports = oxc::allocator::Vec::new_in(&ast_builder);
     let ast_factory = AstFactory { ast_builder };
     Self {
@@ -219,6 +292,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
       renamed_factory_param_bindings: FxHashMap::default(),
       used_binding_names: FxHashSet::default(),
       lazy_imports,
+      direct_cjs_reads,
     }
   }
 
@@ -387,12 +461,19 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     }
   }
 
-  fn mark_import_binding_read(&mut self, binding_name: &str) {
-    if let Some(lazy) = &mut self.lazy_imports
-      && !lazy.read_bindings.contains(binding_name)
-    {
-      lazy.read_bindings.insert(binding_name.to_string());
-    }
+  fn mark_import_binding_read(
+    &mut self,
+    binding_name: &str,
+    imported: &Specifier,
+    lazy_read: bool,
+  ) {
+    note_import_binding_read(
+      &mut self.lazy_imports,
+      &mut self.direct_cjs_reads,
+      binding_name,
+      lazy_read,
+      reads_namespace(imported),
+    );
   }
 
   /// Whether the getter for this module's export `exported` can ever be called, so
@@ -426,39 +507,57 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     }
   }
 
-  /// Turns eligible generated import declarations into lazy holders and returns
-  /// their binding names. Runs after traversal, when every read of the generated
-  /// bindings is known.
-  fn apply_lazy_imports(
+  /// Whether named reads of `importee` can skip the interop namespace and read
+  /// `module.exports` directly.
+  fn can_read_cjs_exports_directly(&self, importee: &NormalModule) -> bool {
+    self.direct_cjs_reads.is_some() && self.ctx.module.interop(importee).is_some()
+  }
+
+  /// Rewrites generated import declarations once every read of their bindings is known,
+  /// and returns the names of the bindings that became lazy holders:
+  /// - Eligible bindings become lazy holders (`__rollipop_lazy__(id[, mode])`).
+  /// - Remaining CommonJS bindings that are only read through named exports become
+  ///   `__rollipop_require__(id)`. A named export of the interop namespace is a getter for
+  ///   the same key of `module.exports`, so reading it directly skips building the
+  ///   namespace and the extra getter call on every read.
+  fn finalize_import_initializers(
     &self,
     body: &mut oxc::allocator::Vec<'ast, Statement<'ast>>,
   ) -> FxHashSet<String> {
     let mut lazy_bindings = FxHashSet::default();
-    let Some(lazy) = &self.lazy_imports else { return lazy_bindings };
-    if lazy.candidates.is_empty() {
+    let has_lazy_candidates = self.lazy_imports.as_ref().is_some_and(|l| !l.candidates.is_empty());
+    let has_direct_candidates =
+      self.direct_cjs_reads.as_ref().is_some_and(|d| !d.candidates.is_empty());
+    if !has_lazy_candidates && !has_direct_candidates {
       return lazy_bindings;
     }
     for stmt in body.iter_mut() {
       let Statement::VariableDeclaration(decl) = stmt else { continue };
       for declarator in &mut decl.declarations {
         let Some(ident) = declarator.id.get_binding_identifier() else { continue };
-        let Some((importee_idx, mode)) = lazy.candidates.get(ident.name.as_str()) else {
-          continue;
-        };
-        if lazy.eager_targets.contains(importee_idx)
-          || self.ctx.lazy_import_excluded.contains(importee_idx)
-          || self
+        let name = ident.name.as_str();
+        if let Some(lazy) = &self.lazy_imports
+          && let Some((importee_idx, mode)) = lazy.candidates.get(name)
+          && !lazy.eager_targets.contains(importee_idx)
+          && !self.ctx.lazy_import_excluded.contains(importee_idx)
+          && !self
             .ctx
             .lazy_pinned_re_exports
             .get(&self.ctx.module.idx)
             .is_some_and(|re_exported| re_exported.contains(importee_idx))
-          || !lazy.read_bindings.contains(ident.name.as_str())
+          && lazy.read_bindings.contains(name)
         {
+          // A lazy holder evaluates the importee on the first read of its `a` property.
+          declarator.init = Some(self.lazy_holder_call(&self.modules()[*importee_idx], *mode));
+          lazy_bindings.insert(name.to_string());
           continue;
         }
-        // A lazy holder evaluates the importee on the first read of its `a` property.
-        declarator.init = Some(self.lazy_holder_call(&self.modules()[*importee_idx], *mode));
-        lazy_bindings.insert(ident.name.to_string());
+        if let Some(direct) = &self.direct_cjs_reads
+          && let Some(importee_idx) = direct.candidates.get(name)
+          && !direct.namespace_reads.contains(name)
+        {
+          declarator.init = Some(self.require_call_for_module(&self.modules()[*importee_idx]));
+        }
       }
     }
     lazy_bindings
@@ -479,6 +578,11 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
         if let Some(lazy) = &mut self.lazy_imports {
           let mode = Self::lazy_holder_mode(interop.as_ref());
           lazy.candidates.insert(binding_name.to_string(), (normal.idx, mode));
+        }
+        if interop.is_some()
+          && let Some(direct) = &mut self.direct_cjs_reads
+        {
+          direct.candidates.insert(binding_name.to_string(), normal.idx);
         }
         self.namespace_expr_for_module(importee, interop.as_ref())
       }
@@ -607,6 +711,11 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     let imported =
       self.export_name_for_canonical_ref(canonical_ref.owner, canonical_ref, &fallback);
     let namespace = match module {
+      Module::Normal(importee)
+        if !reads_namespace(&imported) && self.can_read_cjs_exports_directly(importee) =>
+      {
+        self.require_call_for_module(module)
+      }
       Module::Normal(importee) => {
         self.namespace_expr_for_module(module, self.ctx.module.interop(importee).as_ref())
       }
@@ -903,9 +1012,12 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
               if let Some(stmt) = stmt {
                 program_body.push(stmt);
               }
-              if self.lazy_imports.is_some() && self.is_export_getter_read(&exported) {
-                self.mark_import_binding_read(&import_binding.binding_name);
-              }
+              let lazy_read = self.lazy_imports.is_some() && self.is_export_getter_read(&exported);
+              self.mark_import_binding_read(
+                &import_binding.binding_name,
+                &import_binding.imported,
+                lazy_read,
+              );
               props.push(self.ast_factory.make_lazy_export_property(
                 &exported,
                 import_binding.to_expression(&self.ast_factory),
@@ -1035,6 +1147,8 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     };
     // `export *` enumerates the namespace, and `export * as ns` exposes it as a value.
     self.mark_import_target_eager(importee_idx);
+    // The importee is already eager; this only keeps the CommonJS namespace.
+    self.mark_import_binding_read(&binding_name, &Specifier::Star, false);
     if let Some(stmt) = stmt {
       program_body.push(stmt);
     }
@@ -1106,13 +1220,15 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     for (exported, named_export) in &self.named_exports {
       let expr = if let Some(import_binding) = self.import_bindings.get(&named_export.local_binding)
       {
-        let is_read = self.lazy_imports.is_some() && self.is_export_getter_read(exported.as_str());
-        if is_read
-          && let Some(lazy) = &mut self.lazy_imports
-          && !lazy.read_bindings.contains(&import_binding.binding_name)
-        {
-          lazy.read_bindings.insert(import_binding.binding_name.clone());
-        }
+        let lazy_read =
+          self.lazy_imports.is_some() && self.is_export_getter_read(exported.as_str());
+        note_import_binding_read(
+          &mut self.lazy_imports,
+          &mut self.direct_cjs_reads,
+          &import_binding.binding_name,
+          lazy_read,
+          reads_namespace(&import_binding.imported),
+        );
         import_binding.to_expression(&self.ast_factory)
       } else {
         let name = scoping.symbol_name(named_export.local_binding);
@@ -1420,7 +1536,7 @@ impl<'ast> Traverse<'ast, ()> for RollipopAstFinalizer<'_, 'ast> {
         next_body.push(stmt);
       }
     }
-    let lazy_bindings = self.apply_lazy_imports(&mut body);
+    let lazy_bindings = self.finalize_import_initializers(&mut body);
     if self.uses_import_meta_hot && self.is_dev_mode {
       next_body.push(self.create_module_hot_context_initializer_stmt());
     }
@@ -1462,11 +1578,18 @@ impl<'ast> Traverse<'ast, ()> for RollipopAstFinalizer<'_, 'ast> {
       && let Some(symbol_id) = ctx.scoping().get_reference(reference_id).symbol_id()
       && let Some(import_binding) = self.import_bindings.get(&symbol_id)
     {
-      if let Some(lazy) = &mut self.lazy_imports
-        && !lazy.read_bindings.contains(&import_binding.binding_name)
-      {
-        lazy.read_bindings.insert(import_binding.binding_name.clone());
-      }
+      let needs_namespace = match &import_binding.imported {
+        // `ns.key` of a namespace import reads the same value from `module.exports`.
+        Specifier::Star => !is_named_member_read(ctx),
+        imported @ Specifier::Literal(_) => reads_namespace(imported),
+      };
+      note_import_binding_read(
+        &mut self.lazy_imports,
+        &mut self.direct_cjs_reads,
+        &import_binding.binding_name,
+        true,
+        needs_namespace,
+      );
       let mut expr = import_binding.to_expression(&self.ast_factory);
       // Imported bindings are bare values, not methods of the generated namespace.
       let parent = ctx

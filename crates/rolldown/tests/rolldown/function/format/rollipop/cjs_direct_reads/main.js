@@ -1,0 +1,34 @@
+// Load cycle.cjs first so cycle_importer.js runs while it is still loading.
+import './cycle.cjs';
+import { count, increment, addKey, addedLater } from './live.cjs';
+import { helper } from './fn.cjs';
+import { named } from './esmodule.cjs';
+import { esmoduleDefault, fnDefault } from './default_only.js';
+import { liveNamespace } from './namespace.js';
+import { reexported } from './reexport.js';
+import { nodeNamed } from './node_mode.mjs';
+import { readLate } from './cycle_importer.js';
+import { memberHelper, computedHelper } from './member_ns.js';
+import { defaultMember } from './default_member_ns.js';
+
+const result = {};
+result.countBefore = count;
+increment();
+result.countAfter = count;
+result.addedBefore = addedLater;
+addKey();
+result.addedAfter = addedLater;
+result.helper = helper;
+result.named = named;
+result.esmoduleDefault = esmoduleDefault;
+result.fnDefault = fnDefault();
+result.namespaceCount = liveNamespace.count;
+result.namespaceDefaultIsExports = liveNamespace.default.count === liveNamespace.count;
+result.reexported = reexported;
+result.nodeNamed = nodeNamed;
+result.cycle = globalThis.__rollipop_cjs_direct_cycle;
+result.cycleLate = readLate();
+result.memberHelper = memberHelper;
+result.computedHelper = computedHelper;
+result.defaultMember = defaultMember;
+globalThis.__rollipop_cjs_direct_reads_result = result;
