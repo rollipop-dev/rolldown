@@ -29,7 +29,7 @@ jobs:
       PR_NUMBER: ${{ github.event.pull_request.number }}
       PR_SHA: ${{ github.event.pull_request.head.sha }}
       BASE_SHA: ${{ github.sha }}
-      DEV_BRANCH: codex/prerelease-${{ github.event.pull_request.number }}-${{ github.run_id }}-${{ github.run_attempt }}
+      DEV_BRANCH: prerelease-${{ github.event.pull_request.number }}-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       # The label authorizes the current PR commit and subsequent updates, including forks.
       # Check the label author's access rather than the author of a later push.
