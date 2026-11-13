@@ -82,6 +82,15 @@ details.
 - In a circular import, a lazy namespace of a module that is still loading
   reads through to its partially-initialized exports, like an eager import. It
   becomes final once that module has loaded.
+- Laziness can change which module of an import cycle runs first. Eagerly, a
+  cycle is entered at the first member in import order; lazily, at the first
+  member whose binding is read. Code that only works because of the eager entry
+  point (a member reading another member's `const` at load time) can then hit a
+  TDZ error. `exclude` on the member that has to run first restores the eager
+  entry point (fixture `lazy_imports_cycle_exclude`). Keeping every cycle member
+  eager would avoid this, but React Native app code has many cycles, so that
+  would give up much of the benefit; Metro's `inlineRequires` has the same
+  hazard.
 - Without `Proxy`, `__rollipop_require__.l` falls back to eager evaluation.
 
 As with Metro's `inlineRequires`, code that relies on another module's

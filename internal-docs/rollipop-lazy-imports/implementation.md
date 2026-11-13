@@ -135,6 +135,8 @@ ordinary prototype. Reads are then indistinguishable from the eager path.
 - `lazy_imports_reexport_namespace`: re-exports behind a namespace import, a
   namespace through `export *`, `export *`, `require()` and `import()` stay
   eager when only other exports are read; `ns.x` and `export *` reads stay lazy.
+- `lazy_imports_cycle_exclude`: `exclude` restores the eager entry point of an
+  import cycle that would otherwise hit a TDZ error.
 - `lazy_imports_entry_reexport`: a user-defined entry's re-exports stay eager.
 - `lazy_imports_exclude_barrel`: `exclude` reaches a module behind a package
   index only when the pattern also matches the index.
