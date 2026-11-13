@@ -34,8 +34,10 @@ __rollipop_require__.r = function(exports) {
     Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
   }
 };
-__rollipop_require__.t = function(mod, nodeMode) {
-  var target = mod != null ? Object.create(Object.getPrototypeOf(mod)) : {};
+__rollipop_require__.t = function(mod, nodeMode, target) {
+  var proto = mod != null ? Object.getPrototypeOf(mod) : Object.prototype;
+  if (target === undefined) target = Object.create(proto);
+  else Object.setPrototypeOf(target, proto);
   if (nodeMode || !mod || !mod.__esModule) Object.defineProperty(target, 'default', { value: mod, enumerable: true });
   if (mod != null) {
     var keys = Object.getOwnPropertyNames(mod);
@@ -49,6 +51,19 @@ __rollipop_require__.t = function(mod, nodeMode) {
     }
   }
   return target;
+};
+__rollipop_require__.i = function(id, nodeMode, target) {
+  var mod = __rollipop_require__(id);
+  var module = __rollipop_module_cache[id];
+  // A module that is still initializing (circular import) can gain exports later.
+  if (module === undefined || module.loaded !== true) return __rollipop_require__.t(mod, nodeMode);
+  if (module.nsSource !== mod) {
+    module.nsSource = mod;
+    module.ns = module.nodeNs = undefined;
+  }
+  return nodeMode
+    ? module.nodeNs || (module.nodeNs = __rollipop_require__.t(mod, nodeMode, target))
+    : module.ns || (module.ns = __rollipop_require__.t(mod, nodeMode, target));
 };
 __rollipop_require__.re = function(exports, ns) {
   for (var key in ns) {

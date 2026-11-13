@@ -1,0 +1,12 @@
+{
+  "config": {
+    "id": "host",
+    "format": "rollipop",
+    "lazyImports": true,
+    "experimental": {
+      "devMode": {}
+    }
+  },
+  "expectExecuted": false,
+  "snapshot": false
+}

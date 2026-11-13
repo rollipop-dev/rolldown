@@ -26,18 +26,19 @@ use crate::{
   SharedOptions,
   hmr::utils::HmrAstBuilder,
   rollipop::{
-    HMR_RUNTIME_NAME, ROLLIPOP_EXPORTS_NAME, ROLLIPOP_GLOBAL_NAME, ROLLIPOP_MODULE_NAME,
-    ROLLIPOP_REQUIRE_NAME,
+    HMR_RUNTIME_NAME, ROLLIPOP_EXPORTS_NAME, ROLLIPOP_GLOBAL_NAME, ROLLIPOP_LAZY_NAME,
+    ROLLIPOP_MODULE_NAME, ROLLIPOP_REQUIRE_NAME, is_lazy_imports_enabled,
   },
   stages::link_stage::LinkStageOutput,
   types::linking_metadata::{LinkingMetadata, LinkingMetadataVec},
 };
 
-const FACTORY_PARAM_NAMES: [&str; 5] = [
+const FACTORY_PARAM_NAMES: [&str; 6] = [
   ROLLIPOP_GLOBAL_NAME,
   ROLLIPOP_MODULE_NAME,
   ROLLIPOP_EXPORTS_NAME,
   ROLLIPOP_REQUIRE_NAME,
+  ROLLIPOP_LAZY_NAME,
   HMR_RUNTIME_NAME,
 ];
 
@@ -149,6 +150,8 @@ pub struct RollipopAstFinalizerContext<'me> {
   pub options: &'me SharedOptions,
   pub module: &'me NormalModule,
   pub unique_index: usize,
+  /// Importees matched by `lazyImports.exclude`.
+  pub lazy_import_excluded: &'me FxHashSet<ModuleIdx>,
 }
 
 pub struct RollipopAstFinalizer<'me, 'ast> {
@@ -166,6 +169,19 @@ pub struct RollipopAstFinalizer<'me, 'ast> {
   is_runtime_module: bool,
   renamed_factory_param_bindings: FxHashMap<SymbolId, String>,
   used_binding_names: FxHashSet<String>,
+  /// `None` unless lazy imports are enabled for this module.
+  lazy_imports: Option<LazyImportsState>,
+}
+
+// See internal-docs/rollipop-lazy-imports/implementation.md
+#[derive(Default)]
+struct LazyImportsState {
+  /// Generated import bindings that may become lazy, keyed by binding name.
+  candidates: FxHashMap<String, (ModuleIdx, Option<f64>)>,
+  /// Importees whose evaluation must stay eager (bare, namespace and `export *` imports).
+  eager_targets: FxHashSet<ModuleIdx>,
+  /// Generated import bindings read by the module. Unread ones only exist for side effects.
+  read_bindings: FxHashSet<String>,
 }
 
 impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
@@ -177,6 +193,8 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     };
     let is_dev_mode = ctx.options.is_dev_mode_enabled();
     let is_runtime_module = ctx.link_output.runtime.id() == ctx.module.idx;
+    let lazy_imports =
+      (!is_runtime_module && is_lazy_imports_enabled(ctx.options)).then(LazyImportsState::default);
     let exports = oxc::allocator::Vec::new_in(&ast_builder);
     let ast_factory = AstFactory { ast_builder };
     Self {
@@ -193,6 +211,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
       is_runtime_module,
       renamed_factory_param_bindings: FxHashMap::default(),
       used_binding_names: FxHashSet::default(),
+      lazy_imports,
     }
   }
 
@@ -286,6 +305,121 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     self.ast_factory.make_to_esm_call_with_interop("__rollipop_require__.t", expr, interop)
   }
 
+  /// `__rollipop_require__.<helper>(id[, mode])`
+  fn require_helper_call(
+    &self,
+    helper: &str,
+    importee: &Module,
+    mode: Option<f64>,
+  ) -> Expression<'ast> {
+    let mut arguments = oxc::allocator::Vec::with_capacity_in(2, &self.ast_factory);
+    arguments.push(ast::Argument::from(self.runtime_id_expr_for(importee)));
+    if let Some(mode) = mode {
+      arguments.push(ast::Argument::from(Expression::new_numeric_literal(
+        SPAN,
+        mode,
+        None,
+        ast::NumberBase::Decimal,
+        &self.ast_factory,
+      )));
+    }
+    Expression::new_call_expression(
+      SPAN,
+      self.ast_factory.make_member_access_expr(ROLLIPOP_REQUIRE_NAME, helper),
+      None,
+      arguments,
+      false,
+      &self.ast_factory,
+    )
+  }
+
+  /// `__rollipop_lazy__(id[, mode])`, the lazy loader passed as a factory parameter.
+  fn lazy_namespace_call(&self, importee: &Module, mode: Option<f64>) -> Expression<'ast> {
+    let mut arguments = oxc::allocator::Vec::with_capacity_in(2, &self.ast_factory);
+    arguments.push(ast::Argument::from(self.runtime_id_expr_for(importee)));
+    if let Some(mode) = mode {
+      arguments.push(ast::Argument::from(Expression::new_numeric_literal(
+        SPAN,
+        mode,
+        None,
+        ast::NumberBase::Decimal,
+        &self.ast_factory,
+      )));
+    }
+    Expression::new_call_expression(
+      SPAN,
+      self.ast_factory.make_id_ref_expr(SPAN, ROLLIPOP_LAZY_NAME),
+      None,
+      arguments,
+      false,
+      &self.ast_factory,
+    )
+  }
+
+  /// The ESM namespace of a bundled module. CommonJS importees go through
+  /// `__rollipop_require__.i`, which builds the interop namespace once per module.
+  fn namespace_expr_for_module(
+    &self,
+    importee: &Module,
+    interop: Option<&Interop>,
+  ) -> Expression<'ast> {
+    match interop {
+      None => self.require_call_for_module(importee),
+      Some(Interop::Babel) => self.require_helper_call("i", importee, None),
+      Some(Interop::Node) => self.require_helper_call("i", importee, Some(1.0)),
+    }
+  }
+
+  /// The `mode` argument of `__rollipop_require__.l`: omitted for ESM importees,
+  /// `0` for Babel interop and `1` for Node interop.
+  fn lazy_namespace_mode(interop: Option<&Interop>) -> Option<f64> {
+    match interop {
+      None => None,
+      Some(Interop::Babel) => Some(0.0),
+      Some(Interop::Node) => Some(1.0),
+    }
+  }
+
+  fn mark_import_binding_read(&mut self, binding_name: &str) {
+    if let Some(lazy) = &mut self.lazy_imports
+      && !lazy.read_bindings.contains(binding_name)
+    {
+      lazy.read_bindings.insert(binding_name.to_string());
+    }
+  }
+
+  fn mark_import_target_eager(&mut self, importee_idx: ModuleIdx) {
+    if let Some(lazy) = &mut self.lazy_imports {
+      lazy.eager_targets.insert(importee_idx);
+    }
+  }
+
+  /// Turns eligible generated import declarations into lazy namespaces.
+  /// Runs after traversal, when every read of the generated bindings is known.
+  fn apply_lazy_imports(&self, body: &mut oxc::allocator::Vec<'ast, Statement<'ast>>) {
+    let Some(lazy) = &self.lazy_imports else { return };
+    if lazy.candidates.is_empty() {
+      return;
+    }
+    for stmt in body.iter_mut() {
+      let Statement::VariableDeclaration(decl) = stmt else { continue };
+      for declarator in &mut decl.declarations {
+        let Some(ident) = declarator.id.get_binding_identifier() else { continue };
+        let Some((importee_idx, mode)) = lazy.candidates.get(ident.name.as_str()) else {
+          continue;
+        };
+        if lazy.eager_targets.contains(importee_idx)
+          || self.ctx.lazy_import_excluded.contains(importee_idx)
+          || !lazy.read_bindings.contains(ident.name.as_str())
+        {
+          continue;
+        }
+        // A lazy namespace evaluates the importee on first property access.
+        declarator.init = Some(self.lazy_namespace_call(&self.modules()[*importee_idx], *mode));
+      }
+    }
+  }
+
   fn create_import_binding_stmt(
     &mut self,
     importee: &Module,
@@ -295,17 +429,21 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
       return None;
     }
 
-    let (require_expr, interop) = match importee {
-      Module::Normal(importee) => (
-        self.require_call_for_module(&self.modules()[importee.idx]),
-        self.ctx.module.interop(importee),
-      ),
-      Module::External(importee) => {
-        (self.require_call_for_external(importee), Some(Interop::Babel))
+    let init = match importee {
+      Module::Normal(normal) => {
+        let interop = self.ctx.module.interop(normal);
+        if let Some(lazy) = &mut self.lazy_imports {
+          let mode = Self::lazy_namespace_mode(interop.as_ref());
+          lazy.candidates.insert(binding_name.to_string(), (normal.idx, mode));
+        }
+        self.namespace_expr_for_module(importee, interop.as_ref())
+      }
+      Module::External(external) => {
+        self.to_esm_expr(self.require_call_for_external(external), Some(Interop::Babel))
       }
     };
 
-    Some(self.ast_factory.make_var_decl(binding_name, self.to_esm_expr(require_expr, interop)))
+    Some(self.ast_factory.make_var_decl(binding_name, init))
   }
 
   fn import_binding_for_imported(&self, binding_name: &str, imported: &Specifier) -> ImportBinding {
@@ -345,6 +483,11 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     imported: &Specifier,
     span: Span,
   ) -> (ImportBinding, Option<Statement<'ast>>) {
+    if matches!(imported, Specifier::Star) {
+      // The binding is the namespace object itself (e.g. `import { ns }` through a
+      // removed `export * as ns` barrel), so it can be enumerated or compared.
+      self.mark_import_target_eager(module_idx);
+    }
     let binding_name = self.binding_name_for_import(module_idx, rec_id).to_string();
     let stmt = self.create_import_binding_stmt(&self.modules()[module_idx], &binding_name).map(
       |mut stmt| {
@@ -419,20 +562,15 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     let fallback = Specifier::Literal(canonical_ref.name(self.symbol_db()).into());
     let imported =
       self.export_name_for_canonical_ref(canonical_ref.owner, canonical_ref, &fallback);
-    let (require_expr, interop) = match module {
-      Module::Normal(importee) => (
-        self.require_call_for_module(&self.modules()[importee.idx]),
-        self.ctx.module.interop(importee),
-      ),
+    let namespace = match module {
+      Module::Normal(importee) => {
+        self.namespace_expr_for_module(module, self.ctx.module.interop(importee).as_ref())
+      }
       Module::External(importee) => {
-        (self.require_call_for_external(importee), Some(Interop::Babel))
+        self.to_esm_expr(self.require_call_for_external(importee), Some(Interop::Babel))
       }
     };
-    let mut expr = make_import_access_expr_for_object(
-      &self.ast_factory,
-      self.to_esm_expr(require_expr, interop),
-      &imported,
-    );
+    let mut expr = make_import_access_expr_for_object(&self.ast_factory, namespace, &imported);
     *expr.span_mut() = span;
     expr
   }
@@ -656,12 +794,14 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
                 }
               }
             }
-            if needs_importee_binding
-              && self.should_require_importee(importee_idx)
-              && let Some(stmt) =
+            if needs_importee_binding && self.should_require_importee(importee_idx) {
+              // Side-effect and namespace imports keep evaluating the importee eagerly.
+              self.mark_import_target_eager(importee_idx);
+              if let Some(stmt) =
                 self.create_import_binding_stmt(&self.modules()[importee_idx], &binding_name)
-            {
-              program_body.push(stmt);
+              {
+                program_body.push(stmt);
+              }
             }
           }
           ast::ModuleDeclaration::ExportFromDeclaration(decl) => {
@@ -672,6 +812,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
                 return;
               };
               if self.should_require_importee(importee_idx) {
+                self.mark_import_target_eager(importee_idx);
                 let binding_name = self.binding_name_for_import(importee_idx, rec_id).to_string();
                 if let Some(stmt) =
                   self.create_import_binding_stmt(&self.modules()[importee_idx], &binding_name)
@@ -706,6 +847,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
               if let Some(stmt) = stmt {
                 program_body.push(stmt);
               }
+              self.mark_import_binding_read(&import_binding.binding_name);
               props.push(self.ast_factory.make_lazy_export_property(
                 &exported,
                 import_binding.to_expression(&self.ast_factory),
@@ -828,11 +970,13 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     export_all_decl: &ast::ExportAllDeclaration<'ast>,
   ) {
     let rec_id = self.ctx.module.imports[&export_all_decl.node_id()];
-    let Some((_importee_idx, binding_name, stmt)) =
+    let Some((importee_idx, binding_name, stmt)) =
       self.ensure_import_for_record(rec_id, export_all_decl.span)
     else {
       return;
     };
+    // `export *` enumerates the namespace, and `export * as ns` exposes it as a value.
+    self.mark_import_target_eager(importee_idx);
     if let Some(stmt) = stmt {
       program_body.push(stmt);
     }
@@ -904,6 +1048,11 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     for (exported, named_export) in &self.named_exports {
       let expr = if let Some(import_binding) = self.import_bindings.get(&named_export.local_binding)
       {
+        if let Some(lazy) = &mut self.lazy_imports
+          && !lazy.read_bindings.contains(&import_binding.binding_name)
+        {
+          lazy.read_bindings.insert(import_binding.binding_name.clone());
+        }
         import_binding.to_expression(&self.ast_factory)
       } else {
         let name = scoping.symbol_name(named_export.local_binding);
@@ -1052,11 +1201,9 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     let rec = &self.ctx.module.import_records[*rec_idx];
     let Some(importee_idx) = rec.resolved_module else { return };
     let importee = &self.modules()[importee_idx];
-    let (require_expr, needs_interop) = match importee {
-      Module::Normal(module) => {
-        (self.require_call_for_module(importee), module.exports_kind.is_commonjs())
-      }
-      Module::External(importee) => (self.require_call_for_external(importee), true),
+    let needs_interop = match importee {
+      Module::Normal(module) => module.exports_kind.is_commonjs(),
+      Module::External(_) => true,
     };
     let interop = needs_interop.then(|| {
       if self.ctx.module.should_consider_node_esm_spec_for_dynamic_import() {
@@ -1065,7 +1212,13 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
         Interop::Babel
       }
     });
-    *node = self.ast_factory.make_promise_resolve_then(self.to_esm_expr(require_expr, interop));
+    let namespace = match importee {
+      Module::Normal(_) => self.namespace_expr_for_module(importee, interop.as_ref()),
+      Module::External(external) => {
+        self.to_esm_expr(self.require_call_for_external(external), interop)
+      }
+    };
+    *node = self.ast_factory.make_promise_resolve_then(namespace);
   }
 
   fn rewrite_require(
@@ -1199,7 +1352,7 @@ impl<'ast> Traverse<'ast, ()> for RollipopAstFinalizer<'_, 'ast> {
     node: &mut ast::Program<'ast>,
     ctx: &mut oxc_traverse::TraverseCtx<'ast, ()>,
   ) {
-    let body = node.body.take_in(&self.ast_factory);
+    let mut body = node.body.take_in(&self.ast_factory);
     let mut next_body = oxc::allocator::Vec::with_capacity_in(body.len() + 3, &self.ast_factory);
     if self.ctx.module.exports_kind.is_esm() && !self.is_runtime_module {
       next_body.push(self.create_mark_esm_stmt());
@@ -1207,6 +1360,7 @@ impl<'ast> Traverse<'ast, ()> for RollipopAstFinalizer<'_, 'ast> {
         next_body.push(stmt);
       }
     }
+    self.apply_lazy_imports(&mut body);
     if self.uses_import_meta_hot && self.is_dev_mode {
       next_body.push(self.create_module_hot_context_initializer_stmt());
     }
@@ -1240,6 +1394,11 @@ impl<'ast> Traverse<'ast, ()> for RollipopAstFinalizer<'_, 'ast> {
       && let Some(symbol_id) = ctx.scoping().get_reference(reference_id).symbol_id()
       && let Some(import_binding) = self.import_bindings.get(&symbol_id)
     {
+      if let Some(lazy) = &mut self.lazy_imports
+        && !lazy.read_bindings.contains(&import_binding.binding_name)
+      {
+        lazy.read_bindings.insert(import_binding.binding_name.clone());
+      }
       let mut expr = import_binding.to_expression(&self.ast_factory);
       // Imported bindings are bare values, not methods of the generated namespace.
       let parent = ctx

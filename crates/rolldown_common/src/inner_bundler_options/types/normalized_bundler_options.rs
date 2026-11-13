@@ -128,6 +128,9 @@ pub struct NormalizedBundlerOptions {
   // MARK: - Rollipop
   pub id: String,
   pub persistent_cache: bool,
+  /// `None` unless `lazyImports` is enabled.
+  /// See internal-docs/rollipop-lazy-imports/design.md
+  pub lazy_imports: Option<super::lazy_imports_option::NormalizedLazyImportsOptions>,
 }
 
 // This is only used for testing
@@ -213,6 +216,7 @@ impl Default for NormalizedBundlerOptions {
       // MARK: - Rollipop
       id: "unknown".to_string(),
       persistent_cache: false,
+      lazy_imports: None,
     }
   }
 }

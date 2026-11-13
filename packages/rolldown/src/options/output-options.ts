@@ -813,6 +813,38 @@ export interface OutputOptions {
    * @default false
    */
   persistentCache?: boolean;
+  /**
+   * Defer evaluating statically imported modules until one of their imported
+   * bindings is first read, similar to Metro's `inlineRequires`.
+   *
+   * Only applies to `format: 'rollipop'` and is ignored in dev mode. Use sites
+   * are left untouched: each import declaration yields a lazy namespace that
+   * evaluates the module on first property access and then reads exactly like
+   * an eagerly imported one.
+   *
+   * Side-effect-only imports, namespace imports, `export * from` and imports
+   * whose bindings are never read are still evaluated eagerly. Enabling this
+   * changes module evaluation order: a module that must run as soon as it is
+   * imported (for example one that registers itself somewhere at load time)
+   * can be imported for its side effects (`import './setup'`) or listed in
+   * `exclude`.
+   * @default false
+   */
+  lazyImports?: boolean | LazyImportsOptions;
+}
+
+/** @see {@linkcode OutputOptions.lazyImports | lazyImports} */
+export interface LazyImportsOptions {
+  /**
+   * Modules that are always evaluated eagerly when imported, matched against
+   * module ids. Strings are glob patterns resolved against `cwd`.
+   *
+   * @example
+   * ```js
+   * lazyImports: { exclude: [/[\\/]src[\\/]setup[\\/]/, '**\/node_modules/some-polyfill/**'] }
+   * ```
+   */
+  exclude?: StringOrRegExp | StringOrRegExp[];
 }
 
 /**

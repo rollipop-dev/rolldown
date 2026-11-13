@@ -76,6 +76,7 @@ OPTIONS
   --input <input>             Entry file.
   --intro <intro>             Code to insert the top of the bundled file (inside the wrapper function).
   --keepNames                 Keep function and class names after bundling.
+  --lazyImports <lazyImports> Defer evaluating statically imported modules until first binding access (rollipop format only).
   --legalComments <legalComments>Control legal comments in the output.
   --logLevel <logLevel>       Log level (silent, info, debug, warn).
   --makeAbsoluteExternalsRelative Prevent normalization of external imports.
@@ -232,6 +233,7 @@ OPTIONS
   --input <input>             Entry file.
   --intro <intro>             Code to insert the top of the bundled file (inside the wrapper function).
   --keepNames                 Keep function and class names after bundling.
+  --lazyImports <lazyImports> Defer evaluating statically imported modules until first binding access (rollipop format only).
   --legalComments <legalComments>Control legal comments in the output.
   --logLevel <logLevel>       Log level (silent, info, debug, warn).
   --makeAbsoluteExternalsRelative Prevent normalization of external imports.
@@ -388,6 +390,7 @@ OPTIONS
   --input <input>             Entry file.
   --intro <intro>             Code to insert the top of the bundled file (inside the wrapper function).
   --keepNames                 Keep function and class names after bundling.
+  --lazyImports <lazyImports> Defer evaluating statically imported modules until first binding access (rollipop format only).
   --legalComments <legalComments>Control legal comments in the output.
   --logLevel <logLevel>       Log level (silent, info, debug, warn).
   --makeAbsoluteExternalsRelative Prevent normalization of external imports.
@@ -544,6 +547,7 @@ OPTIONS
   --input <input>             Entry file.
   --intro <intro>             Code to insert the top of the bundled file (inside the wrapper function).
   --keepNames                 Keep function and class names after bundling.
+  --lazyImports <lazyImports> Defer evaluating statically imported modules until first binding access (rollipop format only).
   --legalComments <legalComments>Control legal comments in the output.
   --logLevel <logLevel>       Log level (silent, info, debug, warn).
   --makeAbsoluteExternalsRelative Prevent normalization of external imports.
