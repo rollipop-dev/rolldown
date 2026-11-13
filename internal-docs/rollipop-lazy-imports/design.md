@@ -127,10 +127,16 @@ the imported module. A single pattern then applies at every import site, unlike
 Metro's importer-keyed `blockList`. Patterns use the same string-glob/RegExp
 semantics as other Rolldown module filters (`pattern_filter::filter`).
 
+## Default
+
+`lazyImports` is off by default, both here and in Rollipop. React Native's Metro
+template enables `inlineRequires` by default, but this feature changes
+evaluation order, so it stays opt-in until it has been stabilized on real apps.
+Turning it on by default for Rollipop production builds should be revisited
+then.
+
 ## Unresolved questions
 
-- Whether Rollipop should enable `lazyImports` by default for production builds,
-  as React Native's Metro template does with `inlineRequires`.
 - A stricter mode that only defers modules without side effects (from
   `sideEffects` and Rolldown's own analysis) would never change behavior. Most
   React Native modules probably count as side-effectful (top-level
