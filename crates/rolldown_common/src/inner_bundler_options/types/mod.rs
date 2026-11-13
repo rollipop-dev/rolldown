@@ -44,3 +44,6 @@ pub mod treeshake;
 pub mod tsconfig;
 pub mod tsconfig_merge;
 pub mod watch_option;
+
+// MARK: - Rollipop
+pub mod lazy_imports_option;

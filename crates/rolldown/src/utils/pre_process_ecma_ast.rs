@@ -229,6 +229,16 @@ impl PreProcessEcmaAst {
       });
     }
 
+    // MARK: - Rollipop
+    // DCE merges `import './x'` into `import { a } from './x'`, which would hide the
+    // explicit side-effect import from the lazy imports decision.
+    // See internal-docs/rollipop-lazy-imports/implementation.md
+    let side_effect_import_requests = if crate::rollipop::is_lazy_imports_enabled(bundle_options) {
+      collect_side_effect_import_requests(ast.program())
+    } else {
+      FxHashSet::default()
+    };
+
     // Step 5: Run DCE.
     // Avoid DCE for lazy export.
     if bundle_options.treeshake.is_some() && !has_lazy_export {
@@ -280,6 +290,7 @@ impl PreProcessEcmaAst {
       warnings,
       preserve_jsx,
       enum_member_value_map,
+      side_effect_import_requests,
     })
   }
 
@@ -403,6 +414,24 @@ fn invalid_annotation_warnings(
         comment.content == CommentContent::NoSideEffectsNotApplied,
       )
       .with_severity_warning()
+    })
+    .collect()
+}
+
+// MARK: - Rollipop
+/// Requests of value imports without bindings: `import './x'` and `import {} from './x'`.
+fn collect_side_effect_import_requests(program: &Program<'_>) -> FxHashSet<CompactStr> {
+  program
+    .body
+    .iter()
+    .filter_map(|stmt| match stmt {
+      Statement::ImportDeclaration(decl)
+        if decl.import_kind.is_value()
+          && decl.specifiers.as_ref().is_none_or(|specifiers| specifiers.is_empty()) =>
+      {
+        Some(CompactStr::from(rolldown_utils::ecmascript::to_usv_str(decl.source.value)))
+      }
+      _ => None,
     })
     .collect()
 }

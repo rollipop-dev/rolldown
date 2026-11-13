@@ -586,6 +586,7 @@ pub fn prepare_build_context(
     // MARK: - Rollipop
     id: raw_options.id.unwrap_or_else(|| "unknown".to_string()),
     persistent_cache: raw_options.persistent_cache.unwrap_or(false),
+    lazy_imports: raw_options.lazy_imports.and_then(rolldown_common::LazyImportsOption::normalize),
   };
 
   normalized.minify = raw_minify.normalize(&normalized);

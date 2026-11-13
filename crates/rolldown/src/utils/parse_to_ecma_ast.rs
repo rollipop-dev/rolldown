@@ -11,7 +11,7 @@ use rolldown_ecmascript::{EcmaAst, EcmaCompiler};
 use rolldown_error::{BuildDiagnostic, BuildResult, EventKindSwitcher};
 use rolldown_plugin::HookTransformAstArgs;
 use rolldown_utils::mime::guess_mime;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use sugar_path::SugarPath as _;
 
 use super::pre_process_ecma_ast::PreProcessEcmaAst;
@@ -46,6 +46,11 @@ pub struct ParseToEcmaAstResult {
   /// Enum member constant values, keyed by enum name → member name → value.
   /// Used by the finalizer to inline cross-module enum member accesses (e.g., `Direction.Up` → `0`).
   pub enum_member_value_map: FxHashMap<CompactStr, FxHashMap<CompactStr, ConstExportMeta>>,
+  // MARK: - Rollipop
+  /// Requests of side-effect-only imports (`import './x'`, `import {} from './x'`) seen
+  /// before tree-shaking can merge them into a named import of the same request.
+  /// Only collected for Rollipop lazy imports.
+  pub side_effect_import_requests: FxHashSet<CompactStr>,
 }
 
 pub async fn parse_to_ecma_ast(
