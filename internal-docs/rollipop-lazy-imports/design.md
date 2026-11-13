@@ -109,8 +109,9 @@ synchronously (`exports.init = () => { exports.client = … }`, or another modul
 monkeypatching it) or asynchronously. Importers evaluated after that point saw
 the new keys. To keep that, `.i` compares the number of own keys of
 `module.exports` on every call and extends the cached namespaces in place when
-it changed. This costs one `Object.getOwnPropertyNames` per import site, which
-is still far cheaper than defining a getter per key.
+it changed. This adds one `Object.getOwnPropertyNames` per import site. The
+startup numbers in PR #65 were measured before this check and have not been
+re-measured.
 
 Remaining differences from per-importer namespaces:
 
