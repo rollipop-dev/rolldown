@@ -45,8 +45,10 @@ source: crates/rolldown_testing/src/integration_test.rs
 	__rollipop_require__.r = function(exports) {
 		if (typeof Symbol !== "undefined" && Symbol.toStringTag) Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 	};
-	__rollipop_require__.t = function(mod, nodeMode) {
-		var target = mod != null ? Object.create(Object.getPrototypeOf(mod)) : {};
+	__rollipop_require__.t = function(mod, nodeMode, target) {
+		var proto = mod != null ? Object.getPrototypeOf(mod) : Object.prototype;
+		if (target === void 0) target = Object.create(proto);
+		else Object.setPrototypeOf(target, proto);
 		if (nodeMode || !mod || !mod.__esModule) Object.defineProperty(target, "default", {
 			value: mod,
 			enumerable: true
@@ -68,6 +70,31 @@ source: crates/rolldown_testing/src/integration_test.rs
 			}
 		}
 		return target;
+	};
+	__rollipop_require__.i = function(id, nodeMode, target) {
+		var mod = __rollipop_require__(id);
+		var module = __rollipop_module_cache[id];
+		// A module that is still initializing (circular import) can gain exports later.
+		if (module === void 0 || module.loaded !== true) return __rollipop_require__.t(mod, nodeMode);
+		var keyCount = mod != null ? Object.getOwnPropertyNames(mod).length : 0;
+		if (module.nsSource !== mod) {
+			module.nsSource = mod;
+			module.ns = module.nodeNs = void 0;
+		} else if (module.nsKeyCount !== keyCount) {
+			// Keys added after load (an `init()` or a monkeypatch) must reach later importers.
+			// `.t` skips keys the target already has, so this extends the shared objects in place.
+			// A frozen or sealed namespace can't take keys; later importers get a new one.
+			if (module.ns) {
+				if (Object.isExtensible(module.ns)) __rollipop_require__.t(mod, 0, module.ns);
+				else module.ns = void 0;
+			}
+			if (module.nodeNs) {
+				if (Object.isExtensible(module.nodeNs)) __rollipop_require__.t(mod, 1, module.nodeNs);
+				else module.nodeNs = void 0;
+			}
+		}
+		module.nsKeyCount = keyCount;
+		return nodeMode ? module.nodeNs || (module.nodeNs = __rollipop_require__.t(mod, nodeMode, target)) : module.ns || (module.ns = __rollipop_require__.t(mod, nodeMode, target));
 	};
 	__rollipop_require__.re = function(exports, ns) {
 		for (var key in ns) {

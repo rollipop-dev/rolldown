@@ -1,0 +1,304 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## main.js
+
+```js
+(function(global) {
+// HIDDEN [\0rolldown/runtime.js]
+	//#region \0rollipop/runtime
+	var __rollipop_module_cache = {};
+	function __rollipop_require__(id) {
+	  var cached = __rollipop_module_cache[id];
+	  if (cached !== undefined) {
+	    if (cached.hasError) throw cached.error;
+	    return cached.exports;
+	  }
+	  var factory = __rollipop_modules__[id];
+	  if (factory === undefined) throw new Error('Module ' + id + ' is not registered');
+	  var module = __rollipop_module_cache[id] = { id: id, loaded: false, exports: {} };
+	  try {
+	    factory.call(module.exports, global, module, module.exports, __rollipop_require__, __rollipop_require__.l);
+	  } catch (error) {
+	    module.hasError = true;
+	    module.error = error;
+	    throw error;
+	  }
+	  module.loaded = true;
+	  return module.exports;
+	}
+	__rollipop_require__.c = __rollipop_module_cache;
+	__rollipop_require__.o = function(obj, prop) {
+	  return Object.prototype.hasOwnProperty.call(obj, prop);
+	};
+	__rollipop_require__.d = function(exports, getters) {
+	  for (var key in getters) {
+	    if (__rollipop_require__.o(getters, key) && !__rollipop_require__.o(exports, key)) {
+	      Object.defineProperty(exports, key, { get: getters[key], enumerable: true });
+	    }
+	  }
+	};
+	__rollipop_require__.r = function(exports) {
+	  if (typeof Symbol !== 'undefined' && Symbol.toStringTag) {
+	    Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
+	  }
+	};
+	__rollipop_require__.t = function(mod, nodeMode, target) {
+	  var proto = mod != null ? Object.getPrototypeOf(mod) : Object.prototype;
+	  if (target === undefined) target = Object.create(proto);
+	  else Object.setPrototypeOf(target, proto);
+	  if (nodeMode || !mod || !mod.__esModule) Object.defineProperty(target, 'default', { value: mod, enumerable: true });
+	  if (mod != null) {
+	    var keys = Object.getOwnPropertyNames(mod);
+	    for (var i = 0; i < keys.length; i++) {
+	      var key = keys[i];
+	      if (__rollipop_require__.o(target, key)) continue;
+	      (function(k) {
+	        var desc = Object.getOwnPropertyDescriptor(mod, k);
+	        Object.defineProperty(target, k, { get: function() { return mod[k] }, enumerable: !desc || desc.enumerable });
+	      })(key);
+	    }
+	  }
+	  return target;
+	};
+	__rollipop_require__.i = function(id, nodeMode, target) {
+	  var mod = __rollipop_require__(id);
+	  var module = __rollipop_module_cache[id];
+	  // A module that is still initializing (circular import) can gain exports later.
+	  if (module === undefined || module.loaded !== true) return __rollipop_require__.t(mod, nodeMode);
+	  var keyCount = mod != null ? Object.getOwnPropertyNames(mod).length : 0;
+	  if (module.nsSource !== mod) {
+	    module.nsSource = mod;
+	    module.ns = module.nodeNs = undefined;
+	  } else if (module.nsKeyCount !== keyCount) {
+	    // Keys added after load (an `init()` or a monkeypatch) must reach later importers.
+	    // `.t` skips keys the target already has, so this extends the shared objects in place.
+	    // A frozen or sealed namespace can't take keys; later importers get a new one.
+	    if (module.ns) {
+	      if (Object.isExtensible(module.ns)) __rollipop_require__.t(mod, 0, module.ns);
+	      else module.ns = undefined;
+	    }
+	    if (module.nodeNs) {
+	      if (Object.isExtensible(module.nodeNs)) __rollipop_require__.t(mod, 1, module.nodeNs);
+	      else module.nodeNs = undefined;
+	    }
+	  }
+	  module.nsKeyCount = keyCount;
+	  return nodeMode
+	    ? module.nodeNs || (module.nodeNs = __rollipop_require__.t(mod, nodeMode, target))
+	    : module.ns || (module.ns = __rollipop_require__.t(mod, nodeMode, target));
+	};
+	__rollipop_require__.re = function(exports, ns) {
+	  for (var key in ns) {
+	    if (key === 'default' || key === '__esModule' || __rollipop_require__.o(exports, key)) continue;
+	    (function(k) {
+	      Object.defineProperty(exports, k, { get: function() { return ns[k] }, enumerable: true });
+	    })(key);
+	  }
+	};
+	__rollipop_require__.e = function(id) {
+	  throw new Error('External module ' + id + ' is not available');
+	};
+	var __rollipop_lazy_namespaces = [{}, {}, {}];
+	function __rollipop_lazy_load(id, mode) {
+	  return mode === 2 ? __rollipop_require__(id) : __rollipop_require__.i(id, mode);
+	}
+	function __rollipop_lazy_resolve(state) {
+	  var target = state.target;
+	  // CommonJS namespaces are built directly on the facade when it is the first one.
+	  var ns = state.mode === 2
+	    ? __rollipop_require__(state.id)
+	    : __rollipop_require__.i(state.id, state.mode, target);
+	  if (ns !== target && __rollipop_module_cache[state.id].loaded === true) {
+	    Object.setPrototypeOf(target, Object.getPrototypeOf(ns));
+	    var keys = Object.getOwnPropertyNames(ns);
+	    for (var i = 0; i < keys.length; i++) {
+	      Object.defineProperty(target, keys[i], Object.getOwnPropertyDescriptor(ns, keys[i]));
+	    }
+	  }
+	  return ns;
+	}
+	var __rollipop_lazy_handler = {
+	  get: function(state, key) {
+	    return __rollipop_lazy_resolve(state)[key];
+	  },
+	  has: function(state, key) {
+	    return key in __rollipop_lazy_resolve(state);
+	  }
+	};
+	__rollipop_require__.l = function(id, mode) {
+	  if (mode === undefined) mode = 2;
+	  if (__rollipop_module_cache[id] !== undefined || typeof Proxy !== 'function') {
+	    return __rollipop_lazy_load(id, mode);
+	  }
+	  var namespaces = __rollipop_lazy_namespaces[mode];
+	  var ns = namespaces[id];
+	  if (ns === undefined) {
+	    var state = { id: id, mode: mode, target: undefined };
+	    ns = namespaces[id] = state.target = Object.create(new Proxy(state, __rollipop_lazy_handler));
+	  }
+	  return ns;
+	};
+	//#endregion
+	var __rollipop_modules__ = __rollipop_require__.m = {
+		11: function(global, module, __rollipop_exports__, __rollipop_require__) {
+		// log.js
+			__rollipop_require__.r(__rollipop_exports__);
+			__rollipop_require__.d(__rollipop_exports__, { log: () => log });
+			function log(entry) {
+				(globalThis.__rollipop_lazy_log ??= []).push(entry);
+			}
+
+		},
+		2: function(global, module, __rollipop_exports__, __rollipop_require__, __rollipop_lazy__) {
+		// side.js
+			__rollipop_require__.r(__rollipop_exports__);
+			var import_log_2_0_11 = __rollipop_lazy__(11);
+			(0, import_log_2_0_11.log)("side");
+
+		},
+		3: function(global, module, __rollipop_exports__, __rollipop_require__, __rollipop_lazy__) {
+		// effect.js
+			__rollipop_require__.r(__rollipop_exports__);
+			var import_log_3_0_11 = __rollipop_lazy__(11);
+			(0, import_log_3_0_11.log)("effect");
+
+		},
+		4: function(global, module, __rollipop_exports__, __rollipop_require__, __rollipop_lazy__) {
+		// namespace.js
+			__rollipop_require__.r(__rollipop_exports__);
+			__rollipop_require__.d(__rollipop_exports__, { fromNamespace: () => fromNamespace });
+			var import_log_4_0_11 = __rollipop_lazy__(11);
+			(0, import_log_4_0_11.log)("namespace");
+			const fromNamespace = "namespace-value";
+
+		},
+		12: function(global, module, __rollipop_exports__, __rollipop_require__, __rollipop_lazy__) {
+		// star.js
+			__rollipop_require__.r(__rollipop_exports__);
+			__rollipop_require__.d(__rollipop_exports__, { fromStar: () => fromStar });
+			var import_log_12_0_11 = __rollipop_lazy__(11);
+			(0, import_log_12_0_11.log)("star");
+			const fromStar = "star-value";
+
+		},
+		6: function(global, module, __rollipop_exports__, __rollipop_require__, __rollipop_lazy__) {
+		// lazy.js
+			__rollipop_require__.r(__rollipop_exports__);
+			__rollipop_require__.d(__rollipop_exports__, {
+				lazyValue: () => lazyValue,
+				default: () => lazyDefault
+			});
+			var import_log_6_0_11 = __rollipop_lazy__(11);
+			(0, import_log_6_0_11.log)("lazy");
+			const lazyValue = "lazy-value";
+			function lazyDefault() {
+				return "lazy-default";
+			}
+
+		},
+		5: function(global, module, __rollipop_exports__, __rollipop_require__, __rollipop_lazy__) {
+		// reexport.js
+			__rollipop_require__.r(__rollipop_exports__);
+			__rollipop_require__.d(__rollipop_exports__, {
+				reexportedLazy: () => import_lazy_5_1_6.lazyValue,
+				fromStar: () => __rollipop_require__(12).fromStar
+			});
+			var import_star_5_0_12 = __rollipop_require__(12);
+			__rollipop_require__.re(__rollipop_exports__, import_star_5_0_12);
+			var import_lazy_5_1_6 = __rollipop_lazy__(6);
+
+		},
+		7: function(global, module, __rollipop_exports__, __rollipop_require__, __rollipop_lazy__) {
+		// never.js
+			__rollipop_require__.r(__rollipop_exports__);
+			__rollipop_require__.d(__rollipop_exports__, { neverValue: () => neverValue });
+			var import_log_7_0_11 = __rollipop_lazy__(11);
+			(0, import_log_7_0_11.log)("never");
+			const neverValue = "never";
+
+		},
+		8: function(global, module, __rollipop_exports__, __rollipop_require__) {
+		// cjs.cjs
+			globalThis.__rollipop_lazy_log.push("cjs");
+			module.exports = { named: "cjs-named" };
+
+		},
+		9: function(global, module, __rollipop_exports__, __rollipop_require__, __rollipop_lazy__) {
+		// throws.js
+			__rollipop_require__.r(__rollipop_exports__);
+			__rollipop_require__.d(__rollipop_exports__, { unreachable: () => unreachable });
+			var import_log_9_0_11 = __rollipop_lazy__(11);
+			(0, import_log_9_0_11.log)("throws");
+			throw new Error("boom");
+			const unreachable = "unreachable";
+
+		},
+		13: function(global, module, __rollipop_exports__, __rollipop_require__, __rollipop_lazy__) {
+		// cycle_b.js
+			__rollipop_require__.r(__rollipop_exports__);
+			__rollipop_require__.d(__rollipop_exports__, { b: () => b });
+			var import_log_13_0_11 = __rollipop_lazy__(11);
+			var import_cycle_a_13_1_10 = __rollipop_require__(10);
+			(0, import_log_13_0_11.log)("cycle_b");
+			const b = "b";
+
+		},
+		10: function(global, module, __rollipop_exports__, __rollipop_require__, __rollipop_lazy__) {
+		// cycle_a.js
+			__rollipop_require__.r(__rollipop_exports__);
+			__rollipop_require__.d(__rollipop_exports__, { readB: () => readB });
+			var import_log_10_0_11 = __rollipop_lazy__(11);
+			var import_cycle_b_10_1_13 = __rollipop_lazy__(13);
+			(0, import_log_10_0_11.log)("cycle_a");
+			function readB() {
+				return import_cycle_b_10_1_13.b;
+			}
+
+		},
+		1: function(global, module, __rollipop_exports__, __rollipop_require__, __rollipop_lazy__) {
+		// main.js
+			__rollipop_require__.r(__rollipop_exports__);
+			__rollipop_require__.d(__rollipop_exports__, { useNever: () => useNever });
+			var import_side_1_0_2 = __rollipop_require__(2);
+			var import_effect_1_1_3 = __rollipop_require__(3);
+			var import_namespace_1_2_4 = __rollipop_require__(4);
+			var import_reexport_1_3_5 = __rollipop_lazy__(5);
+			var import_lazy_1_4_6 = __rollipop_lazy__(6);
+			var import_never_1_5_7 = __rollipop_lazy__(7);
+			var import_cjs_1_6_8 = __rollipop_lazy__(8, 0);
+			var import_throws_1_7_9 = __rollipop_lazy__(9);
+			var import_cycle_a_1_8_10 = __rollipop_lazy__(10);
+			var import_log_1_9_11 = __rollipop_lazy__(11);
+			(0, import_log_1_9_11.log)("main");
+			const result = {};
+			result.beforeAccess = globalThis.__rollipop_lazy_log.slice();
+			result.lazyValue = import_lazy_1_4_6.lazyValue;
+			result.lazyDefault = (0, import_lazy_1_4_6.default)();
+			result.afterLazy = globalThis.__rollipop_lazy_log.slice();
+			result.namespace = import_namespace_1_2_4.fromNamespace;
+			result.fromStar = import_reexport_1_3_5.fromStar;
+			result.reexportedLazy = import_reexport_1_3_5.reexportedLazy;
+			result.cjsDefault = import_cjs_1_6_8.default.named;
+			result.cjsNamed = import_cjs_1_6_8.named;
+			result.cycle = (0, import_cycle_a_1_8_10.readB)();
+			const errors = [];
+			for (let i = 0; i < 2; i++) try {
+				errors.push(import_throws_1_7_9.unreachable);
+			} catch (error) {
+				errors.push(error.message);
+			}
+			result.errors = errors;
+			result.final = globalThis.__rollipop_lazy_log.slice();
+			globalThis.__rollipop_lazy_imports_result = result;
+			function useNever() {
+				return import_never_1_5_7.neverValue;
+			}
+
+		}
+	};
+	__rollipop_require__(1);
+})(typeof globalThis !== 'undefined' ? globalThis : typeof global !== 'undefined' ? global : typeof window !== 'undefined' ? window : this);
+```

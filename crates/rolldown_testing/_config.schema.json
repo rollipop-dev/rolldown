@@ -623,6 +623,17 @@
             "boolean",
             "null"
           ]
+        },
+        "lazyImports": {
+          "description": "Defer evaluating statically imported modules until a binding is first read.\nOnly applies to `format: 'rollipop'` outside dev mode.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LazyImportsOption"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -1886,6 +1897,33 @@
           "const": "never"
         }
       ]
+    },
+    "LazyImportsOption": {
+      "description": "`output.lazyImports`: `true` or an options object enables lazy imports.",
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "$ref": "#/$defs/LazyImportsOptions"
+        }
+      ]
+    },
+    "LazyImportsOptions": {
+      "type": "object",
+      "properties": {
+        "exclude": {
+          "description": "Modules that are always evaluated eagerly when imported, matched against module ids.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
     },
     "ConfigVariant": {
       "type": "object",

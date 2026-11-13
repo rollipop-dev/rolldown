@@ -808,11 +808,53 @@ export interface OutputOptions {
    * @default 'auto'
    */
   strict?: boolean | 'auto';
+  // MARK: - Rollipop
   /**
    * Enable persistent transform cache to disk.
    * @default false
    */
   persistentCache?: boolean;
+  /**
+   * Defer evaluating statically imported modules until one of their imported
+   * bindings is first read, similar to Metro's `inlineRequires`.
+   *
+   * Only applies to `format: 'rollipop'` and is ignored in dev mode. Use sites
+   * are left untouched: each import declaration yields a lazy namespace that
+   * evaluates the module on first property access and then reads exactly like
+   * an eagerly imported one.
+   *
+   * Side-effect-only imports, namespace imports, `export * from` and imports
+   * whose bindings are never read are still evaluated eagerly. Enabling this
+   * changes module evaluation order: a module that must run as soon as it is
+   * imported (for example one that registers itself somewhere at load time)
+   * can be imported for its side effects (`import './setup'`) or listed in
+   * `exclude`. Import cycles can also be entered at a different module than
+   * with eager evaluation (the first one whose binding is read), which can
+   * surface TDZ errors in code that relied on the eager order; `exclude` the
+   * module that has to run first.
+   * @default false
+   */
+  lazyImports?: boolean | LazyImportsOptions;
+}
+
+// MARK: - Rollipop
+/** @see {@linkcode OutputOptions.lazyImports | lazyImports} */
+export interface LazyImportsOptions {
+  /**
+   * Modules that are always evaluated eagerly when imported, matched against
+   * module ids. Strings are glob patterns resolved against `cwd`.
+   *
+   * Matching is per import. If the module is reached through a package index
+   * that re-exports it, the index is still lazy and the module runs only when
+   * the index does, so the pattern has to match the index too (for example the
+   * whole package directory).
+   *
+   * @example
+   * ```js
+   * lazyImports: { exclude: [/[\\/]src[\\/]setup[\\/]/, '**\/node_modules/some-polyfill/**'] }
+   * ```
+   */
+  exclude?: StringOrRegExp | StringOrRegExp[];
 }
 
 /**

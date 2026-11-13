@@ -108,6 +108,11 @@ pub mod bundler_options {
     },
   };
 
+  // MARK: - Rollipop
+  pub use crate::inner_bundler_options::types::lazy_imports_option::{
+    LazyImportsOption, LazyImportsOptions, NormalizedLazyImportsOptions,
+  };
+
   pub use crate::utils::enhanced_transform::{
     EnhancedTransformOptions, EnhancedTransformResult, TsconfigOption, enhanced_transform,
   };

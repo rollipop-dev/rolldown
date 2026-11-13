@@ -166,4 +166,14 @@ pub struct BindingOutputOptions<'env> {
   pub strict_execution_order: Option<bool>,
   // MARK: - Rollipop
   pub persistent_cache: Option<bool>,
+  #[napi(ts_type = "boolean | BindingLazyImportsOptions")]
+  pub lazy_imports: Option<Either<bool, BindingLazyImportsOptions>>,
+}
+
+// MARK: - Rollipop
+#[napi_derive::napi(object, object_to_js = false)]
+#[derive(Debug, Default)]
+pub struct BindingLazyImportsOptions {
+  /// Modules that are always evaluated eagerly when imported, matched against module ids.
+  pub exclude: Option<Vec<BindingStringOrRegex>>,
 }

@@ -1,0 +1,10 @@
+{
+  "config": {
+    "format": "rollipop",
+    "minify": false,
+    "lazyImports": {
+      "exclude": ["**/setup/**"]
+    }
+  },
+  "snapshot": false
+}

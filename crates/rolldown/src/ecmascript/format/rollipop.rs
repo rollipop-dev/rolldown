@@ -1,4 +1,4 @@
-use rolldown_common::{AddonRenderContext, ExportsKind, NormalModule};
+use rolldown_common::{AddonRenderContext, ExportsKind, ImportKind, NormalModule};
 use rolldown_sourcemap::{Source, SourceJoiner};
 use rolldown_utils::{
   concat_string,
@@ -13,8 +13,9 @@ use crate::{
 use super::utils::{is_use_strict_directive, render_chunk_directives};
 
 use crate::rollipop::{
-  ROLLIPOP_EXPORTS_NAME, ROLLIPOP_GLOBAL_NAME, ROLLIPOP_MODULE_NAME, ROLLIPOP_MODULES_NAME,
-  ROLLIPOP_REQUIRE_NAME, ROLLIPOP_RUNTIME,
+  ROLLIPOP_EXPORTS_NAME, ROLLIPOP_GLOBAL_NAME, ROLLIPOP_LAZY_NAME, ROLLIPOP_LAZY_RUNTIME,
+  ROLLIPOP_MODULE_NAME, ROLLIPOP_MODULES_NAME, ROLLIPOP_REQUIRE_NAME, is_lazy_imports_enabled,
+  rollipop_runtime,
 };
 
 pub fn render_rollipop<'code>(
@@ -49,7 +50,7 @@ pub fn render_rollipop<'code>(
 
   source_joiner.append_source(concat_string!("(function(", ROLLIPOP_GLOBAL_NAME, ") {"));
   render_runtime_module(ctx, module_sources, &mut source_joiner);
-  render_rollipop_runtime(&mut source_joiner);
+  render_rollipop_runtime(&mut source_joiner, is_lazy_imports_enabled(ctx.options));
   if ctx.options.is_dev_mode_enabled()
     && let Some(prelude) = crate::hmr::module_graph_delta::render_register_graph_source(
       &ctx.link_output.module_table,
@@ -93,6 +94,7 @@ fn render_module_factories<'code>(
     ROLLIPOP_REQUIRE_NAME,
     ".m = {"
   ));
+  let lazy_imports = is_lazy_imports_enabled(ctx.options);
   let mut modules = module_sources
     .iter()
     .filter_map(|RenderedModuleSource { module_idx, sources, .. }| {
@@ -117,6 +119,12 @@ fn render_module_factories<'code>(
       ROLLIPOP_EXPORTS_NAME,
       ", ",
       ROLLIPOP_REQUIRE_NAME,
+      // Only modules with static imports can receive lazy namespaces.
+      if lazy_imports && module.import_records.iter().any(|rec| rec.kind == ImportKind::Import) {
+        concat_string!(", ", ROLLIPOP_LAZY_NAME)
+      } else {
+        String::new()
+      },
       ") {"
     ));
     append_module_sources(sources.as_ref(), source_joiner);
@@ -166,10 +174,15 @@ fn render_runtime_module<'code>(
   }
 }
 
-fn render_rollipop_runtime(source_joiner: &mut SourceJoiner<'_>) {
+fn render_rollipop_runtime(source_joiner: &mut SourceJoiner<'_>, lazy_imports: bool) {
   source_joiner.append_source("\t//#region \\0rollipop/runtime");
-  for line in ROLLIPOP_RUNTIME.trim_end_matches('\n').lines() {
-    source_joiner.append_source(concat_string!("\t", line));
+  let base = rollipop_runtime(lazy_imports);
+  let runtimes: &[&str] =
+    if lazy_imports { &[base.as_ref(), ROLLIPOP_LAZY_RUNTIME] } else { &[base.as_ref()] };
+  for runtime in runtimes {
+    for line in runtime.trim_end_matches('\n').lines() {
+      source_joiner.append_source(concat_string!("\t", line));
+    }
   }
   source_joiner.append_source("\t//#endregion");
 }
