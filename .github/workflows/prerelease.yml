@@ -22,7 +22,7 @@ jobs:
     permissions:
       contents: write # create the temporary release branch
       actions: write # dispatch the existing trusted publisher workflow
-      pull-requests: read # find who enabled prereleases on the PR
+      pull-requests: read # verify the current PR state, label, and head
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
@@ -31,30 +31,6 @@ jobs:
       BASE_SHA: ${{ github.sha }}
       DEV_BRANCH: prerelease-${{ github.event.pull_request.number }}-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
-      # The label authorizes the current PR commit and subsequent updates, including forks.
-      # Check the label author's access rather than the author of a later push.
-      - name: Check trigger permission
-        env:
-          ACTOR: ${{ github.actor }}
-          EVENT_ACTION: ${{ github.event.action }}
-        run: |
-          if [ "$EVENT_ACTION" = 'synchronize' ]; then
-            ACTOR=$(gh api --paginate --slurp "repos/${GH_REPO}/issues/${PR_NUMBER}/events?per_page=100" \
-              --jq '[.[][] | select((.event == "labeled" or .event == "unlabeled") and .label.name == "prerelease")] | max_by(.id) | select(.event == "labeled") | .actor.login // empty')
-          fi
-          if [ -z "$ACTOR" ]; then
-            echo '::error::No active prerelease label author was found.'
-            exit 1
-          fi
-          permission=$(gh api "repos/${GH_REPO}/collaborators/${ACTOR}/permission" --jq .permission)
-          case "$permission" in
-            admin|maintain|write) ;;
-            *)
-              echo '::error::The prerelease label must be added by someone with write access.'
-              exit 1
-              ;;
-          esac
-
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
       # Only Git operations run here; PR build scripts run in the dispatched workflow.
