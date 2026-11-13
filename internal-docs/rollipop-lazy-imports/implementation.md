@@ -52,13 +52,14 @@ it runtime helpers.
   exports that emitted code reads through that module. It follows codegen
   routing: an import of an included module goes through it.
   - Seeds: a named import whose local symbol is referenced by an included
-    statement marks `(importee, name)`; a namespace import marks the whole
-    importee. An included namespace statement, `import()` and `require()` also
-    mark the whole module.
+    statement marks `(importee, name)`. For a namespace import, each member
+    read `ns.x` (the first property of a `MemberExprRef`) marks `(importee, x)`.
   - Edges, walked with a worklist: a re-exported import makes `(importee, name)`
     read when the re-export is read, and `export * from` passes on names the
-    module doesn't declare itself (or everything, when the whole module is
-    read).
+    module doesn't declare itself.
+  - Escaping namespace objects (bare `ns`, `import()`, `require()`,
+    `export * as ns`) mark nothing, so the re-exports behind them stay eager.
+    Only provable reads make a re-exported import lazy.
 - `exit_program` calls `apply_lazy_imports` after `create_define_exports_stmt`.
   It rewrites the initializer of each top-level candidate declaration that is
   read and not eager to `__rollipop_lazy__(id[, mode])`. Deciding at the end
@@ -131,6 +132,9 @@ ordinary prototype. Reads are then indistinguishable from the eager path.
   and the same symbols imported directly elsewhere or named but unused) keep
   their module eager. A re-export that is read stays lazy, except in the
   `no-tree-shaking` variant, where every re-exported module stays eager.
+- `lazy_imports_reexport_namespace`: re-exports behind a namespace import, a
+  namespace through `export *`, `export *`, `require()` and `import()` stay
+  eager when only other exports are read; `ns.x` and `export *` reads stay lazy.
 - `lazy_imports_entry_reexport`: a user-defined entry's re-exports stay eager.
 - `lazy_imports_exclude_barrel`: `exclude` reaches a module behind a package
   index only when the pattern also matches the index.
