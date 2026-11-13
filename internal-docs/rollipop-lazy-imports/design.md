@@ -60,7 +60,9 @@ details.
   `export { x }`) is a read only if something can call it. Exports the linker
   removed are never imported, and nothing in the bundle reads a user-defined
   entry's exports. In both cases the importee is kept only for its side effects
-  and stays eager, as it would without lazy imports.
+  and stays eager, as it would without lazy imports. With tree-shaking off,
+  every export is retained and nothing tells which ones are imported, so no
+  re-export getter counts as a read and re-exported modules stay eager.
 - "Read" means read in the finalized module. If the minifier later removes a
   read as dead code (for example an unused `x.y;` statement), the importee is
   no longer evaluated through that binding.

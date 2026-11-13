@@ -9,8 +9,17 @@ assert.deepEqual(result.values, ['a', 'b', 'c', 'd', 'm', 'late']);
 for (const name of ['register_a', 'register_b', 'register_c', 'register_d']) {
   assert.ok(result.final.includes(name), `${name} should have run: ${result.final}`);
 }
-// A re-export that is read is still lazy.
-assert.ok(
-  result.final.indexOf('late') > result.final.indexOf('before late'),
-  `late.js should run on first read: ${result.final}`,
-);
+if (globalThis.__configName === 'no-tree-shaking') {
+  // Without tree-shaking, whether a re-export is imported is unknown, so every
+  // re-exported module stays eager.
+  assert.ok(
+    result.final.indexOf('late') < result.final.indexOf('before late'),
+    `late.js should run with its barrel: ${result.final}`,
+  );
+} else {
+  // A re-export that is read is still lazy.
+  assert.ok(
+    result.final.indexOf('late') > result.final.indexOf('before late'),
+    `late.js should run on first read: ${result.final}`,
+  );
+}

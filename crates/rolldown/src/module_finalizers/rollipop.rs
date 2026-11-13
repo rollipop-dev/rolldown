@@ -400,7 +400,8 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
       .entries
       .get(&self.ctx.module.idx)
       .is_some_and(|entries| entries.iter().any(|entry| entry.kind.is_user_defined()));
-    if is_user_defined_entry {
+    // Without tree-shaking every export is retained, so whether one is imported is unknown.
+    if is_user_defined_entry || self.ctx.options.treeshake.is_none() {
       return false;
     }
     // The linker removed exports that no module imports.
