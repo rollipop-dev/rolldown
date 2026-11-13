@@ -1092,6 +1092,19 @@ const OutputOptionsSchema = v.strictObject({
     v.optional(v.boolean()),
     v.description('Enable persistent transform cache to disk.'),
   ),
+  lazyImports: v.pipe(
+    v.optional(
+      v.union([
+        v.boolean(),
+        v.strictObject({
+          exclude: v.optional(v.union([StringOrRegExpSchema, v.array(StringOrRegExpSchema)])),
+        }),
+      ]),
+    ),
+    v.description(
+      'Defer evaluating statically imported modules until first binding access (rollipop format only).',
+    ),
+  ),
 });
 isTypeTrue<IsSchemaSubType<typeof OutputOptionsSchema, OutputOptions>>();
 

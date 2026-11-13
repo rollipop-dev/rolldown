@@ -2589,6 +2589,11 @@ export interface BindingLazyChunkOutput {
   sourcemapFilename?: string
 }
 
+export interface BindingLazyImportsOptions {
+  /** Modules that are always evaluated eagerly when imported, matched against module ids. */
+  exclude?: Array<BindingStringOrRegex>
+}
+
 export interface BindingLog {
   message: string
   id?: string
@@ -2741,6 +2746,7 @@ export interface BindingOutputOptions {
   cleanDir?: boolean
   strictExecutionOrder?: boolean
   persistentCache?: boolean
+  lazyImports?: boolean | BindingLazyImportsOptions
 }
 
 export interface BindingOutputs {

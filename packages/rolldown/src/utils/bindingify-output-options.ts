@@ -12,6 +12,7 @@ import type { PluginContextData } from '../plugin/plugin-context-data';
 import { ChunkingContextImpl } from '../types/chunking-context';
 import { transformAssetSource } from './asset-source';
 import { arraify, unimplemented } from './misc';
+import { normalizedStringOrRegex } from './normalize-string-or-regex';
 import { transformRenderedChunk } from './transform-rendered-chunk';
 import {
   measureHookCost,
@@ -192,6 +193,10 @@ export async function bindingifyOutputOptions(
     strictExecutionOrder,
     strict: outputOptions.strict,
     persistentCache: outputOptions.persistentCache,
+    lazyImports:
+      typeof outputOptions.lazyImports === 'object'
+        ? { exclude: normalizedStringOrRegex(outputOptions.lazyImports.exclude) }
+        : outputOptions.lazyImports,
   };
 }
 
