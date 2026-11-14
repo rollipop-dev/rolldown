@@ -7,3 +7,10 @@ const result = globalThis.__rollipop_interop_failure_result;
 // read rethrows instead of later reads returning `undefined`.
 assert.deepEqual(result.immediate, ['threw:esmodule-flag', 'threw:esmodule-flag']);
 assert.deepEqual(result.afterDescriptor, ['threw:descriptor-second', 'threw:descriptor-second']);
+// Named-only bindings of the same modules read `module.exports` and skip interop.
+assert.deepEqual(result.namedOnly, [
+  'value:flagged',
+  'value:flagged',
+  'value:first',
+  'value:first',
+]);

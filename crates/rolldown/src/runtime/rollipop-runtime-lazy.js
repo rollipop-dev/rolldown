@@ -1,6 +1,7 @@
-// `__rollipop_require__.l(id, mode)` returns a holder whose `a` property is the
-// importee's namespace; generated code reads `holder.a.name`. `mode` is omitted for
-// ESM importees, `0` for Babel interop and `1` for Node interop.
+// `__rollipop_require__.l(id, mode)` returns a holder whose `a` property is what the
+// importee is read through; generated code reads `holder.a.name`. `mode` is omitted for
+// ESM importees and for CommonJS importees read only through named exports (`a` is then
+// `module.exports`), `0` for Babel interop and `1` for Node interop.
 // See internal-docs/rollipop-lazy-imports/implementation.md
 function __rollipop_lazy_load(id, mode) {
   return mode === undefined ? __rollipop_require__(id) : __rollipop_require__.i(id, mode);
