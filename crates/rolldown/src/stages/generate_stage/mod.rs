@@ -90,6 +90,7 @@ fn ensure_devtools_package_info<'a>(
 use crate::{
   BundleOutput, SharedOptions,
   chunk_graph::ChunkGraph,
+  rollipop::RollipopModuleIds,
   stages::{
     generate_stage::compute_cross_chunk_links::FinalEsmInitMetadataAvailability,
     link_stage::LinkStageOutput,
@@ -151,6 +152,9 @@ pub struct GenerateStage<'a> {
   /// Carrier -> the records it prints, finalized and rendered for it (`finalize_inline_copies`);
   /// moved out when the files are instantiated.
   inline_renders: FxHashMap<ChunkIdx, Vec<CarriedRender>>,
+  /// Numeric module ids of `format: 'rollipop'`; empty for other formats and with
+  /// `profilerNames`, where modules are addressed by their stable id.
+  rollipop_module_ids: RollipopModuleIds,
 }
 
 impl<'a> GenerateStage<'a> {
@@ -168,6 +172,7 @@ impl<'a> GenerateStage<'a> {
       resolved_paths: None,
       inline_state: InlineCommonChunksState::default(),
       inline_renders: FxHashMap::default(),
+      rollipop_module_ids: RollipopModuleIds::default(),
     }
   }
 
@@ -278,6 +283,13 @@ impl<'a> GenerateStage<'a> {
     }
 
     if matches!(self.options.format, rolldown_common::OutputFormat::Rollipop) {
+      if !self.options.profiler_names {
+        let link_output = &*self.link_output;
+        // Same filter as `finalize_rollipop_modules`: the modules this build emits.
+        self.rollipop_module_ids = RollipopModuleIds::new(&link_output.module_table, |idx| {
+          idx == link_output.runtime.id() || link_output.metas[idx].is_included
+        });
+      }
       self.finalize_rollipop_modules(&chunk_graph, &mut ast_table);
     } else {
       let resolved_file_urls = self.resolve_file_urls(&chunk_graph).await?;
@@ -563,6 +575,7 @@ impl<'a> GenerateStage<'a> {
           resolved_paths: self.resolved_paths.as_ref(),
           inline_state: &self.inline_state,
           carried_renders: vec![],
+          rollipop_module_ids: &self.rollipop_module_ids,
         },
         entry_module,
         &export_names,

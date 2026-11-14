@@ -1,9 +1,11 @@
 mod constants;
 pub mod export_reads;
 mod hmr;
+mod module_ids;
 
 pub use constants::HMR_RUNTIME_NAME;
 pub use hmr::wrap_hmr_patch;
+pub use module_ids::RollipopModuleIds;
 
 pub const ROLLIPOP_RUNTIME: &str = include_str!("../runtime/rollipop-runtime.js");
 // See internal-docs/rollipop-lazy-imports/implementation.md
