@@ -12,16 +12,16 @@ off.
 
 ## Generated code
 
-| Import                            | Before                    | Now (lazy off)      | Now (lazy on)     |
-| --------------------------------- | ------------------------- | ------------------- | ----------------- |
-| ESM → ESM named/default           | `var a = r(5)`            | `var a = r(5)`      | `var a = l(5)`    |
-| ESM → CJS, named reads only       | `var a = r.t(r(5))`       | `var a = r(5)`      | `var a = l(5, 0)` |
-| ESM → CJS (Babel interop)         | `var a = r.t(r(5))`       | `var a = r.i(5)`    | `var a = l(5, 0)` |
-| ESM → CJS (Node interop, `.mjs`)  | `var a = r.t(r(5), 1)`    | `var a = r.i(5, 1)` | `var a = l(5, 1)` |
-| reads of a lazy binding           | `a.x`                     | `a.x`               | `a.a.x`           |
-| inline named access of CJS        | `r.t(r(5)).x`             | `r(5).x`            | same as off       |
-| `import()` of CJS                 | `r.t(r(5))`               | `r.i(5)`            | same as off       |
-| bare, namespace, `export *`       | `var a = r(5)` / `r.t(…)` | `r(5)` / `r.i(5)`   | same as off       |
+| Import                           | Before                    | Now (lazy off)      | Now (lazy on)     |
+| -------------------------------- | ------------------------- | ------------------- | ----------------- |
+| ESM → ESM named/default          | `var a = r(5)`            | `var a = r(5)`      | `var a = l(5)`    |
+| ESM → CJS, named reads only      | `var a = r.t(r(5))`       | `var a = r(5)`      | `var a = l(5)`    |
+| ESM → CJS (Babel interop)        | `var a = r.t(r(5))`       | `var a = r.i(5)`    | `var a = l(5, 0)` |
+| ESM → CJS (Node interop, `.mjs`) | `var a = r.t(r(5), 1)`    | `var a = r.i(5, 1)` | `var a = l(5, 1)` |
+| reads of a lazy binding          | `a.x`                     | `a.x`               | `a.a.x`           |
+| inline named access of CJS       | `r.t(r(5)).x`             | `r(5).x`            | same as off       |
+| `import()` of CJS                | `r.t(r(5))`               | `r.i(5)`            | same as off       |
+| bare, namespace, `export *`      | `var a = r(5)` / `r.t(…)` | `r(5)` / `r.i(5)`   | same as off       |
 
 `r` is `__rollipop_require__`. `l` is `__rollipop_lazy__`, a fifth factory
 parameter that is only declared on modules with static import records
@@ -93,7 +93,9 @@ over the earlier Proxy facade design.
 - `exit_program` calls `finalize_import_initializers` after
   `create_define_exports_stmt`. It rewrites the initializer of each top-level candidate declaration that is
   read and not eager to `__rollipop_lazy__(id[, mode])`, and returns those
-  binding names. `LazyHolderAccessRewriter` then rewrites every member read of
+  binding names. A CommonJS candidate with no namespace read
+  (`reads_cjs_exports_directly`) omits the mode, so its holder resolves to
+  `module.exports`. `LazyHolderAccessRewriter` then rewrites every member read of
   them (`import_x.foo`, `import_x["foo"]`, including the export getters) to
   `import_x.a.foo`. Generated reads of an import binding are always member
   expressions; namespace bindings, the only bare ones, are never lazy. Deciding at the end
@@ -151,7 +153,12 @@ over the earlier Proxy facade design.
 - `lazy_imports_no_proxy`: lazy holders work without `Proxy`.
 - `lazy_imports_interop_failure`: an interop failure, immediate (`__esModule`
   getter throws) or after an earlier export descriptor was processed, rethrows
-  on every read.
+  on every read of a `default` binding; named-only bindings of the same modules
+  skip interop and read the values.
+- `lazy_imports_cjs_direct_reads`: named-only CommonJS lazy bindings are
+  `l(id)` and resolve to `module.exports` (live values, keys added later,
+  accessor exports with `module.exports` as `this`, Proxy exports, rethrown
+  load errors); `default` bindings keep `l(id, 0)`.
 - `lazy_imports_sourcemap{,_minify}`: lazily evaluated modules keep exact
   original line and column mappings.
 - `lazy_imports_exclude` (plus `packages/rolldown/tests/rollipop-lazy-imports.test.ts`

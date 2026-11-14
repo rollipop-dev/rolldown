@@ -184,8 +184,17 @@ read, and react-native's own getters about 2.7× slower when wrapped again.
 
 The namespace is kept when the binding is read through `default` (which is
 `module.exports` itself unless `__esModule`, and always in Node interop), used as
-a value, or re-exported with `export *`. Lazy bindings also keep it, because the
-lazy facade is filled from the namespace.
+a value, or re-exported with `export *`.
+
+Lazy bindings follow the same rule. A named-only CommonJS binding is declared as
+`l(5)` without an interop mode, so its holder's `a` resolves to `module.exports`
+itself (`r(5)`), exactly what the eager direct read holds. Bindings that need
+interop keep `l(5, 0)` / `l(5, 1)`, which resolve to `.i`. Because the holder
+only stores whatever its loader returns, this needs no new runtime code. An
+earlier version of this change used the removed Proxy facade and gave it
+`module.exports` as its prototype, which needed a fallback for accessor exports
+(an inherited getter ran with the facade as `this`); with the holder, reads go
+to `module.exports` directly and that problem doesn't exist.
 
 Behavior differences, all closer to Node and webpack:
 
@@ -196,6 +205,9 @@ Behavior differences, all closer to Node and webpack:
   `module.exports` as `this` instead of the namespace.
 - If `module.exports` is `null` or `undefined`, a named read throws instead of
   returning `undefined`.
+- Interop construction never runs for these bindings, so a module whose
+  interop throws (a throwing `__esModule` getter, a Proxy whose descriptor trap
+  throws) can still be read through named exports.
 
 Dev mode keeps the namespace, since the HMR runtime manages module records.
 

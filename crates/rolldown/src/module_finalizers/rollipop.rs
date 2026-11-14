@@ -513,9 +513,18 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     self.direct_cjs_reads.is_some() && self.ctx.module.interop(importee).is_some()
   }
 
+  /// Whether the generated CommonJS binding `name` is only read through named exports,
+  /// so it can hold `module.exports` instead of the interop namespace.
+  fn reads_cjs_exports_directly(&self, name: &str) -> bool {
+    self.direct_cjs_reads.as_ref().is_some_and(|direct| {
+      direct.candidates.contains_key(name) && !direct.namespace_reads.contains(name)
+    })
+  }
+
   /// Rewrites generated import declarations once every read of their bindings is known,
   /// and returns the names of the bindings that became lazy holders:
-  /// - Eligible bindings become lazy holders (`__rollipop_lazy__(id[, mode])`).
+  /// - Eligible bindings become lazy holders (`__rollipop_lazy__(id[, mode])`). A CommonJS
+  ///   binding with only named reads omits `mode`, so its holder returns `module.exports`.
   /// - Remaining CommonJS bindings that are only read through named exports become
   ///   `__rollipop_require__(id)`. A named export of the interop namespace is a getter for
   ///   the same key of `module.exports`, so reading it directly skips building the
@@ -547,14 +556,17 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
             .is_some_and(|re_exported| re_exported.contains(importee_idx))
           && lazy.read_bindings.contains(name)
         {
+          // A CommonJS binding read only through named exports needs no interop namespace:
+          // its holder resolves to `module.exports`, the same as an eager direct read.
+          let mode = if self.reads_cjs_exports_directly(name) { None } else { *mode };
           // A lazy holder evaluates the importee on the first read of its `a` property.
-          declarator.init = Some(self.lazy_holder_call(&self.modules()[*importee_idx], *mode));
+          declarator.init = Some(self.lazy_holder_call(&self.modules()[*importee_idx], mode));
           lazy_bindings.insert(name.to_string());
           continue;
         }
         if let Some(direct) = &self.direct_cjs_reads
           && let Some(importee_idx) = direct.candidates.get(name)
-          && !direct.namespace_reads.contains(name)
+          && self.reads_cjs_exports_directly(name)
         {
           declarator.init = Some(self.require_call_for_module(&self.modules()[*importee_idx]));
         }
