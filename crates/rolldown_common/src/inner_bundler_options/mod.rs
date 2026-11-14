@@ -254,6 +254,9 @@ pub struct BundlerOptions {
   // MARK: - Rollipop
   pub id: Option<String>,
   pub persistent_cache: Option<bool>,
+  /// Defer evaluating statically imported modules until a binding is first read.
+  /// Only applies to `format: 'rollipop'` outside dev mode.
+  pub lazy_imports: Option<types::lazy_imports_option::LazyImportsOption>,
 }
 
 #[cfg(feature = "deserialize_bundler_options")]

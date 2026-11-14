@@ -78,6 +78,11 @@ bitflags::bitflags! {
     /// The import record is solely for re-export purposes, created by
     /// `export { .. } from '..'` or `export * as ns from '..'`
     const IsReExportOnly = 1 << 10;
+    // MARK: - Rollipop
+    /// The importer also had a side-effect-only import (`import './x'`) of this request,
+    /// which tree-shaking may have merged into this record's declaration. Rollipop lazy
+    /// imports keep such importees eager.
+    const HasSideEffectImport = 1 << 11;
 
     const TopLevelPureDynamicImport = Self::IsTopLevel.bits() | Self::PureDynamicImport.bits();
   }

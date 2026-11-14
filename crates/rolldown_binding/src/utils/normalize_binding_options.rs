@@ -825,6 +825,14 @@ pub fn normalize_binding_options(
     // MARK: - Rollipop
     id: input_options.id,
     persistent_cache: output_options.persistent_cache,
+    lazy_imports: output_options.lazy_imports.map(|lazy_imports| match lazy_imports {
+      Either::A(enabled) => rolldown_common::LazyImportsOption::Bool(enabled),
+      Either::B(options) => {
+        rolldown_common::LazyImportsOption::Options(rolldown_common::LazyImportsOptions {
+          exclude: options.exclude.map(bindingify_string_or_regex_array),
+        })
+      }
+    }),
   };
 
   #[cfg(not(target_family = "wasm"))]

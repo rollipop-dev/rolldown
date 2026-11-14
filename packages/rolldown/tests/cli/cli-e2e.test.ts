@@ -120,6 +120,16 @@ describe('cli options for bundling', () => {
     expect(status.stderr).not.toContain('Unknown');
   });
 
+  it('treats --lazyImports as a boolean flag', async () => {
+    const cwd = cliFixturesDir('no-config');
+    // A value-taking option would consume `index.js` as its value.
+    const status = await execa('rolldown', ['--format', 'rollipop', '--lazyImports', 'index.js'], {
+      cwd,
+    });
+    expect(status.exitCode).toBe(0);
+    expect(status.stderr).not.toContain('Invalid');
+  });
+
   it('should handle `--input` and positional args as entries', async () => {
     const cwd = cliFixturesDir('cli-multi-entries');
     const status = await $({ cwd })`rolldown 1.ts --input ./2.js`;
