@@ -1088,7 +1088,11 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
   }
 
   fn create_define_exports_stmt(&mut self, scoping: &Scoping) -> Option<Statement<'ast>> {
-    for (exported, named_export) in &self.named_exports {
+    // Sorted, so the getter order (and `Object.keys` of the exports) never depends on
+    // hash map iteration order.
+    let mut named_exports = self.named_exports.iter().collect::<Vec<_>>();
+    named_exports.sort_unstable_by(|(a, _), (b, _)| a.as_str().cmp(b.as_str()));
+    for (exported, named_export) in named_exports {
       let expr = if let Some(import_binding) = self.import_bindings.get(&named_export.local_binding)
       {
         let is_read = self.lazy_imports.is_some() && self.is_export_getter_read(exported.as_str());

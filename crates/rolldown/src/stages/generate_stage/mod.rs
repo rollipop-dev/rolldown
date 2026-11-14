@@ -284,7 +284,11 @@ impl<'a> GenerateStage<'a> {
 
     if matches!(self.options.format, rolldown_common::OutputFormat::Rollipop) {
       if !self.options.profiler_names {
-        self.rollipop_module_ids = RollipopModuleIds::new(&self.link_output.module_table);
+        let link_output = &*self.link_output;
+        // Same filter as `finalize_rollipop_modules`: the modules this build emits.
+        self.rollipop_module_ids = RollipopModuleIds::new(&link_output.module_table, |idx| {
+          idx == link_output.runtime.id() || link_output.metas[idx].is_included
+        });
       }
       self.finalize_rollipop_modules(&chunk_graph, &mut ast_table);
     } else {

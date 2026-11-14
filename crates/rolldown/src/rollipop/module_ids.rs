@@ -24,12 +24,19 @@ pub struct RollipopModuleIds {
 }
 
 impl RollipopModuleIds {
-  pub fn new(module_table: &ModuleTable) -> Self {
-    let modules = module_table
-      .modules
-      .iter()
-      .filter_map(|module| module.as_normal())
-      .map(|module| (module.idx, module.stable_id.as_str(), module.id.as_str()));
+  /// `is_bundled` tells which modules this build emits. They claim slots before every
+  /// other module of the table, so modules that aren't emitted (tree-shaken, or stale
+  /// entries an incremental build keeps in the table) can never shift a bundled module's id.
+  pub fn new(module_table: &ModuleTable, is_bundled: impl Fn(ModuleIdx) -> bool) -> Self {
+    let modules =
+      module_table.modules.iter().filter_map(|module| module.as_normal()).map(|module| {
+        ModuleIdEntry {
+          idx: module.idx,
+          stable_id: module.stable_id.as_str(),
+          id: module.id.as_str(),
+          bundled: is_bundled(module.idx),
+        }
+      });
     Self { ids: assign_module_ids(modules, module_table.modules.len(), ROLLIPOP_MODULE_ID_SPACE) }
   }
 
@@ -42,13 +49,22 @@ impl RollipopModuleIds {
   }
 }
 
+struct ModuleIdEntry<'a> {
+  idx: ModuleIdx,
+  stable_id: &'a str,
+  id: &'a str,
+  bundled: bool,
+}
+
 /// Assigns each module `xxh3(stable_id) mod space`, probing linearly on collisions.
 ///
-/// Modules are processed in `(stable_id, id)` order, so the result depends only on the set
-/// of modules, never on `ModuleIdx` (loader discovery order). A module's id only changes
-/// when a module that collides with it, and sorts before it, is added or removed.
+/// Bundled modules are processed first, then the rest, each group in `(stable_id, id)`
+/// order. So the ids of bundled modules depend only on the set of bundled modules, never on
+/// `ModuleIdx` (loader discovery order) or on modules this build doesn't emit. A module's id
+/// only changes when a module in the same run of occupied slots, sorting before it, is added
+/// or removed.
 fn assign_module_ids<'a>(
-  modules: impl Iterator<Item = (ModuleIdx, &'a str, &'a str)>,
+  modules: impl Iterator<Item = ModuleIdEntry<'a>>,
   module_count: usize,
   space: u32,
 ) -> IndexVec<ModuleIdx, Option<u32>> {
@@ -56,14 +72,17 @@ fn assign_module_ids<'a>(
   assert!(modules.len() <= space as usize, "too many modules for the Rollipop module id space");
   // `stable_id` is cwd-relative, so it can be shared, e.g. by a plugin's relative id and
   // an absolute path. The full `id` makes the order total.
-  modules.sort_unstable_by(|(_, a_stable_id, a_id), (_, b_stable_id, b_id)| {
-    a_stable_id.cmp(b_stable_id).then_with(|| a_id.cmp(b_id))
+  modules.sort_unstable_by(|a, b| {
+    b.bundled
+      .cmp(&a.bundled)
+      .then_with(|| a.stable_id.cmp(b.stable_id))
+      .then_with(|| a.id.cmp(b.id))
   });
 
   let mut ids = IndexVec::from_vec(vec![None; module_count]);
   let mut taken = rustc_hash::FxHashSet::default();
   taken.reserve(modules.len());
-  for (idx, stable_id, _) in modules {
+  for ModuleIdEntry { idx, stable_id, .. } in modules {
     #[expect(clippy::cast_possible_truncation, reason = "the remainder is below `space`")]
     let mut id = (xxh3_64(stable_id.as_bytes()) % u64::from(space)) as u32;
     while !taken.insert(id) {
@@ -78,10 +97,14 @@ fn assign_module_ids<'a>(
 mod tests {
   use super::*;
 
+  fn entry<'a>(idx: u32, stable_id: &'a str, id: &'a str, bundled: bool) -> ModuleIdEntry<'a> {
+    ModuleIdEntry { idx: ModuleIdx::from_raw(idx), stable_id, id, bundled }
+  }
+
   fn assign(modules: &[(u32, &'static str)], space: u32) -> Vec<Option<u32>> {
     let count = modules.iter().map(|(idx, _)| *idx as usize + 1).max().unwrap_or(0);
     assign_module_ids(
-      modules.iter().map(|(idx, stable_id)| (ModuleIdx::from_raw(*idx), *stable_id, *stable_id)),
+      modules.iter().map(|(idx, stable_id)| entry(*idx, stable_id, stable_id, true)),
       count,
       space,
     )
@@ -132,8 +155,7 @@ mod tests {
     let second = names.next().unwrap();
     let (first, second) = if first < second { (first, second) } else { (second, first) };
     let ids = assign_module_ids(
-      [(ModuleIdx::from_raw(0), second.as_str(), ""), (ModuleIdx::from_raw(1), first.as_str(), "")]
-        .into_iter(),
+      [entry(0, second.as_str(), "", true), entry(1, first.as_str(), "", true)].into_iter(),
       2,
       space,
     );
@@ -144,8 +166,7 @@ mod tests {
   fn shared_stable_ids_are_ordered_by_id() {
     let space = 2;
     let ids = assign_module_ids(
-      [(ModuleIdx::from_raw(0), "x.js", "/b/x.js"), (ModuleIdx::from_raw(1), "x.js", "/a/x.js")]
-        .into_iter(),
+      [entry(0, "x.js", "/b/x.js", true), entry(1, "x.js", "/a/x.js", true)].into_iter(),
       2,
       space,
     );
@@ -162,5 +183,20 @@ mod tests {
     assert_eq!(before[0], after[0]);
     assert_eq!(before[1], after[2]);
     assert_eq!(before[2], after[3]);
+  }
+
+  #[test]
+  fn modules_not_bundled_never_shift_bundled_ids() {
+    let space = 4;
+    // `a.js` sorts first and collides with `b.js`, but isn't bundled this build.
+    let b_hash = hash("b.js", space);
+    let a =
+      (0..10_000).map(|i| format!("a{i}.js")).find(|name| hash(name, space) == b_hash).unwrap();
+    let ids = assign_module_ids(
+      [entry(0, a.as_str(), "", false), entry(1, "b.js", "", true)].into_iter(),
+      2,
+      space,
+    );
+    assert_eq!(ids.raw, vec![Some((b_hash + 1) % space), Some(b_hash)]);
   }
 }

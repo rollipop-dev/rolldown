@@ -6,7 +6,8 @@
 loads it with `__rollipop_require__(id)`. The numeric id of a module is
 `xxh3(stable_id) mod 2^24`, with collisions resolved by linear probing in
 `stable_id` order. The same input always produces the same bundle, and adding
-or removing one module leaves the other modules' ids alone. With
+or removing one module leaves the other modules' ids alone (unless they share a
+run of occupied slots with it, which is rare). With
 `profilerNames` (what the Rollipop host sets in dev), ids stay `stable_id`
 strings. See [implementation.md](./implementation.md) for the code.
 
@@ -29,7 +30,12 @@ strings. See [implementation.md](./implementation.md) for the code.
 ## Decisions
 
 - **Hash of `stable_id`.** `stable_id` is the cwd-relative path with `/`
-  separators, so it is the same across machines and operating systems. The
+  separators, so for files under the project it is the same across machines
+  and operating systems. Exceptions, inherited from `stable_id`: virtual ids
+  (`\0…`) are only escaped, not made relative, so a plugin id that embeds an
+  absolute path hashes differently per machine; on Windows a file on another
+  drive than the cwd stays absolute. Builds on one machine are always
+  reproducible. The
   hash is `xxh3_64`, spelled out rather than taken from `FxHash` or `std`
   hashers, because the id is now an output contract that must survive
   toolchain and dependency upgrades.
@@ -39,8 +45,10 @@ strings. See [implementation.md](./implementation.md) for the code.
   with the module count would renumber every module whenever the count
   crossed a threshold, so it is fixed. A wider space would cost about one more
   digit per reference to save a handful of collisions.
-- **Deterministic collision resolution.** Modules are processed sorted by
-  `(stable_id, id)` and a taken slot probes to the next one. The full `id`
+- **Deterministic collision resolution.** Modules the build emits (included
+  modules and the runtime) are processed first, then the rest of the module
+  table, each group sorted by `(stable_id, id)`; a taken slot probes to the
+  next one. The full `id`
   breaks ties when two modules share a `stable_id` (a plugin's relative id and
   an absolute path). A module's id changes only when a module that hashes to
   the same run of slots and sorts before it is added or removed.
@@ -49,8 +57,14 @@ strings. See [implementation.md](./implementation.md) for the code.
   (`__rollipop_require__(id)`) and the chunk renderer (`id: function`), so the
   two can't disagree.
 - **Every normal module gets an id,** including ones tree-shaking removes, so
-  no lookup can miss. Such a module can still take a slot that an included
-  module would otherwise probe into; that is rare and still deterministic.
+  no lookup can miss. Because emitted modules claim slots first, a module the
+  build doesn't emit never shifts an emitted one. That matters for incremental
+  builds (dev mode, `experimental.incrementalBuild`): the scan cache keeps
+  modules that are no longer imported in the table, and they must not make an
+  incremental build number modules differently from a clean build.
+- **Export getters are sorted by name.** The finalizer collected them in a hash
+  map, so their order (and `Object.keys` of a module's exports) followed hash
+  iteration order, which can differ between the native and 32-bit WASI builds.
 - **Import binding names don't encode ids.** Generated bindings used to be
   `import_{repr}_{importerIdx}_{record}_{importeeIdx}`, which leaked
   `ModuleIdx` into the output even with `profilerNames`. They are now
@@ -60,9 +74,10 @@ strings. See [implementation.md](./implementation.md) for the code.
 - **Dev mode uses the same scheme.** HMR patches address modules by
   `stable_id` strings (`registerFactory("dep.js", ...)`,
   `loadExports("dep.js")`) and never by numeric id, and the Rollipop host turns
-  on `profilerNames` in dev, so its dev bundles never contain numeric ids. A
-  hash of `stable_id` is also stable across incremental rebuilds, which
-  `ModuleIdx` only was because the module table is reused.
+  on `profilerNames` in dev, so its dev bundles contain no numeric ids. Without
+  `profilerNames` (as in the `topics/hmr/rollipop_*` fixtures), a hash of
+  `stable_id` is stable across incremental rebuilds too; `ModuleIdx` only was
+  because the module table is reused.
 
 ## Trade-offs
 

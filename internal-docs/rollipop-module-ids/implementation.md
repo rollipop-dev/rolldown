@@ -5,9 +5,10 @@
 ## Data flow
 
 1. `GenerateStage::generate` (`stages/generate_stage/mod.rs`) builds
-   `RollipopModuleIds::new(&module_table)` right before
+   `RollipopModuleIds::new(&module_table, is_bundled)` right before
    `finalize_rollipop_modules`, only for `format: 'rollipop'` without
-   `profilerNames`. It is stored on the stage (`rollipop_module_ids`) and is
+   `profilerNames`. `is_bundled` is the filter `finalize_rollipop_modules`
+   uses: the runtime module or `metas[idx].is_included`. It is stored on the stage (`rollipop_module_ids`) and is
    empty otherwise.
 2. `finalize_rollipop_modules` passes it to every finalizer as
    `RollipopAstFinalizerContext::module_ids`. `runtime_id_expr_for` emits the
@@ -19,8 +20,9 @@
 
 ## Assignment (`rollipop/module_ids.rs`)
 
-- `assign_module_ids` takes `(ModuleIdx, stable_id, id)` for every normal
-  module, sorts by `(stable_id, id)`, and gives each module
+- `assign_module_ids` takes a `ModuleIdEntry` (`idx`, `stable_id`, `id`,
+  `bundled`) for every normal module, sorts by `(!bundled, stable_id, id)`, and
+  gives each module
   `xxh3_64(stable_id) % ROLLIPOP_MODULE_ID_SPACE` (2^24), probing linearly
   (wrapping) past taken slots.
 - The result is `IndexVec<ModuleIdx, Option<u32>>`; externals are `None`
@@ -29,6 +31,11 @@
   module has one, so a miss is a bug.
 - The function takes the space as a parameter so the unit tests can force
   collisions and wraparound with a space of 2 or 4.
+
+## Export getters
+
+`create_define_exports_stmt` sorts `named_exports` by exported name before
+emitting the `__rollipop_require__.d(exports, { … })` getters.
 
 ## Generated binding names
 
@@ -42,7 +49,10 @@ deterministic.
 
 - Unit tests in `rollipop/module_ids.rs`: ids are the hash, independent of
   `ModuleIdx`, collisions probe in `stable_id` order, probing wraps, shared
-  `stable_id`s are ordered by `id`, and adding a module keeps the others.
+  `stable_id`s are ordered by `id`, adding a module keeps the others, and a
+  module that isn't bundled never shifts a bundled one.
+- `module_id_collision` fixture: `c1467.js` and `c4211.js` hash to the same
+  id; the static import, `require()` and `import()` all use the probed ids.
 - `packages/rolldown/tests/rollipop-module-ids.test.ts`: 120 modules loaded
   with random latency (which shuffles `ModuleIdx`) build to byte-identical
   bundles, minified and not, and adding a module keeps every other module's

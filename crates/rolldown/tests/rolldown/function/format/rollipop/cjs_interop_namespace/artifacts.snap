@@ -144,8 +144,8 @@ source: crates/rolldown_testing/src/integration_test.rs
 			__rollipop_require__.r(__rollipop_exports__);
 			__rollipop_require__.d(__rollipop_exports__, {
 				esmodule: () => import_esmodule_1,
-				plain: () => import_plain_0,
-				esmoduleDefault: () => import_esmodule_1.default
+				esmoduleDefault: () => import_esmodule_1.default,
+				plain: () => import_plain_0
 			});
 			var import_plain_0 = __rollipop_require__.i(12406298);
 			var import_esmodule_1 = __rollipop_require__.i(12301167);
@@ -155,8 +155,8 @@ source: crates/rolldown_testing/src/integration_test.rs
 		// node_mode.mjs
 			__rollipop_require__.r(__rollipop_exports__);
 			__rollipop_require__.d(__rollipop_exports__, {
-				esmoduleDefault: () => import_esmodule_0.default,
-				esmodule: () => import_esmodule_0
+				esmodule: () => import_esmodule_0,
+				esmoduleDefault: () => import_esmodule_0.default
 			});
 			var import_esmodule_0 = __rollipop_require__.i(12301167, 1);
 
