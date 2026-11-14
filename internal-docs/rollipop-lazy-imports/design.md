@@ -196,7 +196,9 @@ earlier version of this change used the removed Proxy facade and gave it
 (an inherited getter ran with the facade as `this`); with the holder, reads go
 to `module.exports` directly and that problem doesn't exist.
 
-Behavior differences, all closer to Node and webpack:
+Behavior differences. These match webpack, which also reads `module.exports`
+directly. They do not match Node, whose named imports of CommonJS are a
+snapshot of the exports taken at load, with the namespace as `this`:
 
 - Keys added after load (asynchronously, or after a circular import finished
   loading) are visible right away. The cached namespace only picks them up the

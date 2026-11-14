@@ -35,9 +35,10 @@ over the earlier Proxy facade design.
 ## Finalizer (`module_finalizers/rollipop.rs`)
 
 - `namespace_expr_for_module` emits `r(id)` / `r.i(id[, 1])` for every bundled
-  importee, at all call sites: import bindings, inline accesses
-  (`inline_import_access_for_symbol_ref`) and dynamic imports. Externals keep
-  `r.t(r.e(id))`.
+  importee: import bindings, inline accesses
+  (`inline_import_access_for_symbol_ref`) and dynamic imports. Inline named
+  accesses of CommonJS and named-only CommonJS bindings use `r(id)` instead
+  (see "Direct CommonJS reads" below). Externals keep `r.t(r.e(id))`.
 - Lazy mode bookkeeping (`LazyImportsState`, present only when lazy mode is on):
   - `candidates`: binding name → (importee, mode). Recorded when
     `create_import_binding_stmt` emits a declaration for a bundled importee.
@@ -84,7 +85,8 @@ over the earlier Proxy facade design.
   - `namespace_reads`: bindings read as the namespace itself or through
     `default` (`reads_namespace`), plus `export *` / `export * as` bindings.
     A namespace import read only as `ns.key` / `ns["key"]` with
-    `key !== "default"` (`is_named_member_read`) does not count. Export getters
+    `key !== "default"` (`is_named_member_read`), including under `typeof` or
+    `!`, does not count. Export getters
     count even when `is_export_getter_read` is false, to stay conservative.
   - Every read goes through `note_import_binding_read`, which feeds both this
     state and the lazy `read_bindings`.
@@ -131,8 +133,9 @@ over the earlier Proxy facade design.
 `runtime/rollipop-runtime-lazy.js` (appended when lazy mode is on):
 
 - `.l(id, mode)` returns a holder, one per import declaration. Mode is omitted
-  for ESM (`r(id)`), `0` for Babel and `1` for Node interop (`.i(id, mode)`).
-  - If the module already finished loading, the holder is `{ a: namespace }`.
+  for ESM and for named-only CommonJS bindings (`r(id)`: the namespace or
+  `module.exports`), `0` for Babel and `1` for Node interop (`.i(id, mode)`).
+  - If the module already finished loading, the holder is `{ a: value }`.
   - Otherwise it is `{ get a() { … } }`. The getter loads the module and
     builds the namespace. Only when the module has finished loading does it
     replace itself with a data property (`Object.defineProperty(this, 'a', …)`).

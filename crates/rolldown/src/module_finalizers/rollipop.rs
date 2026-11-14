@@ -2,7 +2,9 @@ use oxc::ast_visit::{VisitMut, walk_mut};
 use oxc::{
   allocator::{Allocator, Box as ArenaBox, GetAllocator, TakeIn},
   ast::{
-    ast::{self, ExportDefaultDeclarationKind, Expression, ObjectPropertyKind, Statement},
+    ast::{
+      self, ExportDefaultDeclarationKind, Expression, ObjectPropertyKind, Statement, UnaryOperator,
+    },
     builder::{AstBuilder, GetAstBuilder},
   },
   semantic::{IsGlobalReference, Scoping, SymbolId},
@@ -232,8 +234,10 @@ fn reads_namespace(imported: &Specifier) -> bool {
 
 /// Whether the current node is only the object of a read like `ns.key` or `ns["key"]`
 /// with `key !== "default"`. Such a read of a namespace import gets the same value from
-/// `module.exports`, so the namespace object itself is not needed. Writes (`ns.key = v`,
-/// `ns.key++`, `delete ns.key`) keep the namespace, where they fail as in ESM.
+/// `module.exports`, so the namespace object itself is not needed. Other unary operators
+/// (`typeof ns.key`, `!ns.key`) only read the value. Writes (`ns.key = v`, `ns.key++`,
+/// `delete ns.key`) are already rejected at build time (`ASSIGN_TO_IMPORT`); they keep the
+/// namespace anyway so nothing can ever write to `module.exports` through a binding.
 fn is_named_member_read(ctx: &oxc_traverse::TraverseCtx<'_, ()>) -> bool {
   let is_named = match ctx.parent() {
     Ancestor::StaticMemberExpressionObject(member) => member.property().name != "default",
@@ -245,9 +249,11 @@ fn is_named_member_read(ctx: &oxc_traverse::TraverseCtx<'_, ()>) -> bool {
   is_named
     && !matches!(
       ctx.ancestor(1),
-      Ancestor::AssignmentExpressionLeft(_)
-        | Ancestor::UpdateExpressionArgument(_)
-        | Ancestor::UnaryExpressionArgument(_)
+      Ancestor::AssignmentExpressionLeft(_) | Ancestor::UpdateExpressionArgument(_)
+    )
+    && !matches!(
+      ctx.ancestor(1),
+      Ancestor::UnaryExpressionArgument(unary) if *unary.operator() == UnaryOperator::Delete
     )
 }
 

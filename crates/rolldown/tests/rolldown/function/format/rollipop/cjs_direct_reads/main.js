@@ -10,6 +10,9 @@ import { nodeNamed } from './node_mode.mjs';
 import { readLate } from './cycle_importer.js';
 import { memberHelper, computedHelper } from './member_ns.js';
 import { defaultMember } from './default_member_ns.js';
+import { typeofHelper } from './typeof_ns.js';
+import { computedDefault } from './computed_default_ns.js';
+import { plainDefault } from './default_reexport.js';
 
 const result = {};
 result.countBefore = count;
@@ -31,4 +34,7 @@ result.cycleLate = readLate();
 result.memberHelper = memberHelper;
 result.computedHelper = computedHelper;
 result.defaultMember = defaultMember;
+result.typeofHelper = typeofHelper();
+result.computedDefault = computedDefault();
+result.plainDefault = plainDefault.plain;
 globalThis.__rollipop_cjs_direct_reads_result = result;

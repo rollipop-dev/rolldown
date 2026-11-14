@@ -205,6 +205,34 @@ source: crates/rolldown_testing/src/integration_test.rs
 			const defaultMember = import_esmodule_12_0_5.default;
 
 		},
+		13: function(global, module, __rollipop_exports__, __rollipop_require__) {
+		// typeof_ns.js
+			__rollipop_require__.r(__rollipop_exports__);
+			__rollipop_require__.d(__rollipop_exports__, { typeofHelper: () => typeofHelper });
+			var import_fn_13_0_4 = __rollipop_require__(4);
+			const typeofHelper = () => [typeof import_fn_13_0_4.helper, !import_fn_13_0_4.helper];
+
+		},
+		16: function(global, module, __rollipop_exports__, __rollipop_require__) {
+		// plain.cjs
+			module.exports = { plain: "plain" };
+
+		},
+		14: function(global, module, __rollipop_exports__, __rollipop_require__) {
+		// computed_default_ns.js
+			__rollipop_require__.r(__rollipop_exports__);
+			__rollipop_require__.d(__rollipop_exports__, { computedDefault: () => computedDefault });
+			var import_plain_14_0_16 = __rollipop_require__.i(16);
+			const computedDefault = () => import_plain_14_0_16["default"].plain;
+
+		},
+		15: function(global, module, __rollipop_exports__, __rollipop_require__) {
+		// default_reexport.js
+			__rollipop_require__.r(__rollipop_exports__);
+			__rollipop_require__.d(__rollipop_exports__, { plainDefault: () => import_plain_15_0_16.default });
+			var import_plain_15_0_16 = __rollipop_require__.i(16);
+
+		},
 		1: function(global, module, __rollipop_exports__, __rollipop_require__) {
 		// main.js
 			__rollipop_require__.r(__rollipop_exports__);
@@ -219,6 +247,9 @@ source: crates/rolldown_testing/src/integration_test.rs
 			var import_cycle_importer_1_8_10 = __rollipop_require__(10);
 			var import_member_ns_1_9_11 = __rollipop_require__(11);
 			var import_default_member_ns_1_10_12 = __rollipop_require__(12);
+			var import_typeof_ns_1_11_13 = __rollipop_require__(13);
+			var import_computed_default_ns_1_12_14 = __rollipop_require__(14);
+			var import_default_reexport_1_13_15 = __rollipop_require__(15);
 			const result = {};
 			result.countBefore = import_live_1_1_3.count;
 			(0, import_live_1_1_3.increment)();
@@ -239,6 +270,9 @@ source: crates/rolldown_testing/src/integration_test.rs
 			result.memberHelper = import_member_ns_1_9_11.memberHelper;
 			result.computedHelper = import_member_ns_1_9_11.computedHelper;
 			result.defaultMember = import_default_member_ns_1_10_12.defaultMember;
+			result.typeofHelper = (0, import_typeof_ns_1_11_13.typeofHelper)();
+			result.computedDefault = (0, import_computed_default_ns_1_12_14.computedDefault)();
+			result.plainDefault = import_default_reexport_1_13_15.plainDefault.plain;
 			globalThis.__rollipop_cjs_direct_reads_result = result;
 
 		}
