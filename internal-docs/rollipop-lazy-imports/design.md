@@ -205,6 +205,9 @@ Behavior differences, all closer to Node and webpack:
   `module.exports` as `this` instead of the namespace.
 - If `module.exports` is `null` or `undefined`, a named read throws instead of
   returning `undefined`.
+- A named-only importer no longer calls `.i`, so it no longer extends another
+  importer's cached namespace with keys added after load. That namespace picks
+  them up at the next `.i` call, like a snapshot namespace in Babel or Node.
 - Interop construction never runs for these bindings, so a module whose
   interop throws (a throwing `__esModule` getter, a Proxy whose descriptor trap
   throws) can still be read through named exports.
