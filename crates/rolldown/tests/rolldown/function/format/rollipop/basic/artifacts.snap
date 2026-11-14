@@ -114,14 +114,14 @@ source: crates/rolldown_testing/src/integration_test.rs
 		throw new Error("External module " + id + " is not available");
 	};
 	//#endregion
-	var __rollipop_modules__ = __rollipop_require__.m = { 1: function(global, module, __rollipop_exports__, __rollipop_require__) {
+	var __rollipop_modules__ = __rollipop_require__.m = { 6990571: function(global, module, __rollipop_exports__, __rollipop_require__) {
 		// main.js
 		__rollipop_require__.r(__rollipop_exports__);
 		__rollipop_require__.d(__rollipop_exports__, { value: () => value });
 		const value = 1;
 		globalThis.__rollipop_basic_result = `entry:${value}`;
 	} };
-	__rollipop_require__(1);
+	__rollipop_require__(6990571);
 })(typeof globalThis !== "undefined" ? globalThis : typeof global !== "undefined" ? global : typeof window !== "undefined" ? window : this);
 
 ```

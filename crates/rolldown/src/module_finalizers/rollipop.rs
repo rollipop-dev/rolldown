@@ -28,7 +28,7 @@ use crate::{
   hmr::utils::HmrAstBuilder,
   rollipop::{
     HMR_RUNTIME_NAME, ROLLIPOP_EXPORTS_NAME, ROLLIPOP_GLOBAL_NAME, ROLLIPOP_LAZY_NAME,
-    ROLLIPOP_MODULE_NAME, ROLLIPOP_REQUIRE_NAME,
+    ROLLIPOP_MODULE_NAME, ROLLIPOP_REQUIRE_NAME, RollipopModuleIds,
     export_reads::{ExportReadsMap, PinnedReExportsMap},
     is_lazy_imports_enabled,
   },
@@ -142,17 +142,12 @@ impl Deref for AstFactory<'_> {
 }
 
 #[derive(Clone, Copy)]
-pub enum RollipopRuntimeIdMode {
-  Numeric,
-  StableId,
-}
-
-#[derive(Clone, Copy)]
 pub struct RollipopAstFinalizerContext<'me> {
   pub link_output: &'me LinkStageOutput,
   pub options: &'me SharedOptions,
   pub module: &'me NormalModule,
-  pub unique_index: usize,
+  /// Numeric module ids. Empty with `profilerNames`, where ids are stable id strings.
+  pub module_ids: &'me RollipopModuleIds,
   /// Importees matched by `lazyImports.exclude`.
   pub lazy_import_excluded: &'me FxHashSet<ModuleIdx>,
   /// Exports read through each module. Empty unless lazy imports are enabled.
@@ -164,7 +159,6 @@ pub struct RollipopAstFinalizerContext<'me> {
 pub struct RollipopAstFinalizer<'me, 'ast> {
   ast_factory: AstFactory<'ast>,
   pub ctx: RollipopAstFinalizerContext<'me>,
-  pub runtime_id_mode: RollipopRuntimeIdMode,
 
   import_bindings: FxHashMap<SymbolId, ImportBinding>,
   generated_static_import_infos: FxHashMap<ModuleIdx, String>,
@@ -193,11 +187,6 @@ struct LazyImportsState {
 
 impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
   pub fn new(ast_builder: AstBuilder<'ast>, ctx: RollipopAstFinalizerContext<'me>) -> Self {
-    let runtime_id_mode = if ctx.options.profiler_names {
-      RollipopRuntimeIdMode::StableId
-    } else {
-      RollipopRuntimeIdMode::Numeric
-    };
     let is_dev_mode = ctx.options.is_dev_mode_enabled();
     let is_runtime_module = ctx.link_output.runtime.id() == ctx.module.idx;
     let lazy_imports =
@@ -207,7 +196,6 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     Self {
       ast_factory,
       ctx,
-      runtime_id_mode,
       import_bindings: FxHashMap::default(),
       generated_static_import_infos: FxHashMap::default(),
       generated_imports: FxHashSet::default(),
@@ -242,8 +230,9 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     &self.ctx.link_output.symbol_db
   }
 
+  // See internal-docs/rollipop-module-ids/design.md
   fn runtime_id_expr_for(&self, module: &Module) -> Expression<'ast> {
-    if matches!(self.runtime_id_mode, RollipopRuntimeIdMode::StableId) {
+    if self.ctx.options.profiler_names {
       Expression::new_string_literal(
         SPAN,
         ast::Str::from_str_in(module.stable_id().as_str(), &self.ast_factory),
@@ -253,7 +242,7 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
     } else {
       Expression::new_numeric_literal(
         SPAN,
-        f64::from(module.idx().raw()),
+        f64::from(self.ctx.module_ids.get(module.idx())),
         None,
         ast::NumberBase::Decimal,
         &self.ast_factory,
@@ -263,18 +252,14 @@ impl<'me, 'ast> RollipopAstFinalizer<'me, 'ast> {
 
   fn binding_name_for_import(&mut self, target_idx: ModuleIdx, rec_id: ImportRecordIdx) -> &str {
     let modules = self.modules();
-    let unique_index = self.ctx.unique_index;
     let used_names = &mut self.used_binding_names;
     self.generated_static_import_infos.entry(target_idx).or_insert_with(|| {
       let importee = &modules[target_idx];
-      // A removed barrel can resolve one import record to multiple same-named modules.
-      let base = format!(
-        "import_{}_{}_{}_{}",
-        importee.repr_name(),
-        unique_index,
-        rec_id.raw(),
-        target_idx.raw()
-      );
+      // Each factory is its own scope, so the name only needs to be unique in this module.
+      // It must not encode `ModuleIdx`, which follows loader discovery order: a removed
+      // barrel resolving one record to several same-named modules gets `$n` suffixes in
+      // source order instead.
+      let base = format!("import_{}_{}", importee.repr_name(), rec_id.raw());
       // Generated namespace references can appear in any nested source scope.
       if used_names.insert(base.clone()) {
         return base;

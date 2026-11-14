@@ -59,6 +59,7 @@ impl GenerateStage<'_> {
         };
       let lazy_export_reads = &lazy_export_reads;
       let lazy_pinned_re_exports = &lazy_pinned_re_exports;
+      let module_ids = &self.rollipop_module_ids;
       ast_table
         .par_iter_mut_enumerated()
         .filter(|(idx, _ast)| {
@@ -71,7 +72,6 @@ impl GenerateStage<'_> {
           let Some(ast) = ast.as_mut() else { return };
           let module = link_output.module_table[idx].as_normal().unwrap();
           let Some(_chunk_idx) = chunk_graph.module_to_chunk[idx] else { return };
-          let unique_index = idx.raw() as usize;
           ast.program.with_mut(|fields| {
             let scoping = EcmaAst::make_semantic(fields.program).into_scoping();
             let mut finalizer = RollipopAstFinalizer::new(
@@ -80,7 +80,7 @@ impl GenerateStage<'_> {
                 link_output,
                 options,
                 module,
-                unique_index,
+                module_ids,
                 lazy_import_excluded,
                 lazy_export_reads,
                 lazy_pinned_re_exports,

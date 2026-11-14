@@ -103,7 +103,7 @@ source: crates/rolldown_testing/src/integration_test.rs
 	};
 	//#endregion
 	var __rollipop_modules__ = __rollipop_require__.m = {
-		2: function(global, module, __rollipop_exports__, __rollipop_require__) {
+		16231317: function(global, module, __rollipop_exports__, __rollipop_require__) {
 		// dep.js
 			__rollipop_require__.r(__rollipop_exports__);
 			__rollipop_require__.d(__rollipop_exports__, {
@@ -116,14 +116,14 @@ source: crates/rolldown_testing/src/integration_test.rs
 			}
 
 		},
-		1: function(global, module, __rollipop_exports__, __rollipop_require__) {
+		6990571: function(global, module, __rollipop_exports__, __rollipop_require__) {
 		// main.js
 			__rollipop_require__.r(__rollipop_exports__);
-			var import_dep_1_0_2 = __rollipop_require__(2);
-			globalThis.__rollipop_static_import_no_minify_result = `${(0, import_dep_1_0_2.default)()}:${import_dep_1_0_2.count}`;
+			var import_dep_0 = __rollipop_require__(16231317);
+			globalThis.__rollipop_static_import_no_minify_result = `${(0, import_dep_0.default)()}:${import_dep_0.count}`;
 
 		}
 	};
-	__rollipop_require__(1);
+	__rollipop_require__(6990571);
 })(typeof globalThis !== 'undefined' ? globalThis : typeof global !== 'undefined' ? global : typeof window !== 'undefined' ? window : this);
 ```

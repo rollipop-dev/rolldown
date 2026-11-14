@@ -151,11 +151,12 @@ fn render_entry_execution(ctx: &GenerateContext<'_>) -> String {
   String::new()
 }
 
+// See internal-docs/rollipop-module-ids/design.md
 fn render_module_runtime_id(ctx: &GenerateContext<'_>, module: &NormalModule) -> String {
   if ctx.options.profiler_names {
     to_ecma_string_literal(module.stable_id.as_str(), ctx.options.charset.is_ascii())
   } else {
-    module.idx.raw().to_string()
+    ctx.rollipop_module_ids.get(module.idx).to_string()
   }
 }
 
