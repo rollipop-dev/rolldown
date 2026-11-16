@@ -1,4 +1,27 @@
 
+## [1.3.0] - 2026-11-16
+
+### 🚀 Features
+
+- rollipop: lazy imports and cached CommonJS interop namespaces (#65) by `@gronxb`
+
+### ⚡ Performance
+
+- rollipop: read CommonJS named imports from module.exports directly (#66) by `@gronxb`
+
+### ⚙️ Miscellaneous Tasks
+
+- allow prereleases for any PR target branch by `@leegeunhyeok`
+- trigger dev releases after approved PR workflows by `@leegeunhyeok`
+- require approval before PR dev release preparation by `@leegeunhyeok`
+- remove prerelease label author permission check by `@leegeunhyeok`
+- comment published dev versions on PRs by `@leegeunhyeok`
+- remove prerelease branch prefix by `@leegeunhyeok`
+- refresh labeled PR dev releases on push by `@leegeunhyeok`
+- trigger dev releases from prerelease labels by `@leegeunhyeok`
+- add manual dev npm publishing by `@leegeunhyeok`
+
+
 ## [1.2.1] - 2026-11-12
 
 ### 🐛 Bug Fixes
