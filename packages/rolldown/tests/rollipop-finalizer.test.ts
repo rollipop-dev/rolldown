@@ -361,7 +361,7 @@ test('keeps generated import bindings off nested source bindings', async () => {
     'dep.js': `export function value() { return 42; }`,
   };
   const initial = await generate(sources);
-  const generatedName = /var (import_dep_\d+_\d+_\d+)/.exec(initial)![1];
+  const generatedName = /var (import_dep_\d+)/.exec(initial)![1];
   sources['entry.js'] = `
     import { value } from 'dep.js';
     function read() {

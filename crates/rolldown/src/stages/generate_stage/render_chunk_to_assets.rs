@@ -226,6 +226,7 @@ impl GenerateStage<'_> {
               resolved_paths,
               inline_state: &self.inline_state,
               carried_renders,
+              rollipop_module_ids: &self.rollipop_module_ids,
             };
             let ecma_chunks_future = EcmaGenerator::instantiate_chunk(&mut ecma_ctx);
             let ecma_chunks = ecma_chunks_future.await?;

@@ -11,6 +11,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
   chunk_graph::ChunkGraph,
+  rollipop::RollipopModuleIds,
   stages::{
     generate_stage::{
       CarriedRender, InlineCommonChunksState, InlineReader,
@@ -47,6 +48,8 @@ pub struct GenerateContext<'a> {
   pub inline_state: &'a InlineCommonChunksState,
   /// The records this file carries, each finalized and printed for this file, dependencies first.
   pub carried_renders: Vec<CarriedRender>,
+  /// Numeric module ids of `format: 'rollipop'`. Empty for other formats and with `profilerNames`.
+  pub rollipop_module_ids: &'a RollipopModuleIds,
 }
 
 impl GenerateContext<'_> {

@@ -116,17 +116,17 @@ source: crates/rolldown_testing/src/integration_test.rs
 	};
 	//#endregion
 	var __rollipop_modules__ = __rollipop_require__.m = {
-		2: function(global, module, __rollipop_exports__, __rollipop_require__) {
+		16231317: function(global, module, __rollipop_exports__, __rollipop_require__) {
 			// dep.js
 			__rollipop_exports__.answer = 42;
 		},
-		1: function(global, module, __rollipop_exports__, __rollipop_require__) {
+		6990571: function(global, module, __rollipop_exports__, __rollipop_require__) {
 			// main.js
-			const dep = __rollipop_require__(2);
+			const dep = __rollipop_require__(16231317);
 			globalThis.__rollipop_commonjs_result = `cjs:${dep.answer}`;
 		}
 	};
-	__rollipop_require__(1);
+	__rollipop_require__(6990571);
 })(typeof globalThis !== "undefined" ? globalThis : typeof global !== "undefined" ? global : typeof window !== "undefined" ? window : this);
 
 ```

@@ -180,3 +180,5 @@ over the earlier Proxy facade design.
 - [design.md](./design.md)
 - `crates/rolldown/src/ecmascript/format/rollipop.rs`: chunk renderer and
   factory signatures
+- [../rollipop-module-ids/design.md](../rollipop-module-ids/design.md): how the
+  numeric ids in `r(id)` / `l(id)` are assigned

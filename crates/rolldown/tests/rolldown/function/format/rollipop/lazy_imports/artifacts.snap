@@ -1,0 +1,286 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## main.js
+
+```js
+(function(global) {
+// HIDDEN [\0rolldown/runtime.js]
+	//#region \0rollipop/runtime
+	var __rollipop_module_cache = {};
+	function __rollipop_require__(id) {
+	  var cached = __rollipop_module_cache[id];
+	  if (cached !== undefined) {
+	    if (cached.hasError) throw cached.error;
+	    return cached.exports;
+	  }
+	  var factory = __rollipop_modules__[id];
+	  if (factory === undefined) throw new Error('Module ' + id + ' is not registered');
+	  var module = __rollipop_module_cache[id] = { id: id, loaded: false, exports: {} };
+	  try {
+	    factory.call(module.exports, global, module, module.exports, __rollipop_require__, __rollipop_require__.l);
+	  } catch (error) {
+	    module.hasError = true;
+	    module.error = error;
+	    throw error;
+	  }
+	  module.loaded = true;
+	  return module.exports;
+	}
+	__rollipop_require__.c = __rollipop_module_cache;
+	__rollipop_require__.o = function(obj, prop) {
+	  return Object.prototype.hasOwnProperty.call(obj, prop);
+	};
+	__rollipop_require__.d = function(exports, getters) {
+	  for (var key in getters) {
+	    if (__rollipop_require__.o(getters, key) && !__rollipop_require__.o(exports, key)) {
+	      Object.defineProperty(exports, key, { get: getters[key], enumerable: true });
+	    }
+	  }
+	};
+	__rollipop_require__.r = function(exports) {
+	  if (typeof Symbol !== 'undefined' && Symbol.toStringTag) {
+	    Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
+	  }
+	};
+	// `target` is a namespace built earlier for the same `mod`; only missing keys are added.
+	__rollipop_require__.t = function(mod, nodeMode, target) {
+	  if (target === undefined) {
+	    target = mod != null ? Object.create(Object.getPrototypeOf(mod)) : {};
+	    if (nodeMode || !mod || !mod.__esModule) Object.defineProperty(target, 'default', { value: mod, enumerable: true });
+	  }
+	  if (mod != null) {
+	    var keys = Object.getOwnPropertyNames(mod);
+	    for (var i = 0; i < keys.length; i++) {
+	      var key = keys[i];
+	      if (__rollipop_require__.o(target, key)) continue;
+	      (function(k) {
+	        var desc = Object.getOwnPropertyDescriptor(mod, k);
+	        Object.defineProperty(target, k, { get: function() { return mod[k] }, enumerable: !desc || desc.enumerable });
+	      })(key);
+	    }
+	  }
+	  return target;
+	};
+	__rollipop_require__.i = function(id, nodeMode) {
+	  var mod = __rollipop_require__(id);
+	  var module = __rollipop_module_cache[id];
+	  // A module that is still initializing (circular import) can gain exports later.
+	  if (module === undefined || module.loaded !== true) return __rollipop_require__.t(mod, nodeMode);
+	  var keyCount = mod != null ? Object.getOwnPropertyNames(mod).length : 0;
+	  if (module.nsSource !== mod) {
+	    module.nsSource = mod;
+	    module.ns = module.nodeNs = undefined;
+	  } else if (module.nsKeyCount !== keyCount) {
+	    // Keys added after load (an `init()` or a monkeypatch) must reach later importers.
+	    // `.t` skips keys the target already has, so this extends the shared objects in place.
+	    // A frozen or sealed namespace can't take keys; later importers get a new one.
+	    if (module.ns) {
+	      if (Object.isExtensible(module.ns)) __rollipop_require__.t(mod, 0, module.ns);
+	      else module.ns = undefined;
+	    }
+	    if (module.nodeNs) {
+	      if (Object.isExtensible(module.nodeNs)) __rollipop_require__.t(mod, 1, module.nodeNs);
+	      else module.nodeNs = undefined;
+	    }
+	  }
+	  module.nsKeyCount = keyCount;
+	  return nodeMode
+	    ? module.nodeNs || (module.nodeNs = __rollipop_require__.t(mod, nodeMode))
+	    : module.ns || (module.ns = __rollipop_require__.t(mod, nodeMode));
+	};
+	__rollipop_require__.re = function(exports, ns) {
+	  for (var key in ns) {
+	    if (key === 'default' || key === '__esModule' || __rollipop_require__.o(exports, key)) continue;
+	    (function(k) {
+	      Object.defineProperty(exports, k, { get: function() { return ns[k] }, enumerable: true });
+	    })(key);
+	  }
+	};
+	__rollipop_require__.e = function(id) {
+	  throw new Error('External module ' + id + ' is not available');
+	};
+	// `__rollipop_require__.l(id, mode)` returns a holder whose `a` property is the
+	// importee's namespace; generated code reads `holder.a.name`. `mode` is omitted for
+	// ESM importees, `0` for Babel interop and `1` for Node interop.
+	// See internal-docs/rollipop-lazy-imports/implementation.md
+	function __rollipop_lazy_load(id, mode) {
+	  return mode === undefined ? __rollipop_require__(id) : __rollipop_require__.i(id, mode);
+	}
+	__rollipop_require__.l = function(id, mode) {
+	  var record = __rollipop_module_cache[id];
+	  if (record !== undefined && record.loaded === true) return { a: __rollipop_lazy_load(id, mode) };
+	  return {
+	    get a() {
+	      var ns = __rollipop_lazy_load(id, mode);
+	      // Replace the getter only once the module finished loading and interop succeeded.
+	      // A module still loading (a cycle) is read through to its partial exports, and a
+	      // throw leaves the getter in place, so every later read throws again.
+	      if (__rollipop_module_cache[id].loaded === true) Object.defineProperty(this, 'a', { value: ns });
+	      return ns;
+	    }
+	  };
+	};
+	//#endregion
+	var __rollipop_modules__ = __rollipop_require__.m = {
+		1134366: function(global, module, __rollipop_exports__, __rollipop_require__) {
+		// log.js
+			__rollipop_require__.r(__rollipop_exports__);
+			__rollipop_require__.d(__rollipop_exports__, { log: () => log });
+			function log(entry) {
+				(globalThis.__rollipop_lazy_log ??= []).push(entry);
+			}
+
+		},
+		1221081: function(global, module, __rollipop_exports__, __rollipop_require__, __rollipop_lazy__) {
+		// side.js
+			__rollipop_require__.r(__rollipop_exports__);
+			var import_log_0 = __rollipop_lazy__(1134366);
+			(0, import_log_0.a.log)("side");
+
+		},
+		13148076: function(global, module, __rollipop_exports__, __rollipop_require__, __rollipop_lazy__) {
+		// effect.js
+			__rollipop_require__.r(__rollipop_exports__);
+			var import_log_0 = __rollipop_lazy__(1134366);
+			(0, import_log_0.a.log)("effect");
+
+		},
+		12826691: function(global, module, __rollipop_exports__, __rollipop_require__, __rollipop_lazy__) {
+		// namespace.js
+			__rollipop_require__.r(__rollipop_exports__);
+			__rollipop_require__.d(__rollipop_exports__, { fromNamespace: () => fromNamespace });
+			var import_log_0 = __rollipop_lazy__(1134366);
+			(0, import_log_0.a.log)("namespace");
+			const fromNamespace = "namespace-value";
+
+		},
+		15554421: function(global, module, __rollipop_exports__, __rollipop_require__, __rollipop_lazy__) {
+		// star.js
+			__rollipop_require__.r(__rollipop_exports__);
+			__rollipop_require__.d(__rollipop_exports__, { fromStar: () => fromStar });
+			var import_log_0 = __rollipop_lazy__(1134366);
+			(0, import_log_0.a.log)("star");
+			const fromStar = "star-value";
+
+		},
+		4366677: function(global, module, __rollipop_exports__, __rollipop_require__, __rollipop_lazy__) {
+		// lazy.js
+			__rollipop_require__.r(__rollipop_exports__);
+			__rollipop_require__.d(__rollipop_exports__, {
+				lazyValue: () => lazyValue,
+				default: () => lazyDefault
+			});
+			var import_log_0 = __rollipop_lazy__(1134366);
+			(0, import_log_0.a.log)("lazy");
+			const lazyValue = "lazy-value";
+			function lazyDefault() {
+				return "lazy-default";
+			}
+
+		},
+		15078362: function(global, module, __rollipop_exports__, __rollipop_require__, __rollipop_lazy__) {
+		// reexport.js
+			__rollipop_require__.r(__rollipop_exports__);
+			__rollipop_require__.d(__rollipop_exports__, {
+				reexportedLazy: () => import_lazy_1.a.lazyValue,
+				fromStar: () => __rollipop_require__(15554421).fromStar
+			});
+			var import_star_0 = __rollipop_require__(15554421);
+			__rollipop_require__.re(__rollipop_exports__, import_star_0);
+			var import_lazy_1 = __rollipop_lazy__(4366677);
+
+		},
+		11814473: function(global, module, __rollipop_exports__, __rollipop_require__, __rollipop_lazy__) {
+		// never.js
+			__rollipop_require__.r(__rollipop_exports__);
+			__rollipop_require__.d(__rollipop_exports__, { neverValue: () => neverValue });
+			var import_log_0 = __rollipop_lazy__(1134366);
+			(0, import_log_0.a.log)("never");
+			const neverValue = "never";
+
+		},
+		250858: function(global, module, __rollipop_exports__, __rollipop_require__) {
+		// cjs.cjs
+			globalThis.__rollipop_lazy_log.push("cjs");
+			module.exports = { named: "cjs-named" };
+
+		},
+		570621: function(global, module, __rollipop_exports__, __rollipop_require__, __rollipop_lazy__) {
+		// throws.js
+			__rollipop_require__.r(__rollipop_exports__);
+			__rollipop_require__.d(__rollipop_exports__, { unreachable: () => unreachable });
+			var import_log_0 = __rollipop_lazy__(1134366);
+			(0, import_log_0.a.log)("throws");
+			throw new Error("boom");
+			const unreachable = "unreachable";
+
+		},
+		15705237: function(global, module, __rollipop_exports__, __rollipop_require__, __rollipop_lazy__) {
+		// cycle_b.js
+			__rollipop_require__.r(__rollipop_exports__);
+			__rollipop_require__.d(__rollipop_exports__, { b: () => b });
+			var import_log_0 = __rollipop_lazy__(1134366);
+			var import_cycle_a_1 = __rollipop_require__(6947919);
+			(0, import_log_0.a.log)("cycle_b");
+			const b = "b";
+
+		},
+		6947919: function(global, module, __rollipop_exports__, __rollipop_require__, __rollipop_lazy__) {
+		// cycle_a.js
+			__rollipop_require__.r(__rollipop_exports__);
+			__rollipop_require__.d(__rollipop_exports__, { readB: () => readB });
+			var import_log_0 = __rollipop_lazy__(1134366);
+			var import_cycle_b_1 = __rollipop_lazy__(15705237);
+			(0, import_log_0.a.log)("cycle_a");
+			function readB() {
+				return import_cycle_b_1.a.b;
+			}
+
+		},
+		6990571: function(global, module, __rollipop_exports__, __rollipop_require__, __rollipop_lazy__) {
+		// main.js
+			__rollipop_require__.r(__rollipop_exports__);
+			__rollipop_require__.d(__rollipop_exports__, { useNever: () => useNever });
+			var import_side_0 = __rollipop_require__(1221081);
+			var import_effect_1 = __rollipop_require__(13148076);
+			var import_namespace_2 = __rollipop_require__(12826691);
+			var import_reexport_3 = __rollipop_lazy__(15078362);
+			var import_lazy_4 = __rollipop_lazy__(4366677);
+			var import_never_5 = __rollipop_lazy__(11814473);
+			var import_cjs_6 = __rollipop_lazy__(250858, 0);
+			var import_throws_7 = __rollipop_lazy__(570621);
+			var import_cycle_a_8 = __rollipop_lazy__(6947919);
+			var import_log_9 = __rollipop_lazy__(1134366);
+			(0, import_log_9.a.log)("main");
+			const result = {};
+			result.beforeAccess = globalThis.__rollipop_lazy_log.slice();
+			result.lazyValue = import_lazy_4.a.lazyValue;
+			result.lazyDefault = (0, import_lazy_4.a.default)();
+			result.afterLazy = globalThis.__rollipop_lazy_log.slice();
+			result.namespace = import_namespace_2.fromNamespace;
+			result.fromStar = import_reexport_3.a.fromStar;
+			result.reexportedLazy = import_reexport_3.a.reexportedLazy;
+			result.cjsDefault = import_cjs_6.a.default.named;
+			result.cjsNamed = import_cjs_6.a.named;
+			result.cycle = (0, import_cycle_a_8.a.readB)();
+			const errors = [];
+			for (let i = 0; i < 2; i++) try {
+				errors.push(import_throws_7.a.unreachable);
+			} catch (error) {
+				errors.push(error.message);
+			}
+			result.errors = errors;
+			result.final = globalThis.__rollipop_lazy_log.slice();
+			globalThis.__rollipop_lazy_imports_result = result;
+			function useNever() {
+				return import_never_5.a.neverValue;
+			}
+
+		}
+	};
+	__rollipop_require__(6990571);
+})(typeof globalThis !== 'undefined' ? globalThis : typeof global !== 'undefined' ? global : typeof window !== 'undefined' ? window : this);
+```
