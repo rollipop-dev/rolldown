@@ -1,0 +1,8 @@
+{
+  "config": {
+    "format": "rollipop",
+    "minify": false,
+    "lazyImports": true
+  },
+  "snapshot": false
+}

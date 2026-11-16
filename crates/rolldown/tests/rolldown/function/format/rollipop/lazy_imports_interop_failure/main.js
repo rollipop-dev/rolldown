@@ -1,5 +1,7 @@
-import { flagged } from './esmodule_flag_throws.cjs';
-import { first } from './descriptor_throws.cjs';
+// `default` reads need the interop namespace, so these bindings build it.
+import flaggedDefault from './esmodule_flag_throws.cjs';
+import descriptorDefault from './descriptor_throws.cjs';
+import { namedOnly } from './named_only.js';
 
 function readTwice(read) {
   const results = [];
@@ -14,6 +16,7 @@ function readTwice(read) {
 }
 
 globalThis.__rollipop_interop_failure_result = {
-  immediate: readTwice(() => flagged),
-  afterDescriptor: readTwice(() => first),
+  immediate: readTwice(() => flaggedDefault),
+  afterDescriptor: readTwice(() => descriptorDefault.first),
+  namedOnly: namedOnly(readTwice),
 };
