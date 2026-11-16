@@ -12,14 +12,16 @@ off.
 
 ## Generated code
 
-| Import                            | Before                    | Now (lazy off)      | Now (lazy on)     |
-| --------------------------------- | ------------------------- | ------------------- | ----------------- |
-| ESM → ESM named/default           | `var a = r(5)`            | `var a = r(5)`      | `var a = l(5)`    |
-| ESM → CJS (Babel interop)         | `var a = r.t(r(5))`       | `var a = r.i(5)`    | `var a = l(5, 0)` |
-| ESM → CJS (Node interop, `.mjs`)  | `var a = r.t(r(5), 1)`    | `var a = r.i(5, 1)` | `var a = l(5, 1)` |
-| reads of a lazy binding           | `a.x`                     | `a.x`               | `a.a.x`           |
-| inline access / `import()` of CJS | `r.t(r(5)).x`             | `r.i(5).x`          | same as off       |
-| bare, namespace, `export *`       | `var a = r(5)` / `r.t(…)` | `r(5)` / `r.i(5)`   | same as off       |
+| Import                           | Before                    | Now (lazy off)      | Now (lazy on)     |
+| -------------------------------- | ------------------------- | ------------------- | ----------------- |
+| ESM → ESM named/default          | `var a = r(5)`            | `var a = r(5)`      | `var a = l(5)`    |
+| ESM → CJS, named reads only      | `var a = r.t(r(5))`       | `var a = r(5)`      | `var a = l(5)`    |
+| ESM → CJS (Babel interop)        | `var a = r.t(r(5))`       | `var a = r.i(5)`    | `var a = l(5, 0)` |
+| ESM → CJS (Node interop, `.mjs`) | `var a = r.t(r(5), 1)`    | `var a = r.i(5, 1)` | `var a = l(5, 1)` |
+| reads of a lazy binding          | `a.x`                     | `a.x`               | `a.a.x`           |
+| inline named access of CJS       | `r.t(r(5)).x`             | `r(5).x`            | same as off       |
+| `import()` of CJS                | `r.t(r(5))`               | `r.i(5)`            | same as off       |
+| bare, namespace, `export *`      | `var a = r(5)` / `r.t(…)` | `r(5)` / `r.i(5)`   | same as off       |
 
 `r` is `__rollipop_require__`. `l` is `__rollipop_lazy__`, a fifth factory
 parameter that is only declared on modules with static import records
@@ -33,9 +35,10 @@ over the earlier Proxy facade design.
 ## Finalizer (`module_finalizers/rollipop.rs`)
 
 - `namespace_expr_for_module` emits `r(id)` / `r.i(id[, 1])` for every bundled
-  importee, at all call sites: import bindings, inline accesses
-  (`inline_import_access_for_symbol_ref`) and dynamic imports. Externals keep
-  `r.t(r.e(id))`.
+  importee: import bindings, inline accesses
+  (`inline_import_access_for_symbol_ref`) and dynamic imports. Inline named
+  accesses of CommonJS and named-only CommonJS bindings use `r(id)` instead
+  (see "Direct CommonJS reads" below). Externals keep `r.t(r.e(id))`.
 - Lazy mode bookkeeping (`LazyImportsState`, present only when lazy mode is on):
   - `candidates`: binding name → (importee, mode). Recorded when
     `create_import_binding_stmt` emits a declaration for a bundled importee.
@@ -73,25 +76,42 @@ over the earlier Proxy facade design.
     `pinned_barrels` adds every barrel reachable from them through re-exports
     and `export *`, and their entries are removed from the map. It also returns,
     per pinned module, the importees it re-exports (`PinnedReExportsMap`,
-    passed as `lazy_pinned_re_exports`); `apply_lazy_imports` keeps those
+    passed as `lazy_pinned_re_exports`); `finalize_import_initializers` keeps those
     imports eager even when the module also reads them locally. So loading pkg
     in any of those ways keeps pkg's re-exported modules eager.
-- `exit_program` calls `apply_lazy_imports` after `create_define_exports_stmt`.
-  It rewrites the initializer of each top-level candidate declaration that is
+- Direct CommonJS reads (`DirectCjsReadsState`, absent in dev mode):
+  - `candidates`: binding name → importee, for every generated binding of a
+    bundled CommonJS importee (any interop).
+  - `namespace_reads`: bindings read as the namespace itself or through
+    `default` (`reads_namespace`), plus `export *` / `export * as` bindings.
+    A namespace import read only as `ns.key` / `ns["key"]` with
+    `key !== "default"` (`is_named_member_read`), including under `typeof` or
+    `!`, does not count. Export getters
+    count even when `is_export_getter_read` is false, to stay conservative.
+  - Every read goes through `note_import_binding_read`, which feeds both this
+    state and the lazy `read_bindings`.
+  - `inline_import_access_for_symbol_ref` emits `r(id).key` instead of
+    `r.i(id).key` for the same reason.
+- `exit_program` calls `finalize_import_initializers` after
+  `create_define_exports_stmt`. It rewrites the initializer of each top-level candidate declaration that is
   read and not eager to `__rollipop_lazy__(id[, mode])`, and returns those
-  binding names. `LazyHolderAccessRewriter` then rewrites every member read of
+  binding names. A CommonJS candidate with no namespace read
+  (`reads_cjs_exports_directly`) omits the mode, so its holder resolves to
+  `module.exports`. `LazyHolderAccessRewriter` then rewrites every member read of
   them (`import_x.foo`, `import_x["foo"]`, including the export getters) to
   `import_x.a.foo`. Generated reads of an import binding are always member
   expressions; namespace bindings, the only bare ones, are never lazy. Deciding at the end
   makes "eager wins" independent of statement order, and it keeps imports
-  retained only for side effects (bindings tree-shaken away) eager.
+  retained only for side effects (bindings tree-shaken away) eager. A CommonJS
+  candidate that stays eager and has no namespace read becomes
+  `__rollipop_require__(id)`.
 - `__rollipop_lazy__` is in `FACTORY_PARAM_NAMES`, so a user binding with that
   name gets renamed like the other factory parameters.
 - `lazyImports.exclude` is evaluated once per build in
   `stages/generate_stage/finalize_rollipop_modules.rs`
   (`NormalizedLazyImportsOptions::is_excluded`, with module ids against `cwd`).
   The resulting `FxHashSet<ModuleIdx>` is passed to every finalizer as
-  `RollipopAstFinalizerContext::lazy_import_excluded`, and `apply_lazy_imports`
+  `RollipopAstFinalizerContext::lazy_import_excluded`, and `finalize_import_initializers`
   keeps those importees eager.
 
 ## Runtime
@@ -113,8 +133,9 @@ over the earlier Proxy facade design.
 `runtime/rollipop-runtime-lazy.js` (appended when lazy mode is on):
 
 - `.l(id, mode)` returns a holder, one per import declaration. Mode is omitted
-  for ESM (`r(id)`), `0` for Babel and `1` for Node interop (`.i(id, mode)`).
-  - If the module already finished loading, the holder is `{ a: namespace }`.
+  for ESM and for named-only CommonJS bindings (`r(id)`: the namespace or
+  `module.exports`), `0` for Babel and `1` for Node interop (`.i(id, mode)`).
+  - If the module already finished loading, the holder is `{ a: value }`.
   - Otherwise it is `{ get a() { … } }`. The getter loads the module and
     builds the namespace. Only when the module has finished loading does it
     replace itself with a data property (`Object.defineProperty(this, 'a', …)`).
@@ -135,7 +156,12 @@ over the earlier Proxy facade design.
 - `lazy_imports_no_proxy`: lazy holders work without `Proxy`.
 - `lazy_imports_interop_failure`: an interop failure, immediate (`__esModule`
   getter throws) or after an earlier export descriptor was processed, rethrows
-  on every read.
+  on every read of a `default` binding; named-only bindings of the same modules
+  skip interop and read the values.
+- `lazy_imports_cjs_direct_reads`: named-only CommonJS lazy bindings are
+  `l(id)` and resolve to `module.exports` (live values, keys added later,
+  accessor exports with `module.exports` as `this`, Proxy exports, rethrown
+  load errors); `default` bindings keep `l(id, 0)`.
 - `lazy_imports_sourcemap{,_minify}`: lazily evaluated modules keep exact
   original line and column mappings.
 - `lazy_imports_exclude` (plus `packages/rolldown/tests/rollipop-lazy-imports.test.ts`
@@ -165,6 +191,9 @@ over the earlier Proxy facade design.
 - `lazy_imports_entry_reexport`: a user-defined entry's re-exports stay eager.
 - `lazy_imports_exclude_barrel`: `exclude` reaches a module behind a package
   index only when the pattern also matches the index.
+- `cjs_direct_reads`: named-only and member-only namespace bindings use
+  `r(id)`; `default` and namespace values keep `.i`; reads stay live, see keys
+  added after load, and see exports added after a cycle finishes loading.
 - `cjs_interop_namespace`: one namespace per module and interop mode, shared
   with `import()`; not cached during a cycle; `module.exports` reassignment;
   `__esModule` handling.
